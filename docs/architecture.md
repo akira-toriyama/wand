@@ -1,12 +1,11 @@
 # stroke — architecture
 
-stroke is a global mouse-gesture daemon for macOS, built as the
-spiritual successor to [MacGesture](https://github.com/MacGesture/MacGesture)
-and [xGestures](https://www.briankendall.net/xGestures/), centred on
-the one thing they don't solve:
-[MacGesture#115](https://github.com/MacGesture/MacGesture/issues/115)
-— gestures must act on the **window under the cursor**, not the
-focused one.
+stroke is a global mouse-gesture daemon for macOS, built around a
+single invariant: gestures act on the **window under the cursor**,
+not the focused one. On multi-display Macs the focused window is
+often on a different display from where you're pointing, so a
+gesture aimed at e.g. a Chrome tab on display 2 should fire against
+that tab — not whatever happened to have focus on display 1.
 
 The split into **Core / Adapter / App** is the central design idea
 (same shape as [facet](https://github.com/akira-toriyama/facet)): the
@@ -50,7 +49,7 @@ only ever sees `MouseSource`. Real vs synthetic is picked at app
 startup. Adding a new mouse-input strategy means a new `MouseSource`
 conformer in an Adapter module — never a `#if` in Core.
 
-## The issue #115 spine
+## The cursor-anchored spine
 
 The whole point of stroke is **cursor-anchored** action dispatch.
 Every decision below flows from that contract:
@@ -69,7 +68,8 @@ Every decision below flows from that contract:
 - **`.key(...)` raises the specific window** (AX
   `kAXFrontmost` + `kAXMain` + `kAXRaiseAction`) before posting the
   keystroke. Raising only the app would pick the app's last-focused
-  window — the very bug this project exists to fix, in microcosm.
+  window — exactly the failure mode the cursor-anchored design
+  exists to avoid, recreated inside dispatch.
 - **`.ax(...)` acts directly on the window** via
   `AXUIElementPerformAction` — no focus switch, no keystroke. Less
   disruptive; prefer for close / minimize / zoom.
@@ -85,9 +85,9 @@ displacement from the last anchor; when `max(|dx|, |dy|)` exceeds
 reset the anchor. Consecutive duplicates are coalesced (continuing
 left is one `L`, not many).
 
-The alphabet (`L U R D`) is intentionally identical to MacGesture's
-so existing rule files port without retraining. Y grows up — `dy > 0`
-⇒ `.up`, pinned by `testStraightDownThenRight`. The adapter samples
+The alphabet is `L U R D` — single-letter cardinals are easy to
+type in TOML and grep-friendly in logs. Y grows up — `dy > 0` ⇒
+`.up`, pinned by `testStraightDownThenRight`. The adapter samples
 from `CGEvent.location` (Y-down) and sign-flips Y at sample creation
 to honour the convention.
 
@@ -118,7 +118,5 @@ over the same CGEventTap.
   preservation, …)
 - [commit-convention.md](commit-convention.md) — message format +
   release flow
-- [MacGesture#115](https://github.com/MacGesture/MacGesture/issues/115)
-  — the bug stroke exists to fix
 - [facet's architecture.md](https://github.com/akira-toriyama/facet/blob/main/docs/architecture.md)
   — same hexagonal pattern, different domain

@@ -9,10 +9,9 @@ import Foundation
 
 // MARK: - Direction
 
-/// Cardinal direction of a single stroke segment. Mirrors MacGesture's
-/// `L U R D` alphabet so existing users can port their rule files
-/// trivially. Scroll-axis directions (lowercase `u` / `d`) are not
-/// recognised yet — see [README.md](README.md) M2+ roadmap.
+/// Cardinal direction of a single stroke segment. The `L U R D`
+/// alphabet is single-letter (grep-friendly in logs, easy to type
+/// in TOML). Scroll-axis directions are not recognised yet.
 public enum Direction: Character, Sendable, Hashable, CaseIterable {
     case left  = "L"
     case up    = "U"
@@ -53,8 +52,8 @@ public enum Modifier: String, Sendable, Hashable, CaseIterable {
 
 /// One row in `[[rules]]`. Matches if `pattern` equals the recognised
 /// direction string AND `apps` matches the **cursor-anchored target**
-/// window's bundle id (NOT the focused app — see issue #115 in
-/// README).
+/// window's bundle id (NOT the focused app — see the cursor-anchored
+/// section in README).
 public struct Rule: Sendable, Equatable {
     public let name: String
     public let pattern: String
@@ -111,8 +110,8 @@ public struct Sample: Sendable, Equatable {
 /// Stored as plain data so Core can reason about app filtering
 /// without depending on AX types.
 ///
-/// This is the spine of the issue #115 fix: actions always dispatch
-/// to this target, never to the currently-focused window at
+/// This is the spine of the project: actions always dispatch to
+/// this target, never to the currently-focused window at
 /// stroke-end time.
 public struct Target: Sendable, Equatable {
     public let pid: Int32

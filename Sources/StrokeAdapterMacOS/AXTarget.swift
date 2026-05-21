@@ -1,4 +1,4 @@
-// Cursor-anchored window targeting — the spine of the issue #115 fix.
+// Cursor-anchored window targeting — the spine of the project.
 //
 // At stroke *start* (button-down) we resolve which window sits under
 // the cursor and freeze that as the stroke's target. Actions later

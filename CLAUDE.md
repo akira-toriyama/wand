@@ -4,13 +4,14 @@ Guidance for working in this repository.
 
 ## What this is
 
-`stroke` — global mouse-gesture daemon for macOS. Inspired by
-[MacGesture](https://github.com/MacGesture/MacGesture) and
-[xGestures](https://www.briankendall.net/xGestures/), built to
-solve the one thing they don't:
-[MacGesture#115](https://github.com/MacGesture/MacGesture/issues/115)
-— gestures must act on the window under the cursor, not the
-focused one. Architecturally a sibling of
+`stroke` — global mouse-gesture daemon for macOS. Built around a
+single invariant: **gestures act on the window under the cursor,
+not the focused one.** On multi-display Macs the focused window is
+often on a different display from where you're pointing, so a
+gesture aimed at e.g. a Chrome tab on display 2 should fire against
+*that* tab — not whatever happened to have focus on display 1.
+
+Architecturally a sibling of
 [facet](https://github.com/akira-toriyama/facet): Swift 6,
 macOS 13+, three-layer hexagonal split.
 
@@ -51,7 +52,7 @@ ws-tabs.
   Adding a new mouse-input strategy means a new `MouseSource`
   conformer in an Adapter module — never a `#if` in Core.
 
-### The issue #115 spine — DO NOT regress this
+### The cursor-anchored spine — DO NOT regress this
 
 The whole point of stroke is that **actions dispatch to the
 cursor-anchored target window**, not to the focused window.
@@ -75,7 +76,8 @@ Everything below depends on this contract:
 - `.key(...)` actions raise the target first (via
   `NSRunningApplication.activate`), THEN post the keystroke.
   Posting before raising would land the key on whoever has focus
-  — that's the MacGesture bug.
+  — exactly the failure mode the cursor-anchored design exists
+  to avoid.
 - `.ax(...)` actions skip raising and call
   `AXUIElementPerformAction` directly. Less disruption, no
   focus stolen. Prefer `ax` for close/minimize/zoom.
@@ -187,19 +189,6 @@ Everything below depends on this contract:
 External material that informed stroke's API / architecture
 decisions. Subsections ordered broad → narrow.
 
-### Prior art (the apps stroke supersedes)
-
-- [MacGesture](https://github.com/MacGesture/MacGesture)
-  *(reviewed 2026-05-22)* — direction-alphabet, app-filtered
-  rules. stroke's pattern syntax (`L U R D`) is intentionally
-  identical so rule files port without retraining. The unsolved
-  issue this app has is [#115](https://github.com/MacGesture/MacGesture/issues/115).
-- [xGestures (Brian Kendall)](https://www.briankendall.net/xGestures/)
-  *(reviewed 2026-05-22)* — older macOS gesture tool with
-  configurable mouse buttons and modifier+drag triggers.
-  Influenced stroke's `[trigger]` schema (button + modifier
-  set rather than a single hard-coded right-click).
-
 ### Architecture
 
 - See [facet's CLAUDE.md → References → Architecture](https://github.com/akira-toriyama/facet/blob/main/CLAUDE.md)
@@ -209,10 +198,10 @@ decisions. Subsections ordered broad → narrow.
 ### macOS / Apple
 
 - [AXUIElementCopyElementAtPosition](https://developer.apple.com/documentation/applicationservices/1462091-axuielementcopyelementatposition)
-  *(reviewed 2026-05-22)* — the single API stroke's #115 fix
-  hinges on. Returns the deepest AX element at a screen point;
-  walk `kAXParentAttribute` up to `kAXWindowRole` to get the
-  window.
+  *(reviewed 2026-05-22)* — the single API the cursor-anchored
+  spine hinges on. Returns the deepest AX element at a screen
+  point; walk `kAXParentAttribute` up to `kAXWindowRole` to get
+  the window.
 - [Quartz Event Services (CGEventTap)](https://developer.apple.com/documentation/coregraphics/quartz_event_services)
   *(reviewed 2026-05-22)* — the global mouse-event capture
   mechanism. `.cgSessionEventTap` location + `tapOption.defaultTap`

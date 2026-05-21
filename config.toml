@@ -19,7 +19,7 @@
 [trigger]
 
 # Which mouse button initiates a stroke.
-#   "right"   — right mouse button (most common; matches MacGesture)
+#   "right"   — right mouse button (most common)
 #   "middle"  — middle button / scroll-wheel click
 #   "side1"   — back button (Mouse Button 4)
 #   "side2"   — forward button (Mouse Button 5)
@@ -58,17 +58,17 @@ exclude-apps = []
 # `pattern` matches and whose `apps` filter allows the target
 # window's bundle id fires.
 #
-# Pattern alphabet (MacGesture-compatible):
+# Pattern alphabet:
 #   L  = left      U  = up
 #   R  = right     D  = down
 # Sequences combine: "DR" = down then right; "URD" = up, right, down.
 #
-# IMPORTANT — Issue #115:
+# IMPORTANT — cursor-anchored matching:
 #   `apps` matches against the **window under the cursor at
 #   stroke-start**, NOT the focused app. So a gesture started while
 #   pointing at Chrome on display 2 always sees `*chrome*` even if
 #   Finder happens to be focused on display 1. This is the whole
-#   point of stroke vs MacGesture.
+#   design point of stroke.
 #
 # `apps` syntax:
 #   "*"                 — match every bundle id

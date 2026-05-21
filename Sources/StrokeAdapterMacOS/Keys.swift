@@ -10,7 +10,7 @@
 // keys F1–F12 / home / end / pageup / pagedown / delete / backspace.
 // US-QWERTY keycodes — there is no global "logical-name → keycode"
 // map on macOS, so the rule writer is implicitly typing on that
-// layout. (Same constraint MacGesture has had for over a decade.)
+// layout.
 
 import CoreGraphics
 import StrokeCore

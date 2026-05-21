@@ -9,10 +9,9 @@
 //   3. Coalesce consecutive duplicate directions (continuing in the
 //      same direction is one stroke, not many).
 //
-// The algorithm matches MacGesture's "dominant-axis quantisation"
-// closely enough that existing rule files port without retraining.
-//
-// M1 status: signature + stub. M2 fills the body in.
+// Dominant-axis quantisation is a stable, easy-to-explain shape
+// recogniser for short directional flicks — keeps the mental model
+// "draw a path of arrow keys" rather than anything fancier.
 
 import CoreGraphics
 

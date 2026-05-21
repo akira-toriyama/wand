@@ -8,7 +8,8 @@
 // One stroke = (target captured at button-down) + (sample stream
 // while button is held) + (button-up triggers delivery). The
 // adapter is responsible for resolving the target via AX before
-// streaming samples — that's the heart of issue #115's fix.
+// streaming samples — that's the heart of the cursor-anchored
+// design.
 
 import Foundation
 

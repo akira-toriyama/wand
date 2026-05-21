@@ -81,8 +81,8 @@ class Stroke < Formula
   def caveats
     <<~EOS
       stroke is a global mouse-gesture daemon (LSUIElement, no Dock icon).
-      It acts on the window UNDER the cursor — not the focused one — solving
-      MacGesture issue #115. See https://github.com/MacGesture/MacGesture/issues/115
+      It acts on the window UNDER the cursor — not the focused one — so
+      gestures land where you're pointing even on multi-display setups.
 
       First-run setup:
         1) Drop the config template:

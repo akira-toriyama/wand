@@ -1,7 +1,8 @@
 // Action execution against a cursor-anchored Target.
 //
 // Three variants, each dispatching to the captured Target (NOT the
-// currently-focused window — that's the whole point of issue #115):
+// currently-focused window — that's the whole point of the
+// cursor-anchored design):
 //
 //   .key("cmd+w")     raise(target), then post the key combo
 //   .ax("close")      AXUIElementPerformAction on the target's
@@ -33,9 +34,9 @@ public enum Dispatch {
     /// Delay between activating the target app and posting the
     /// keystroke. Activation is asynchronous — the new app takes a
     /// tick to become key, and a keystroke posted too early lands
-    /// on the previous keyWindow (the very bug this project exists
-    /// to fix). 30 ms matches MacGesture's choice and is well under
-    /// human-perceptible latency.
+    /// on the previous keyWindow (the very failure mode the cursor-
+    /// anchored design exists to avoid). 30 ms is well under human-
+    /// perceptible latency.
     private static let activationDelayMs = 30
 
     private static func runKey(_ combo: String, target: Target) {
@@ -60,7 +61,7 @@ public enum Dispatch {
     /// window, which for a multi-window app is exactly the wrong one
     /// (e.g. two Chrome windows: cursor on B, focus on A → activate
     /// Chrome → A stays frontmost → cmd+w closes A's tab. That's the
-    /// issue #115 bug recreated inside dispatch).
+    /// cursor-anchored failure mode recreated inside dispatch).
     ///
     /// Order mirrors facet's `AX.focus`: AX-level app frontmost,
     /// make this window main + focused, then raise it last so it

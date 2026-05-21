@@ -11,8 +11,8 @@
 //
 //   StrokeAdapterMacOS   real-world glue: CGEventTap mouse capture,
 //                        AXUIElementCopyElementAtPosition window
-//                        targeting (the heart of issue #115's fix),
-//                        action dispatch via AX + CGEvent.
+//                        targeting (the heart of the cursor-anchored
+//                        spine), action dispatch via AX + CGEvent.
 //
 //   StrokeAdapterTest    synthetic MouseSource for end-to-end tests
 //                        of the recognition + matching pipeline

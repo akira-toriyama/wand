@@ -11,11 +11,8 @@ A global mouse-gesture daemon for macOS. Draw a shape with the
 mouse, run an action against **the window you were pointing at** —
 not whatever app happens to have focus.
 
-stroke is the spiritual successor to
-[MacGesture](https://github.com/MacGesture/MacGesture) and
-[xGestures](https://www.briankendall.net/xGestures/), built around
-the one thing they don't do: **cursor-anchored target resolution**.
-See [Why stroke exists](#why-stroke-exists) below.
+The one design principle: **the cursor is ground truth.** See
+[Why cursor-anchored](#why-cursor-anchored) below.
 
 ## Status
 
@@ -29,24 +26,23 @@ to a rolling DRAFT release.
 |---|---|
 | M1 — repo scaffolded, `swift build` green, config parses, recognition algorithm | ✅ |
 | M2 — CGEventTap captures real strokes; `key` / `shell` actions fire | ✅ |
-| M3 — AX cursor-anchored target resolution (the issue #115 fix); `ax` actions | ✅ |
+| M3 — AX cursor-anchored target resolution + `ax` actions | ✅ |
 | M4 — `--reload`, `--record`, `--quit` | ✅ |
 | M5 — Homebrew tap, `.app` bundle, persistent codesign | ✅ |
 
-## Why stroke exists
+## Why cursor-anchored
 
-[MacGesture issue #115](https://github.com/MacGesture/MacGesture/issues/115)
-captures the gap. Multi-display setups break MacGesture: you draw a
-gesture while pointing at Chrome on display 2, but the keystroke
-fires into whatever app happens to be focused on display 1. The same
-problem haunts the older xGestures.
+On a multi-display Mac the focused window is often on a different
+display from where you're pointing. A gesture drawn over a Chrome
+tab on display 2 should close *that* tab — not whatever happened to
+have focus on display 1.
 
-stroke's fix is to **resolve the target window at button-down time**
-via `AXUIElementCopyElementAtPosition`, then dispatch every action
-to that exact window — `ax` actions hit it directly without focus
-churn, `key` actions raise it first, `shell` actions get the target
-identity passed through as environment variables. The cursor is
-ground truth.
+stroke does this by **resolving the target window at button-down
+time** via `AXUIElementCopyElementAtPosition`, then dispatching every
+action to that exact window — `ax` actions hit it directly without
+focus churn, `key` actions raise it first, `shell` actions get the
+target identity passed through as environment variables. The cursor
+is ground truth.
 
 ## Install
 
@@ -87,9 +83,9 @@ action-type = "key"
 action-keys = "cmd+w"
 ```
 
-Pattern alphabet is MacGesture-compatible: `L U R D`
-(left / up / right / down). Scroll-axis directions are deferred to
-post-M2. App filters support `*` / `?` globs and `!` exclusions.
+Pattern alphabet is `L U R D` (left / up / right / down). Scroll-
+axis directions are not recognised yet. App filters support
+`*` / `?` globs and `!` exclusions.
 
 ## CLI
 

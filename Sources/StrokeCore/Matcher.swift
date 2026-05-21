@@ -1,7 +1,8 @@
 // Rule matching: (pattern, target bundle id) → first matching Rule.
 //
-// Pure logic, used by the Controller. The "first match wins" semantic
-// matches MacGesture so existing rule files port without surprise.
+// Pure logic, used by the Controller. "First match wins" — easy to
+// reason about and matches the way users naturally read rule files
+// top-to-bottom.
 //
 // App filter syntax:
 //   "*"                — matches every bundle id
