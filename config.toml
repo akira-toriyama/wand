@@ -1,0 +1,117 @@
+# stroke — user configuration
+# https://github.com/akira-toriyama/stroke
+#
+# This file is the **single source of truth** for stroke's settings.
+# stroke does NOT ship a GUI. Drop your edited copy at
+# ~/.config/stroke/config.toml:
+#
+#   curl --create-dirs -o ~/.config/stroke/config.toml \
+#     https://raw.githubusercontent.com/akira-toriyama/stroke/main/config.toml
+#
+# stroke only ever READS this file. Out-of-range / unknown values are
+# silently clamped to safe defaults rather than rejected — a typo can
+# never break the daemon. Validate explicitly with `stroke --validate`.
+
+
+# -----------------------------------------------------------------
+# Trigger — which button (and optional modifiers) starts a stroke
+# -----------------------------------------------------------------
+[trigger]
+
+# Which mouse button initiates a stroke.
+#   "right"   — right mouse button (most common; matches MacGesture)
+#   "middle"  — middle button / scroll-wheel click
+#   "side1"   — back button (Mouse Button 4)
+#   "side2"   — forward button (Mouse Button 5)
+button = "right"
+
+# Modifier keys that must be held at button-down for a stroke to
+# start. Empty = no modifier required.
+# Valid values: "cmd", "opt", "ctrl", "shift", "fn"
+modifiers = []
+
+
+# -----------------------------------------------------------------
+# Recognition — how samples turn into a direction sequence
+# -----------------------------------------------------------------
+[recognition]
+
+# Minimum displacement (px) before a new direction is emitted.
+# Smaller = more sensitive (catches small flicks), bigger = more
+# tolerant of jitter. Clamped 4..200.
+min-stroke-px = 16
+
+# Sampling cadence. Clamped 30..240.
+sample-hz = 120
+
+# Bundle IDs where stroke is completely disabled — useful for apps
+# that already have native gestures (Xcode, video editors, …).
+# Supports `*` / `?` glob.
+exclude-apps = []
+
+
+# -----------------------------------------------------------------
+# Rules — first match wins, applied to the cursor-anchored target
+# -----------------------------------------------------------------
+# Each `[[rules]]` block defines one gesture → action mapping.
+# Rules are matched in document order; the FIRST one whose
+# `pattern` matches and whose `apps` filter allows the target
+# window's bundle id fires.
+#
+# Pattern alphabet (MacGesture-compatible):
+#   L  = left      U  = up
+#   R  = right     D  = down
+# Sequences combine: "DR" = down then right; "URD" = up, right, down.
+#
+# IMPORTANT — Issue #115:
+#   `apps` matches against the **window under the cursor at
+#   stroke-start**, NOT the focused app. So a gesture started while
+#   pointing at Chrome on display 2 always sees `*chrome*` even if
+#   Finder happens to be focused on display 1. This is the whole
+#   point of stroke vs MacGesture.
+#
+# `apps` syntax:
+#   "*"                 — match every bundle id
+#   "com.apple.Safari"  — exact
+#   "*chrome*"          — glob (`*`, `?`)
+#   "!com.apple.dt.Xcode" — exclusion (any matching exclusion wins)
+#
+# Action shapes (decomposed across keys to keep the TOML parser
+# minimal — no inline tables):
+#
+#   action-type = "key"    + action-keys = "cmd+w"
+#   action-type = "ax"     + action-verb = "close" | "minimize" |
+#                                            "zoom" | "raise"
+#   action-type = "shell"  + action-cmd  = "open -a Terminal …"
+#
+# Shell actions receive these env vars describing the target:
+#   STROKE_TARGET_BUNDLE_ID, STROKE_TARGET_PID,
+#   STROKE_TARGET_TITLE,     STROKE_TARGET_FRAME (x,y,w,h)
+
+[[rules]]
+name = "close tab"
+pattern = "DR"
+apps = ["*chrome*", "*safari*"]
+action-type = "key"
+action-keys = "cmd+w"
+
+[[rules]]
+name = "reopen tab"
+pattern = "UR"
+apps = ["*chrome*", "*safari*"]
+action-type = "key"
+action-keys = "cmd+shift+t"
+
+[[rules]]
+name = "close window"
+pattern = "DRU"
+apps = ["*"]
+action-type = "ax"
+action-verb = "close"
+
+[[rules]]
+name = "minimize"
+pattern = "L"
+apps = ["*"]
+action-type = "ax"
+action-verb = "minimize"
