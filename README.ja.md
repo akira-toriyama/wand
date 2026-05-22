@@ -3,50 +3,42 @@
 ![platform](https://img.shields.io/badge/platform-macOS%2013%2B-lightgrey)
 ![swift](https://img.shields.io/badge/Swift-6.0-orange)
 ![license](https://img.shields.io/badge/license-MIT-blue)
-![status](https://img.shields.io/badge/status-M5%20packaged-brightgreen)
 
 [English](README.md) · **日本語**
 
-macOS 用のグローバルマウスジェスチャーデーモン。マウスで形を描くと、
-**カーソルが乗っていたウィンドウ** に対してアクションが実行される —
-たまたまフォーカスを持っていたウィンドウではなく。
+macOS 用のグローバルマウスジェスチャーデーモン。マウスのボタンを
+押したままカーソルで短い形 — 下、そして右 — を描くと、stroke が
+アクションを実行する: タブを閉じる、開き直す、ウィンドウを最小化、
+シェルコマンドを走らせる。アクションは **描き始めた時にカーソルが
+乗っていたウィンドウ** に対して実行される。
 
-設計原則は一点 — **カーソルが ground truth**。詳細は
-[なぜカーソル基準か](#なぜカーソル基準か) を参照。
+## ジェスチャー
 
-## ステータス
+トリガーボタン(デフォルトは右ボタン)を押したまま描く。1 ストロークは
+方向の並び:
 
-**M5 — パッケージング完了**。`Stroke.app` バンドル化、ログイン
-キーチェーンに永続自己署名証明書を作って rebuild / `brew upgrade`
-でも AX 権限が剥がれない構成、`akira-toriyama/homebrew-tap` 経由の
-インストール、main への push ごとに `.app` ビルド + zip 化して
-rolling DRAFT release に添付するパイプライン。
+```
+L = 左    U = 上    R = 右    D = 下
+```
 
-| マイルストーン | 状態 |
-|---|---|
-| M1 — リポジトリ scaffold、`swift build` グリーン、config パース、認識アルゴリズム | ✅ |
-| M2 — CGEventTap で実イベント捕捉、`key` / `shell` アクション動作 | ✅ |
-| M3 — AX による cursor-anchored ターゲット解決、`ax` アクション動作 | ✅ |
-| M4 — `--reload`、`--record`、`--quit` | ✅ |
-| M5 — Homebrew tap、`.app` バンドル、永続コード署名 | ✅ |
+`DR` は 下→右、`URD` は 上→右→下。ボタンを離すと stroke が形を
+ルールと照合し、最初にマッチしたものを実行する。何にもマッチしない形
+(またはほとんど動いていない)は何も起きず、普通のクリックは普通の
+クリックとして動く。
 
-## なぜカーソル基準か
+デフォルト(同梱の [`config.toml`](config.toml)):
 
-マルチディスプレイ環境では、フォーカスを持つウィンドウと
-カーソルが指しているウィンドウが別ディスプレイにいることが多い。
-ディスプレイ 2 の Chrome タブを狙ってジェスチャーを描いたら、
-**その** タブが閉じてほしい — ディスプレイ 1 で偶然フォーカスを
-持っていた何かではなく。
+| 描く | アクション | 対象 |
+|---|---|---|
+| `DR` 下 → 右 | 現在のタブを閉じる(`cmd+w`) | Chrome / Safari |
+| `UR` 上 → 右 | 直前に閉じたタブを復元(`cmd+shift+t`) | Chrome / Safari |
+| `DRU` 下 → 右 → 上 | ウィンドウを閉じる | 全アプリ |
+| `L` 左 | ウィンドウを最小化 | 全アプリ |
 
-stroke は **ボタン押下時点でカーソル直下のウィンドウを
-`AXUIElementCopyElementAtPosition` で解決し**、以降すべてのアクションを
-**そのウィンドウに対して** 実行する:
-
-- `ax` アクションはフォーカス移動なしで対象ウィンドウを直接操作
-- `key` アクションは対象ウィンドウを raise してからキーを送る
-- `shell` アクションは対象の識別子を環境変数で渡す
-
-カーソルが ground truth。
+アクションは **カーソル直下のウィンドウ** を対象にする(キーボード
+フォーカスを持つウィンドウではない): `ax` はそのウィンドウを直接
+操作、`key` は raise してからキーを送る、`shell` はそのウィンドウの
+識別子(bundle id, pid, title, frame)を環境変数で受け取る。
 
 ## インストール
 
@@ -81,14 +73,15 @@ stroke は **config.toml 駆動**。設定 GUI は意図的に持たない。
 [[rules]]
 name = "close tab"
 pattern = "DR"                        # 下 → 右
-apps = ["*chrome*", "*safari*"]       # ← カーソル直下のウィンドウで判定
+apps = ["*chrome*", "*safari*"]       # カーソル直下のウィンドウで判定
 action-type = "key"
 action-keys = "cmd+w"
 ```
 
 方向アルファベットは `L U R D`(左 / 上 / 右 / 下)。
 スクロール軸方向は未対応。アプリフィルタは `*` / `?` グロブと
-`!` による除外をサポート。
+`!` による除外をサポート。アクション種別は `key`(キーストローク)、
+`ax`(`close` / `minimize` / `zoom` / `raise`)、`shell`(任意コマンド)。
 
 ## CLI
 
@@ -112,7 +105,7 @@ daemon が居なければ exit 3 で拒否。
 
 ## アーキテクチャ
 
-Hexagonal(Ports & Adapters)、3 層構成 — [facet](https://github.com/akira-toriyama/facet) を踏襲:
+Hexagonal(Ports & Adapters)、3 層構成:
 
 ```
 StrokeApp           @main / CLI / Controller(配線層)

@@ -3,46 +3,44 @@
 ![platform](https://img.shields.io/badge/platform-macOS%2013%2B-lightgrey)
 ![swift](https://img.shields.io/badge/Swift-6.0-orange)
 ![license](https://img.shields.io/badge/license-MIT-blue)
-![status](https://img.shields.io/badge/status-M5%20packaged-brightgreen)
 
 **English** · [日本語](README.ja.md)
 
-A global mouse-gesture daemon for macOS. Draw a shape with the
-mouse, run an action against **the window you were pointing at** —
-not whatever app happens to have focus.
+A global mouse-gesture daemon for macOS. Hold a mouse button, draw a
+short shape with the cursor — down, then right — and stroke fires an
+action: close a tab, reopen one, minimize a window, run a shell
+command. The action runs against the window the cursor was over when
+you started drawing.
 
-The one design principle: **the cursor is ground truth.** See
-[Why cursor-anchored](#why-cursor-anchored) below.
+## Gestures
 
-## Status
+Draw with the trigger button held down (right mouse by default). A
+stroke is a sequence of cardinal directions:
 
-**M5 — packaged.** `Stroke.app` bundle, persistent self-signed cert
-for stable Accessibility grants across rebuilds / `brew upgrade`,
-Homebrew formula at `akira-toriyama/homebrew-tap`, release pipeline
-that builds + zips on every push to main and attaches the artifact
-to a rolling DRAFT release.
+```
+L = left    U = up    R = right    D = down
+```
 
-| Milestone | Status |
-|---|---|
-| M1 — repo scaffolded, `swift build` green, config parses, recognition algorithm | ✅ |
-| M2 — CGEventTap captures real strokes; `key` / `shell` actions fire | ✅ |
-| M3 — AX cursor-anchored target resolution + `ax` actions | ✅ |
-| M4 — `--reload`, `--record`, `--quit` | ✅ |
-| M5 — Homebrew tap, `.app` bundle, persistent codesign | ✅ |
+So `DR` is down-then-right, `URD` is up → right → down. When you
+release the button, stroke matches the shape against your rules and
+runs the first match. A shape that matches nothing — or barely
+moving at all — does nothing, and a plain click still behaves like a
+normal click.
 
-## Why cursor-anchored
+Out of the box (the bundled [`config.toml`](config.toml)):
 
-On a multi-display Mac the focused window is often on a different
-display from where you're pointing. A gesture drawn over a Chrome
-tab on display 2 should close *that* tab — not whatever happened to
-have focus on display 1.
+| Draw | Action | Where |
+|---|---|---|
+| `DR` down → right | close the current tab (`cmd+w`) | Chrome / Safari |
+| `UR` up → right | reopen last closed tab (`cmd+shift+t`) | Chrome / Safari |
+| `DRU` down → right → up | close the window | any app |
+| `L` left | minimize the window | any app |
 
-stroke does this by **resolving the target window at button-down
-time** via `AXUIElementCopyElementAtPosition`, then dispatching every
-action to that exact window — `ax` actions hit it directly without
-focus churn, `key` actions raise it first, `shell` actions get the
-target identity passed through as environment variables. The cursor
-is ground truth.
+Actions target the window **under the cursor**, not whichever window
+holds keyboard focus: `ax` actions operate on it directly, `key`
+actions raise it first and send the keystroke, and `shell` actions
+receive its identity (bundle id, pid, title, frame) as environment
+variables.
 
 ## Install
 
@@ -78,14 +76,16 @@ A rule looks like this:
 [[rules]]
 name = "close tab"
 pattern = "DR"                        # down → right
-apps = ["*chrome*", "*safari*"]       # cursor-anchored — see above
+apps = ["*chrome*", "*safari*"]       # matches the window under the cursor
 action-type = "key"
 action-keys = "cmd+w"
 ```
 
 Pattern alphabet is `L U R D` (left / up / right / down). Scroll-
 axis directions are not recognised yet. App filters support
-`*` / `?` globs and `!` exclusions.
+`*` / `?` globs and `!` exclusions. Action types are `key` (a
+keystroke), `ax` (`close` / `minimize` / `zoom` / `raise`), and
+`shell` (any command).
 
 ## CLI
 
@@ -109,8 +109,7 @@ would fight over the same CGEventTap.
 
 ## Architecture
 
-Hexagonal (Ports & Adapters), three layers — mirrors
-[facet](https://github.com/akira-toriyama/facet):
+Hexagonal (Ports & Adapters), three layers:
 
 ```
 StrokeApp           @main / CLI / Controller (wires the pipeline)
