@@ -197,6 +197,28 @@ final class RecognitionTests: XCTestCase {
             "[recognition]\nmax-stroke-ms = 999999").maxStrokeMs, 60000)    // clamp high
     }
 
+    func testCancelReversals() {
+        XCTAssertEqual(StrokeConfig.parse("").cancelReversals, 2)            // default on
+        XCTAssertEqual(StrokeConfig.parse(
+            "[recognition]\ncancel-reversals = 3").cancelReversals, 3)
+        XCTAssertEqual(StrokeConfig.parse(
+            "[recognition]\ncancel-reversals = 0").cancelReversals, 0)       // off
+        XCTAssertEqual(StrokeConfig.parse(
+            "[recognition]\ncancel-reversals = 999").cancelReversals, 20)    // clamp high
+    }
+
+    func testCancelWindowMs() {
+        XCTAssertEqual(StrokeConfig.parse("").cancelWindowMs, 500)           // default
+        XCTAssertEqual(StrokeConfig.parse(
+            "[recognition]\ncancel-window-ms = 800").cancelWindowMs, 800)
+        XCTAssertEqual(StrokeConfig.parse(
+            "[recognition]\ncancel-window-ms = 0").cancelWindowMs, 0)        // any speed
+        XCTAssertEqual(StrokeConfig.parse(
+            "[recognition]\ncancel-window-ms = 50").cancelWindowMs, 100)     // clamp low
+        XCTAssertEqual(StrokeConfig.parse(
+            "[recognition]\ncancel-window-ms = 99999").cancelWindowMs, 5000) // clamp high
+    }
+
     func testRuleNameDefaultsToPattern() {
         let toml = """
         [[rules]]

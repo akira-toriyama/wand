@@ -120,6 +120,15 @@ deliberate right-drag) runs past it and is abandoned. `0` (default) =
 no limit; the trail turns the no-match color once a segment runs past
 the budget.
 
+`[recognition] cancel-reversals` is the escape hatch: scribble the
+cursor back and forth and the in-progress gesture is abandoned on the
+spot — no waiting for a timeout, and releasing fires nothing. It
+counts 180° direction reversals; the default `2` catches a deliberate
+back-and-forth without tripping on real gestures. `0` = off.
+`cancel-window-ms` (default `500`) gates it on *speed* — the reversals
+must land within that window, so a fast scribble cancels but a slow
+deliberate back-and-forth doesn't; `0` = any speed.
+
 ## CLI
 
 ```sh

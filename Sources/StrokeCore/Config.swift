@@ -17,6 +17,16 @@ public struct StrokeConfig: Sendable {
     /// action). `0` = no limit. Lets you right-drag normally without
     /// it being read as a gesture, as long as you take your time.
     public var maxStrokeMs: Int
+    /// Number of 180° direction reversals (a back-and-forth scribble)
+    /// that cancels the in-progress stroke — once reached, the gesture
+    /// is latched dead and releasing fires nothing, no waiting for a
+    /// timeout. `0` = off. A real gesture rarely reverses, so the
+    /// default catches deliberate scribbles without false positives.
+    public var cancelReversals: Int
+    /// Time window (ms) the `cancelReversals` reversals must fall within
+    /// for a scribble to cancel — so only a *fast* back-and-forth counts,
+    /// not a slow deliberate one. `0` = any speed (count alone cancels).
+    public var cancelWindowMs: Int
     public var sampleHz: Int
     public var excludeApps: [String]
     public var rules: [Rule]
@@ -35,6 +45,8 @@ public struct StrokeConfig: Sendable {
         trigger: Trigger(button: .right, modifiers: []),
         minStrokePx: 16,
         maxStrokeMs: 0,
+        cancelReversals: 2,
+        cancelWindowMs: 500,
         sampleHz: 120,
         excludeApps: [],
         rules: [],
@@ -76,6 +88,11 @@ public struct StrokeConfig: Sendable {
         let minPx = max(4, min(200, reco.int("min-stroke-px", 16)))
         // 0 = no limit; otherwise clamp to a sane 100ms..60s window.
         let maxMs = { let m = reco.int("max-stroke-ms", 0); return m <= 0 ? 0 : max(100, min(60000, m)) }()
+        // 0 = off; otherwise at least 1 reversal, capped so a typo can't
+        // demand an unreachable scribble.
+        let cancelRev = { let n = reco.int("cancel-reversals", 2); return n <= 0 ? 0 : max(1, min(20, n)) }()
+        // 0 = any speed; otherwise clamp to a sane 100ms..5s window.
+        let cancelWin = { let m = reco.int("cancel-window-ms", 500); return m <= 0 ? 0 : max(100, min(5000, m)) }()
         let hz = max(30, min(240, reco.int("sample-hz", 120)))
         let excludes = reco.strings("exclude-apps")
 
@@ -103,6 +120,8 @@ public struct StrokeConfig: Sendable {
             trigger: Trigger(button: button, modifiers: mods),
             minStrokePx: minPx,
             maxStrokeMs: maxMs,
+            cancelReversals: cancelRev,
+            cancelWindowMs: cancelWin,
             sampleHz: hz,
             excludeApps: excludes,
             rules: rules,

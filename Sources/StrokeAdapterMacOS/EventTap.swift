@@ -42,6 +42,8 @@ public struct TrailSample {
     public let bundleID: String
     /// Stroke has already exceeded `maxStrokeMs` (won't fire).
     public let expired: Bool
+    /// Stroke has been scribble-cancelled (latched; won't fire).
+    public let cancelled: Bool
 }
 
 public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
@@ -49,9 +51,14 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
     // Configuration -----------------------------------------------------
     private let trigger: Trigger
     private let minStrokePx: Int
-    /// Max button-down→up duration (ms) for a stroke to count as a
-    /// gesture; `0` = no limit. A slower drag is abandoned at button-up.
+    /// Max time (ms) a single segment may take; `0` = no limit. The
+    /// clock resets on each turn, so a stalled single direction is
+    /// abandoned at button-up.
     private let maxStrokeMs: Int
+    /// 180° reversals that scribble-cancel the stroke; `0` = off.
+    private let cancelReversals: Int
+    /// Window (ms) those reversals must fall within; `0` = any speed.
+    private let cancelWindowMs: Int
     /// `--record` mode: never fire actions, deliver *every* stroke
     /// (including too-short ones) to the handler so the recorder can
     /// log them, and still replay short clicks so the user keeps a
@@ -99,6 +106,13 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
     /// Direction count of the live pattern at the last turn — a turn is
     /// detected when the recomputed pattern grows past this.
     private var lastDirCount = 0
+    /// Latched once the live pattern accumulates `cancelReversals`
+    /// back-and-forth reversals fast enough — a deliberate scribble.
+    /// Stays set until the next button-down, so releasing fires nothing.
+    private var cancelled = false
+    /// Timestamp of each 180° reversal seen this stroke, in order. The
+    /// span of the last `cancelReversals` of these is the scribble speed.
+    private var reversalTimes: [TimeInterval] = []
     /// Mouse location at button-down in CG screen coords (origin
     /// top-left). Used to replay a click on no-motion strokes.
     private var downPoint: CGPoint = .zero
@@ -126,10 +140,13 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
     }
 
     public init(trigger: Trigger, minStrokePx: Int,
-                maxStrokeMs: Int = 0, isRecording: Bool = false) {
+                maxStrokeMs: Int = 0, cancelReversals: Int = 0,
+                cancelWindowMs: Int = 0, isRecording: Bool = false) {
         self.trigger = trigger
         self.minStrokePx = minStrokePx
         self.maxStrokeMs = maxStrokeMs
+        self.cancelReversals = cancelReversals
+        self.cancelWindowMs = cancelWindowMs
         self.isRecording = isRecording
     }
 
@@ -147,6 +164,20 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
             lastDirCount = dirCount
             lastTurn = CACurrentMediaTime()
         }
+    }
+
+    /// Count of 180° reversals in a coalesced pattern (`L↔R`, `U↔D`).
+    private static func reversals(_ pattern: String) -> Int {
+        let c = Array(pattern)
+        guard c.count > 1 else { return 0 }
+        var n = 0
+        for i in 1..<c.count where isOpposite(c[i - 1], c[i]) { n += 1 }
+        return n
+    }
+
+    private static func isOpposite(_ a: Character, _ b: Character) -> Bool {
+        (a == "L" && b == "R") || (a == "R" && b == "L")
+            || (a == "U" && b == "D") || (a == "D" && b == "U")
     }
 
     // MARK: - MouseSource
@@ -281,6 +312,8 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
         strokeStart = CACurrentMediaTime()
         lastTurn = strokeStart
         lastDirCount = 0
+        cancelled = false
+        reversalTimes.removeAll(keepingCapacity: true)
         samples.removeAll(keepingCapacity: true)
         samples.append(Sample(p: Self.flipY(cg), t: 0))
         emitTrailSample(cg)
@@ -299,18 +332,36 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
         return nil
     }
 
-    /// Feed the overlay one trail point plus the gesture-so-far, and
-    /// advance the per-segment expiry clock on each turn. The live
-    /// pattern drives both, so the recognise pass runs whenever either
-    /// the overlay or `maxStrokeMs` needs it — and is skipped otherwise.
+    /// Feed the overlay one trail point plus the gesture-so-far, advance
+    /// the per-segment expiry clock on each turn, and latch a cancel
+    /// once the shape scribbles back and forth. The live pattern drives
+    /// all three, so the recognise pass runs whenever any of the overlay,
+    /// `maxStrokeMs`, or `cancelReversals` needs it — skipped otherwise.
     private func emitTrailSample(_ cg: CGPoint) {
-        guard onSample != nil || maxStrokeMs > 0 else { return }
+        guard onSample != nil || maxStrokeMs > 0 || cancelReversals > 0
+        else { return }
         let pattern = Recognition.recognize(samples: samples,
                                              minStrokePx: minStrokePx).patternString
         noteTurn(dirCount: pattern.count)
+        if cancelReversals > 0 && !cancelled {
+            let rev = Self.reversals(pattern)   // monotonic as samples grow
+            if rev > reversalTimes.count {
+                let now = CACurrentMediaTime()
+                while reversalTimes.count < rev { reversalTimes.append(now) }
+                if reversalTimes.count >= cancelReversals {
+                    let span = now - reversalTimes[reversalTimes.count - cancelReversals]
+                    if cancelWindowMs == 0 || span * 1000 <= Double(cancelWindowMs) {
+                        cancelled = true
+                        Log.debug("event-tap: scribble-cancelled at \(pattern) "
+                                  + "(\(cancelReversals) reversals in "
+                                  + "\(Int(span * 1000))ms)")
+                    }
+                }
+            }
+        }
         onSample?(TrailSample(point: cg, pattern: pattern,
                               bundleID: currentTarget?.bundleID ?? "",
-                              expired: strokeExpired))
+                              expired: strokeExpired, cancelled: cancelled))
     }
 
     /// Convert CG global coords (Y grows down) to the Y-up convention
@@ -324,6 +375,7 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
     private func handleUp(event: CGEvent) -> Unmanaged<CGEvent>? {
         guard capturing else { return Unmanaged.passUnretained(event) }
         let expired = strokeExpired         // capture before resetting state
+        let wasCancelled = cancelled
         capturing = false
         onStrokeEnd?()   // clear the overlay trail, whatever the outcome
 
@@ -347,6 +399,15 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
                       + "— replayed click")
             // Recorder wants to see misses too — that's how the user
             // learns "I moved 12px but the threshold is 16."
+            if isRecording { deliver(target, captured) }
+            return nil
+        }
+
+        // Scribble-cancelled mid-stroke — abandon it. They moved (so no
+        // click replay) and the shape is dead by design, no dispatch.
+        if wasCancelled {
+            Log.line("event-tap: \(recognised.patternString) recognised but "
+                     + "scribble-cancelled — abandoned")
             if isRecording { deliver(target, captured) }
             return nil
         }

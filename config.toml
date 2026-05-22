@@ -49,6 +49,20 @@ min-stroke-px = 16
 # 100..60000 when set.
 max-stroke-ms = 0
 
+# Scribble-to-cancel: the number of 180° direction reversals (a quick
+# back-and-forth) that abandons the in-progress stroke. Once reached
+# the gesture is dead — releasing fires nothing, with no waiting for a
+# timeout. A real gesture rarely reverses, so 2 catches a deliberate
+# scribble without false positives. 0 = off. Clamped 1..20 when set.
+# Raise it above the most-reversing rule you define.
+cancel-reversals = 2
+
+# Speed gate for the scribble: the reversals above must all fall within
+# this window (ms) to cancel, so a *fast* back-and-forth cancels but a
+# slow deliberate one doesn't. 0 = any speed (count alone cancels).
+# Clamped 100..5000 when set.
+cancel-window-ms = 500
+
 # Sampling cadence. Clamped 30..240.
 sample-hz = 120
 

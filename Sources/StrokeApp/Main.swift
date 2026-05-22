@@ -143,7 +143,9 @@ enum StrokeApp {
         let source = MacOSMouseSource(
             trigger: cfg.trigger,
             minStrokePx: cfg.minStrokePx,
-            maxStrokeMs: cfg.maxStrokeMs
+            maxStrokeMs: cfg.maxStrokeMs,
+            cancelReversals: cfg.cancelReversals,
+            cancelWindowMs: cfg.cancelWindowMs
         )
 
         // Gesture-trail overlay (passive observer of the sample
@@ -171,7 +173,7 @@ enum StrokeApp {
                 var hint: GestureHint? = nil      // nil only before any direction
                 if s.pattern.isEmpty {
                     valid = !s.expired            // neutral start
-                } else if s.expired
+                } else if s.expired || s.cancelled
                     || Matcher.isExcluded(bundleID: s.bundleID, by: excludes) {
                     hint = GestureHint(shape: arrows(s.pattern), rows: [])
                 } else {
