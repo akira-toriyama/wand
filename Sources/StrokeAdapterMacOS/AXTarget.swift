@@ -107,6 +107,9 @@ public enum AXTarget {
 
     // MARK: - AX permission prompt
 
+    /// Current trust state, without prompting — for `stroke --doctor`.
+    public static func isTrusted() -> Bool { AXIsProcessTrusted() }
+
     /// Ensure Accessibility is granted; prompt the user if not.
     /// Called once from `Main` at server startup. Mirrors facet's
     /// `AX.ensureTrusted()`.

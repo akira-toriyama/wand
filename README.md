@@ -41,8 +41,9 @@ the shape forming; it clears the moment you release. The trail is
 **colored by whether the shape so far matches a rule** — one color
 while it's a valid gesture for the window under the cursor, another
 once it forms a shape no rule wants (set up `DR` but drew `DL`?
-you'll see it turn). When it matches, the rule's `name` is shown
-next to the cursor so you know what it'll do before you release.
+you'll see it turn). The recognised pattern (`DR`) is shown next to
+the cursor — plus the matched rule's `name` (`DR · close tab`) when
+it'll fire — so you know what's happening before you release.
 Colors, width, and on/off live in the `[overlay]` section of
 `config.toml`.
 
@@ -115,6 +116,8 @@ stroke                    # run as agent (CGEventTap loop)
 stroke --debug            # verbose log to /tmp/stroke.log + stderr
 
 stroke --validate         # parse config.toml, exit 0/2
+stroke --doctor           # health check: Accessibility, config, daemon, tap
+stroke --test DR [app]    # dry-run: which rule fires for a pattern
 stroke --record           # interactive recorder — draw a gesture, get a
                           # paste-ready [[rules]] snippet on stdout
 

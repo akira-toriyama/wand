@@ -39,9 +39,9 @@ L = 左    U = 上    R = 右    D = 下
 離した瞬間に消える。軌跡は **今の形がルールにマッチしているかで色が
 変わる** — カーソル下のウィンドウで有効なジェスチャーなら 1 色、
 どのルールにも当たらない形になると別の色(`DR` を設定してるのに `DL`
-を描いた、など)。マッチしている時は、そのルールの `name` がカーソル
-横に出るので、離す前に何が起きるか分かる(`name` は人間可読に)。
-色・太さ・on/off は `config.toml` の `[overlay]` セクションで設定。
+を描いた、など)。認識中のパターン(`DR`)がカーソル横に出て、発動する
+時はルールの `name` も付く(`DR · タブを閉じる`)ので、離す前に何が
+起きるか分かる。色・太さ・on/off は `config.toml` の `[overlay]` で設定。
 
 アクションは **カーソル直下のウィンドウ** を対象にする(キーボード
 フォーカスを持つウィンドウではない): `ax` はそのウィンドウを直接
@@ -109,6 +109,8 @@ stroke                    # agent として常駐(CGEventTap loop)
 stroke --debug            # 詳細ログを /tmp/stroke.log + stderr へ
 
 stroke --validate         # config.toml をパース、0 / 2 で exit
+stroke --doctor           # 健康診断: AX / config / daemon / tap
+stroke --test DR [app]    # ドライラン: そのパターンでどのルールが発動するか
 stroke --record           # 対話型レコーダ — 描くと貼れる [[rules]]
                           # スニペットが stdout に出る
 

@@ -50,9 +50,13 @@ enum StrokeApp {
 
         STANDALONE COMMANDS
           stroke --validate            parse config.toml; exit 0 if valid
+          stroke --doctor              health check: Accessibility,
+                                       config, daemon, event tap
+          stroke --test PATTERN [APP]  dry-run: which rule would fire for
+                                       a pattern (optionally for a bundle id)
           stroke --record              interactive recorder: draw a
-                                       gesture, see the direction
-                                       sequence printed to stdout.
+                                       gesture, get a paste-ready
+                                       [[rules]] snippet on stdout.
                                        Refuses if the daemon is running.
           stroke --help                this help
 
@@ -79,6 +83,15 @@ enum StrokeApp {
         if argv.contains("--help") { printHelp() }
         if argv.contains("--debug") { debugMode = true }
 
+        // `--test PATTERN [bundle-id]` consumes operands, so handle it
+        // before the unknown-flag scan would reject that pattern.
+        if let i = argv.firstIndex(of: "--test") {
+            let pattern = i + 1 < argv.count ? argv[i + 1] : ""
+            let bundleID = (i + 2 < argv.count && !argv[i + 2].hasPrefix("--"))
+                ? argv[i + 2] : nil
+            runTest(pattern: pattern, bundleID: bundleID)
+        }
+
         // Two-pass: reject ANY unknown flag *before* dispatching a
         // recognised one, so `stroke --reload --typo` fails loudly on
         // --typo instead of silently acting on --reload and never
@@ -86,7 +99,7 @@ enum StrokeApp {
         // policy must hold even when flags are combined).
         let recognised: Set<String> = [
             "--help", "--debug", "--validate", "--record",
-            "--reload", "--quit", "--status",
+            "--reload", "--quit", "--status", "--doctor",
         ]
         for a in argv where !recognised.contains(a) {
             let msg = "stroke: unknown flag \"\(a)\" — see "
@@ -96,6 +109,7 @@ enum StrokeApp {
         }
 
         // Standalone modes — no running daemon required.
+        if argv.contains("--doctor") { runDoctor() }
         if argv.contains("--validate") {
             let cfg = StrokeConfig.load()
             FileHandle.standardError.write(Data((
@@ -154,16 +168,18 @@ enum StrokeApp {
             // fire).
             source.onSample = { s in
                 var valid = false
-                var label: String? = nil
-                if !s.expired {
-                    if s.pattern.isEmpty {
-                        valid = true                 // just started — neutral
-                    } else if let rule = Matcher.resolve(
-                        pattern: s.pattern, bundleID: s.bundleID,
-                        rules: rules, excludes: excludes) {
-                        valid = true
-                        label = rule.name            // show what it'll do
-                    }
+                var label: String? = nil          // nil only before any direction
+                if s.pattern.isEmpty {
+                    valid = !s.expired            // neutral start
+                } else if !s.expired, let rule = Matcher.resolve(
+                    pattern: s.pattern, bundleID: s.bundleID,
+                    rules: rules, excludes: excludes) {
+                    valid = true
+                    label = "\(s.pattern) · \(rule.name)"   // shape + what it'll do
+                } else {
+                    // a shape that matches nothing (or timed out): show
+                    // the pattern alone so the user sees what they drew.
+                    label = s.pattern
                 }
                 MainActor.assumeIsolated {
                     overlay.addPoint(s.point, valid: valid, label: label)
@@ -190,6 +206,91 @@ enum StrokeApp {
 
         app.run()
         exit(0)
+    }
+
+    // MARK: - Doctor
+
+    /// Health report: Accessibility, config, daemon, event tap. Exit 0
+    /// if everything's green, 1 if any check fails.
+    private static func runDoctor() -> Never {
+        func line(_ ok: Bool, _ label: String, _ detail: String) -> String {
+            "  \(ok ? "✓" : "✗")  \(label.padding(toLength: 16, withPad: " ", startingAt: 0))\(detail)"
+        }
+        var ok = true
+        print("stroke doctor")
+
+        let ax = AXTarget.isTrusted()
+        ok = ok && ax
+        print(line(ax, "Accessibility:",
+                   ax ? "granted"
+                      : "NOT granted — open Stroke.app and grant it in "
+                        + "System Settings → Privacy & Security → Accessibility"))
+
+        let fileExists = FileManager.default.fileExists(atPath: StrokeConfig.path)
+        let cfg = StrokeConfig.load()
+        print(line(fileExists, "Config:",
+                   fileExists
+                     ? "\(StrokeConfig.path) — \(cfg.rules.count) rule(s), "
+                       + "trigger=\(cfg.trigger.button.rawValue)"
+                     : "no file at \(StrokeConfig.path) — using built-in "
+                       + "defaults (curl the template)"))
+
+        let running = isServerRunning()
+        print(line(running, "Daemon:",
+                   running ? "running" : "not running — start with `stroke`"))
+
+        let tap = MacOSMouseSource.canInstallTap()
+        ok = ok && tap
+        print(line(tap, "Event tap:",
+                   tap ? "can install" : "cannot install (needs Accessibility)"))
+
+        exit(ok ? 0 : 1)
+    }
+
+    // MARK: - Test (dry-run a pattern against the rules)
+
+    /// `--test PATTERN [bundle-id]`: resolve which rule a pattern would
+    /// fire. With a bundle id, report the single firing rule (honouring
+    /// app filters + excludes); without one, list every rule that uses
+    /// the pattern. Reads config; touches no event tap.
+    private static func runTest(pattern: String, bundleID: String?) -> Never {
+        guard !pattern.isEmpty else {
+            FileHandle.standardError.write(Data(
+                "usage: stroke --test PATTERN [bundle-id]\n".utf8))
+            exit(2)
+        }
+        let cfg = StrokeConfig.load()
+        if let bid = bundleID {
+            if Matcher.isExcluded(bundleID: bid, by: cfg.excludeApps) {
+                print("\(pattern) on \(bid) → app excluded, nothing fires")
+            } else if let rule = Matcher.match(pattern: pattern,
+                                               bundleID: bid, rules: cfg.rules) {
+                print("\(pattern) on \(bid) → \"\(rule.name)\"  "
+                      + "[\(actionDescription(rule.action))]")
+            } else {
+                print("\(pattern) on \(bid) → no matching rule")
+            }
+        } else {
+            let matches = cfg.rules.filter { $0.pattern == pattern }
+            if matches.isEmpty {
+                print("no rule has pattern \"\(pattern)\"")
+            } else {
+                print("pattern \"\(pattern)\" is used by:")
+                for r in matches {
+                    print("  \"\(r.name)\"  apps=\(r.apps)  "
+                          + "[\(actionDescription(r.action))]")
+                }
+            }
+        }
+        exit(0)
+    }
+
+    private static func actionDescription(_ action: Action) -> String {
+        switch action {
+        case .key(let k):   return "key \(k)"
+        case .ax(let v):    return "ax \(v)"
+        case .shell(let c): return "shell \(c)"
+        }
     }
 
     // MARK: - Status
