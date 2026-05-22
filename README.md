@@ -40,12 +40,21 @@ As you draw, a translucent trail follows the cursor so you can see
 the shape forming; it clears the moment you release. The trail is
 **colored by whether the shape so far matches a rule** — one color
 while it's a valid gesture for the window under the cursor, another
-once it forms a shape no rule wants (set up `DR` but drew `DL`?
-you'll see it turn). The recognised pattern (`DR`) is shown next to
-the cursor — plus the matched rule's `name` (`DR · close tab`) when
-it'll fire — so you know what's happening before you release.
-Colors, width, and on/off live in the `[overlay]` section of
-`config.toml`.
+once it forms a shape no rule wants. Next to the cursor it shows the
+shape so far as **arrows** (`↓→`) and a live **gesture-assist** list
+— every rule still reachable from here, showing only what's *left* to
+draw, with `▸` marking the one that fires right now:
+
+```
+↓
+  ←   close tab
+  →↑  close window
+```
+
+So after a `↓` you can see you're on the way to either, and what to
+add. The trail is the match color while the current shape fires a
+rule, the no-match color otherwise. Colors, width, and on/off live in
+the `[overlay]` section of `config.toml`.
 
 Actions target the window **under the cursor**, not whichever window
 holds keyboard focus: `ax` actions operate on it directly, `key`

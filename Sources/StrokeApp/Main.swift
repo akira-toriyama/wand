@@ -168,21 +168,26 @@ enum StrokeApp {
             // fire).
             source.onSample = { s in
                 var valid = false
-                var label: String? = nil          // nil only before any direction
+                var hint: GestureHint? = nil      // nil only before any direction
                 if s.pattern.isEmpty {
                     valid = !s.expired            // neutral start
-                } else if !s.expired, let rule = Matcher.resolve(
-                    pattern: s.pattern, bundleID: s.bundleID,
-                    rules: rules, excludes: excludes) {
-                    valid = true
-                    label = "\(s.pattern) · \(rule.name)"   // shape + what it'll do
+                } else if s.expired
+                    || Matcher.isExcluded(bundleID: s.bundleID, by: excludes) {
+                    hint = GestureHint(shape: arrows(s.pattern), rows: [])
                 } else {
-                    // a shape that matches nothing (or timed out): show
-                    // the pattern alone so the user sees what they drew.
-                    label = s.pattern
+                    // Blue when the *current* shape fires a rule; the
+                    // assist rows show every rule reachable from here
+                    // (so a red, still-incomplete shape shows the way).
+                    valid = Matcher.match(pattern: s.pattern,
+                                          bundleID: s.bundleID,
+                                          rules: rules) != nil
+                    hint = assistHint(pattern: s.pattern,
+                                      candidates: Matcher.candidates(
+                                        prefix: s.pattern, bundleID: s.bundleID,
+                                        rules: rules))
                 }
                 MainActor.assumeIsolated {
-                    overlay.addPoint(s.point, valid: valid, label: label)
+                    overlay.addPoint(s.point, valid: valid, hint: hint)
                 }
             }
             source.onStrokeEnd = {
@@ -291,6 +296,28 @@ enum StrokeApp {
         case .ax(let v):    return "ax \(v)"
         case .shell(let c): return "shell \(c)"
         }
+    }
+
+    // MARK: - Overlay label helpers
+
+    /// Render a `L U R D` pattern as arrow glyphs (`DL` → `↓←`).
+    private static func arrows(_ pattern: String) -> String {
+        pattern.compactMap { Direction(rawValue: $0)?.arrow }.joined()
+    }
+
+    /// Build the overlay hint: the shape so far, plus a row per rule
+    /// reachable from here. Each row shows only the *remaining* arrows
+    /// (the already-drawn prefix is stripped), and `fires` marks the
+    /// rule the current shape triggers now. Capped so a permissive
+    /// prefix can't grow a wall.
+    private static func assistHint(pattern: String, candidates: [Rule]) -> GestureHint {
+        let rows = candidates.prefix(6).map { r in
+            GestureHint.Row(
+                suffix: arrows(String(r.pattern.dropFirst(pattern.count))),
+                name: r.name,
+                fires: r.pattern == pattern)
+        }
+        return GestureHint(shape: arrows(pattern), rows: Array(rows))
     }
 
     // MARK: - Status

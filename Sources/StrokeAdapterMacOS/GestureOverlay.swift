@@ -16,6 +16,27 @@
 import AppKit
 import CoreGraphics
 
+/// What the overlay shows next to the cursor: the shape drawn so far
+/// (as arrows) plus the rules still reachable from it. Each row's
+/// `suffix` is only the *remaining* arrows (the drawn prefix is
+/// stripped — you already see it), and `fires` marks the rule the
+/// current shape triggers right now (its suffix is empty).
+public struct GestureHint: Sendable {
+    public struct Row: Sendable {
+        public let suffix: String
+        public let name: String
+        public let fires: Bool
+        public init(suffix: String, name: String, fires: Bool) {
+            self.suffix = suffix; self.name = name; self.fires = fires
+        }
+    }
+    public let shape: String
+    public let rows: [Row]
+    public init(shape: String, rows: [Row]) {
+        self.shape = shape; self.rows = rows
+    }
+}
+
 @MainActor
 public final class GestureOverlay {
 
@@ -57,13 +78,12 @@ public final class GestureOverlay {
     }
 
     /// Append one trail point (CG global coords, Y-down). `valid`
-    /// recolors the whole trail: the match color when the stroke so
-    /// far matches a rule, the no-match color otherwise. `label` (the
-    /// matched rule's name, or nil) is drawn near the cursor so the
-    /// user sees what the gesture will do. Coalesced redraws keep this
-    /// cheap even at the per-mouse-move rate.
-    public func addPoint(_ cg: CGPoint, valid: Bool, label: String?) {
-        view.append(cg, valid: valid, label: label)
+    /// recolors the whole trail: the match color when the current
+    /// shape fires a rule, the no-match color otherwise. `hint` (the
+    /// shape-so-far + reachable rules) is drawn near the cursor.
+    /// Coalesced redraws keep this cheap at the per-mouse-move rate.
+    public func addPoint(_ cg: CGPoint, valid: Bool, hint: GestureHint?) {
+        view.append(cg, valid: valid, hint: hint)
     }
 
     /// Clear the trail (stroke ended).
@@ -137,15 +157,15 @@ private final class TrailView: NSView {
 
     private var points: [CGPoint] = []   // already in view-local coords
     private var valid = true             // current match state of the trail
-    private var label: String?           // matched rule's label, if any
+    private var hint: GestureHint?       // shape + reachable rules
 
     override var isFlipped: Bool { false }   // Cocoa default (Y-up)
     override func hitTest(_ point: NSPoint) -> NSView? { nil }   // click-through
 
     /// Convert a CG global point (Y-down) to view-local (Y-up) coords.
-    func append(_ cg: CGPoint, valid: Bool, label: String?) {
+    func append(_ cg: CGPoint, valid: Bool, hint: GestureHint?) {
         self.valid = valid
-        self.label = label
+        self.hint = hint
         // CG global (origin top-left, Y-down) → Cocoa global (origin
         // bottom-left of the primary display, Y-up). Flipping about the
         // primary screen's height is correct for ALL displays, not
@@ -164,50 +184,106 @@ private final class TrailView: NSView {
     }
 
     func reset() {
-        guard !points.isEmpty || label != nil else { return }
+        guard !points.isEmpty || hint != nil else { return }
         points.removeAll(keepingCapacity: true)
-        label = nil
+        hint = nil
         needsDisplay = true
     }
 
     override func draw(_ dirtyRect: NSRect) {
         guard points.count >= 2 else { return }
+        let color = valid ? matchColor : noMatchColor
+
+        // Trail with a soft same-color glow for a bit of depth.
         let path = NSBezierPath()
         path.lineWidth = strokeWidth
         path.lineCapStyle = .round
         path.lineJoinStyle = .round
         path.move(to: points[0])
         for p in points.dropFirst() { path.line(to: p) }
-        (valid ? matchColor : noMatchColor).withAlphaComponent(0.85).setStroke()
+        NSGraphicsContext.saveGraphicsState()
+        let glow = NSShadow()
+        glow.shadowColor = color.withAlphaComponent(0.5)
+        glow.shadowBlurRadius = 7
+        glow.set()
+        color.withAlphaComponent(0.9).setStroke()
         path.stroke()
+        NSGraphicsContext.restoreGraphicsState()
 
-        if let label, !label.isEmpty, let cursor = points.last {
-            drawLabel(label, near: cursor)
+        if let hint, let cursor = points.last {
+            drawHint(hint, near: cursor, accent: color)
         }
     }
 
-    /// Draw the matched rule's label as a rounded "pill" just above-
-    /// right of the cursor: dark translucent background, light text.
-    private func drawLabel(_ text: String, near cursor: CGPoint) {
-        let font = NSFont.systemFont(ofSize: 14, weight: .medium)
-        let attrs: [NSAttributedString.Key: Any] = [
-            .font: font, .foregroundColor: NSColor.white,
-        ]
-        let str = NSAttributedString(string: text, attributes: attrs)
-        let textSize = str.size()
-        let padX: CGFloat = 10, padY: CGFloat = 6, gap: CGFloat = 16
-        var pill = CGRect(x: cursor.x + gap, y: cursor.y + gap,
-                          width: textSize.width + padX * 2,
-                          height: textSize.height + padY * 2)
-        // Keep the pill inside the view so it isn't clipped at edges.
-        pill.origin.x = min(pill.origin.x, bounds.maxX - pill.width - 4)
-        pill.origin.x = max(pill.origin.x, 4)
-        pill.origin.y = min(pill.origin.y, bounds.maxY - pill.height - 4)
-        pill.origin.y = max(pill.origin.y, 4)
+    /// Draw the hint as a rounded card just above-right of the cursor:
+    /// the shape on top (bold), then each reachable rule's remaining
+    /// arrows + name. The firing row is tinted with the accent color.
+    private func drawHint(_ hint: GestureHint, near cursor: CGPoint,
+                          accent: NSColor) {
+        func mono(_ sz: CGFloat, _ w: NSFont.Weight) -> NSFont {
+            .monospacedSystemFont(ofSize: sz, weight: w)
+        }
+        let dim = NSColor.white.withAlphaComponent(0.55)
+        let markerFont = mono(13, .bold), suffixFont = mono(13, .medium)
 
-        let bg = NSBezierPath(roundedRect: pill, xRadius: 8, yRadius: 8)
-        NSColor.black.withAlphaComponent(0.7).setFill()
+        // Names align in a column: a left tab stop just past the widest
+        // "marker+suffix" prefix. Arrow glyphs aren't monospaced, so a
+        // tab stop (not space padding) is what reliably lines them up.
+        var prefixMax: CGFloat = 0
+        for row in hint.rows {
+            let marker = (row.fires ? "▸ " : "   ") as NSString
+            let w = marker.size(withAttributes: [.font: markerFont]).width
+                + (row.suffix as NSString).size(withAttributes: [.font: suffixFont]).width
+            prefixMax = max(prefixMax, w)
+        }
+        let para = NSMutableParagraphStyle()
+        para.lineSpacing = 4
+        para.tabStops = [NSTextTab(textAlignment: .left, location: prefixMax + 14)]
+
+        let s = NSMutableAttributedString()
+        s.append(NSAttributedString(string: hint.shape, attributes: [
+            .font: mono(17, .semibold), .foregroundColor: NSColor.white]))
+        for row in hint.rows {
+            s.append(NSAttributedString(string: "\n", attributes: [.font: mono(13, .regular)]))
+            s.append(NSAttributedString(string: row.fires ? "▸ " : "   ", attributes: [
+                .font: markerFont,
+                .foregroundColor: row.fires ? accent : dim]))
+            if !row.suffix.isEmpty {
+                s.append(NSAttributedString(string: row.suffix, attributes: [
+                    .font: suffixFont,
+                    .foregroundColor: NSColor.white.withAlphaComponent(0.9)]))
+            }
+            s.append(NSAttributedString(string: "\t" + row.name, attributes: [
+                .font: mono(13, .regular),
+                .foregroundColor: row.fires ? accent : NSColor.white.withAlphaComponent(0.8)]))
+        }
+        s.addAttribute(.paragraphStyle, value: para,
+                       range: NSRange(location: 0, length: s.length))
+
+        let opts: NSString.DrawingOptions = [.usesLineFragmentOrigin]
+        let textSize = s.boundingRect(
+            with: CGSize(width: 600, height: 800), options: opts).size
+        let padX: CGFloat = 13, padY: CGFloat = 10, gap: CGFloat = 18
+        var card = CGRect(x: cursor.x + gap, y: cursor.y + gap,
+                          width: ceil(textSize.width) + padX * 2,
+                          height: ceil(textSize.height) + padY * 2)
+        card.origin.x = min(max(card.origin.x, 6), bounds.maxX - card.width - 6)
+        card.origin.y = min(max(card.origin.y, 6), bounds.maxY - card.height - 6)
+
+        let bg = NSBezierPath(roundedRect: card, xRadius: 11, yRadius: 11)
+        NSGraphicsContext.saveGraphicsState()
+        let shadow = NSShadow()
+        shadow.shadowColor = NSColor.black.withAlphaComponent(0.45)
+        shadow.shadowBlurRadius = 14
+        shadow.shadowOffset = NSSize(width: 0, height: -3)
+        shadow.set()
+        NSColor.black.withAlphaComponent(0.8).setFill()
         bg.fill()
-        str.draw(at: CGPoint(x: pill.minX + padX, y: pill.minY + padY))
+        NSGraphicsContext.restoreGraphicsState()
+        NSColor.white.withAlphaComponent(0.12).setStroke()
+        bg.lineWidth = 1
+        bg.stroke()
+
+        s.draw(with: card.insetBy(dx: padX, dy: padY), options: opts)
     }
 }

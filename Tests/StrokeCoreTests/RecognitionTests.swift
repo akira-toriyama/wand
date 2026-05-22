@@ -59,6 +59,40 @@ final class RecognitionTests: XCTestCase {
                                       rules: rules))
     }
 
+    func testCandidatesByPrefixAndApp() {
+        let rules = [
+            Rule(name: "close tab", pattern: "DL", apps: ["*chrome*"], action: .key("cmd+w")),
+            Rule(name: "close window", pattern: "DRU", apps: ["*"], action: .ax("close")),
+            Rule(name: "minimize", pattern: "L", apps: ["*"], action: .ax("minimize")),
+        ]
+        // "D" reaches both DL (chrome-only) and DRU on Chrome…
+        XCTAssertEqual(
+            Set(Matcher.candidates(prefix: "D", bundleID: "com.google.Chrome",
+                                   rules: rules).map(\.name)),
+            ["close tab", "close window"])
+        // …but only DRU on a non-chrome app (app filter applies).
+        XCTAssertEqual(
+            Matcher.candidates(prefix: "D", bundleID: "com.apple.finder",
+                               rules: rules).map(\.name),
+            ["close window"])
+        // Exact pattern is a prefix of itself.
+        XCTAssertEqual(
+            Matcher.candidates(prefix: "DL", bundleID: "com.google.Chrome",
+                               rules: rules).map(\.name),
+            ["close tab"])
+        // Dead end → nothing.
+        XCTAssertTrue(
+            Matcher.candidates(prefix: "X", bundleID: "com.google.Chrome",
+                               rules: rules).isEmpty)
+    }
+
+    func testDirectionArrows() {
+        XCTAssertEqual(Direction.left.arrow, "←")
+        XCTAssertEqual(Direction.up.arrow, "↑")
+        XCTAssertEqual(Direction.right.arrow, "→")
+        XCTAssertEqual(Direction.down.arrow, "↓")
+    }
+
     func testGlobWildcards() {
         XCTAssertTrue(Matcher.glob("*chrome*", "com.google.chrome"))
         XCTAssertTrue(Matcher.glob("com.apple.?afari", "com.apple.safari"))

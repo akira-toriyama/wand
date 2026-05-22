@@ -26,6 +26,18 @@ extension Array where Element == Direction {
     }
 }
 
+extension Direction {
+    /// Arrow glyph for display (the overlay shows arrows, not letters).
+    public var arrow: String {
+        switch self {
+        case .left:  return "←"
+        case .up:    return "↑"
+        case .right: return "→"
+        case .down:  return "↓"
+        }
+    }
+}
+
 extension Array where Element == Sample {
     /// Largest absolute displacement from the first sample on each
     /// axis. Diagnostic for "why was nothing recognised" — a tiny
