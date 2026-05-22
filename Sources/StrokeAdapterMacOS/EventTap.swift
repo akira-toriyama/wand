@@ -90,6 +90,15 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
     private var samples: [Sample] = []
     private var currentTarget: Target?
     private var strokeStart: TimeInterval = 0
+    /// Timestamp of the last "turn" — button-down, or the moment a new
+    /// direction was added to the live pattern. `maxStrokeMs` is measured
+    /// from here, not from `strokeStart`, so a multi-segment gesture gets
+    /// a fresh budget per segment and only a stalled single direction
+    /// (the slow deliberate drag we want to ignore) expires.
+    private var lastTurn: TimeInterval = 0
+    /// Direction count of the live pattern at the last turn — a turn is
+    /// detected when the recomputed pattern grows past this.
+    private var lastDirCount = 0
     /// Mouse location at button-down in CG screen coords (origin
     /// top-left). Used to replay a click on no-motion strokes.
     private var downPoint: CGPoint = .zero
@@ -124,10 +133,20 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
         self.isRecording = isRecording
     }
 
-    /// Has the in-progress stroke exceeded `maxStrokeMs`?
+    /// Has the current segment (time since the last turn) exceeded
+    /// `maxStrokeMs`? Each direction change resets the clock, so the
+    /// budget is per-segment rather than for the whole stroke.
     private var strokeExpired: Bool {
         maxStrokeMs > 0
-            && (CACurrentMediaTime() - strokeStart) * 1000 > Double(maxStrokeMs)
+            && (CACurrentMediaTime() - lastTurn) * 1000 > Double(maxStrokeMs)
+    }
+
+    /// Reset the segment clock when a new direction appears.
+    private func noteTurn(dirCount: Int) {
+        if dirCount > lastDirCount {
+            lastDirCount = dirCount
+            lastTurn = CACurrentMediaTime()
+        }
     }
 
     // MARK: - MouseSource
@@ -260,6 +279,8 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
         currentTarget = AXTarget.resolveAt(point: cg)
         capturing = true
         strokeStart = CACurrentMediaTime()
+        lastTurn = strokeStart
+        lastDirCount = 0
         samples.removeAll(keepingCapacity: true)
         samples.append(Sample(p: Self.flipY(cg), t: 0))
         emitTrailSample(cg)
@@ -278,15 +299,18 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
         return nil
     }
 
-    /// Feed the overlay one trail point plus the gesture-so-far. Skips
-    /// the recognise pass entirely when no overlay is attached.
+    /// Feed the overlay one trail point plus the gesture-so-far, and
+    /// advance the per-segment expiry clock on each turn. The live
+    /// pattern drives both, so the recognise pass runs whenever either
+    /// the overlay or `maxStrokeMs` needs it — and is skipped otherwise.
     private func emitTrailSample(_ cg: CGPoint) {
-        guard let onSample else { return }
+        guard onSample != nil || maxStrokeMs > 0 else { return }
         let pattern = Recognition.recognize(samples: samples,
                                              minStrokePx: minStrokePx).patternString
-        onSample(TrailSample(point: cg, pattern: pattern,
-                             bundleID: currentTarget?.bundleID ?? "",
-                             expired: strokeExpired))
+        noteTurn(dirCount: pattern.count)
+        onSample?(TrailSample(point: cg, pattern: pattern,
+                              bundleID: currentTarget?.bundleID ?? "",
+                              expired: strokeExpired))
     }
 
     /// Convert CG global coords (Y grows down) to the Y-up convention
@@ -327,13 +351,13 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
             return nil
         }
 
-        // Recognisable shape but the user took longer than
-        // `maxStrokeMs` — abandon it. No replay (they moved, so it
-        // wasn't a click) and no dispatch; the whole sequence is
-        // already swallowed, so nothing happens.
+        // Recognisable shape but a single segment stalled longer than
+        // `maxStrokeMs` (the clock resets on each turn) — abandon it. No
+        // replay (they moved, so it wasn't a click) and no dispatch; the
+        // whole sequence is already swallowed, so nothing happens.
         if expired {
             Log.line("event-tap: \(recognised.patternString) recognised but "
-                     + "stroke exceeded \(maxStrokeMs)ms — abandoned")
+                     + "a segment stalled past \(maxStrokeMs)ms — abandoned")
             if isRecording { deliver(target, captured) }
             return nil
         }
