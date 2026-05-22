@@ -118,8 +118,15 @@ public enum AXTarget {
         if !AXIsProcessTrustedWithOptions(opts) {
             FileHandle.standardError.write(Data(
                 "stroke: grant Accessibility, then relaunch.\n".utf8))
-            Log.line("AX: not yet trusted — required to capture mouse "
-                     + "events and resolve target windows")
+            Log.line("AX: not yet trusted — opening System Settings → "
+                     + "Privacy & Security → Accessibility")
+            // Jump the user straight to the right pane instead of
+            // making them navigate. macOS 13+ deep link; no-op (just
+            // the prompt above) if the URL scheme ever changes.
+            if let url = URL(string: "x-apple.systempreferences:"
+                + "com.apple.preference.security?Privacy_Accessibility") {
+                NSWorkspace.shared.open(url)
+            }
         }
     }
 
