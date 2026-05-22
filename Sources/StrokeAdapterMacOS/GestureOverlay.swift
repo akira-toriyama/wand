@@ -254,31 +254,32 @@ private final class TrailView: NSView {
         }
     }
 
-    /// One card's text: each row is `[▸ ]<remaining arrows>\t<name>`,
-    /// names tab-aligned past the widest arrows; the firing row tinted.
+    /// One card's text: each row is `<remaining arrows>\t<name>`, names
+    /// tab-aligned past the widest arrows. The firing rows have no
+    /// arrows left, so their card drops the tab and tints the name with
+    /// the accent color instead.
     private func cardText(_ rows: [GestureHint.Row], accent: NSColor) -> NSAttributedString {
         let arrowFont = Self.mono(14, .semibold)
         var arrowMax: CGFloat = 0
         for r in rows {
-            let pre = ((r.fires ? "▸ " : "") + r.suffix) as NSString
-            arrowMax = max(arrowMax, pre.size(withAttributes: [.font: arrowFont]).width)
+            let w = (r.suffix as NSString).size(withAttributes: [.font: arrowFont]).width
+            arrowMax = max(arrowMax, w)
         }
+        let useTab = arrowMax > 0
         let para = NSMutableParagraphStyle()
         para.lineSpacing = 4
-        para.tabStops = [NSTextTab(textAlignment: .left, location: arrowMax + 12)]
+        if useTab {
+            para.tabStops = [NSTextTab(textAlignment: .left, location: arrowMax + 12)]
+        }
 
         let s = NSMutableAttributedString()
         for (i, r) in rows.enumerated() {
             if i > 0 { s.append(NSAttributedString(string: "\n")) }
-            if r.fires {
-                s.append(NSAttributedString(string: "▸ ", attributes: [
-                    .font: arrowFont, .foregroundColor: accent]))
-            }
             if !r.suffix.isEmpty {
                 s.append(NSAttributedString(string: r.suffix, attributes: [
                     .font: arrowFont, .foregroundColor: NSColor.white]))
             }
-            s.append(NSAttributedString(string: "\t" + r.name, attributes: [
+            s.append(NSAttributedString(string: (useTab ? "\t" : "") + r.name, attributes: [
                 .font: Self.mono(13, .regular),
                 .foregroundColor: r.fires ? accent : NSColor.white.withAlphaComponent(0.85)]))
         }

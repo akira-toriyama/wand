@@ -43,7 +43,7 @@ while it's a valid gesture for the window under the cursor, another
 once it forms a shape no rule wants. Next to the cursor it shows the
 shape so far as **arrows** (`↓→`) and a live **gesture-assist** list
 — every rule still reachable from here, showing only what's *left* to
-draw, with `▸` marking the one that fires right now:
+draw, with the one that fires right now tinted in the match color:
 
 ```
 ↓
