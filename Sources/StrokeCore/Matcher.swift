@@ -29,6 +29,21 @@ public enum Matcher {
         return nil
     }
 
+    /// Rules whose pattern **starts with** `prefix` and whose `apps`
+    /// filter allows `bundleID` — the live "what can I still complete
+    /// this into?" set for the overlay's gesture-assist. Includes an
+    /// exact match (`pattern == prefix`) since that's a prefix too.
+    /// Excludes are the caller's concern (the overlay suppresses hints
+    /// for excluded apps).
+    public static func candidates(prefix: String, bundleID: String,
+                                  rules: [Rule]) -> [Rule] {
+        guard !prefix.isEmpty else { return [] }
+        let bid = bundleID.lowercased()
+        return rules.filter {
+            $0.pattern.hasPrefix(prefix) && appsAllow($0.apps, bundleID: bid)
+        }
+    }
+
     /// The rule a gesture would fire: `nil` if the app is excluded or
     /// nothing matches. The single definition of "this gesture acts"
     /// — the Controller dispatches its result, the overlay colors by

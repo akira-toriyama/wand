@@ -238,10 +238,18 @@ stray instances before relaunching.
 ### CLI surface
 
 - **Flags**: `--debug` (server, verbose), `--validate` /
-  `--record` / `--help` (standalone), `--reload` / `--quit` /
-  `--status` (client). Any unrecognised flag exits `2` with a
-  stderr message (no silent fallback — facet's *Rule of Repair*
-  discipline).
+  `--doctor` / `--test` / `--record` / `--help` (standalone),
+  `--reload` / `--quit` / `--status` (client). Any unrecognised
+  flag exits `2` with a stderr message (no silent fallback —
+  facet's *Rule of Repair* discipline). **`--test` takes an operand**
+  (the pattern), so it's handled *before* the unknown-flag scan would
+  reject that operand — keep that ordering if adding more
+  value-taking flags.
+- **`--doctor`** reports Accessibility (`AXTarget.isTrusted()`),
+  config, daemon liveness, and a live tap probe
+  (`MacOSMouseSource.canInstallTap()` — a listen-only tap created and
+  torn down). Exit 1 if AX/tap fail. **`--test PATTERN [bundle-id]`**
+  dry-runs `Matcher` against config (no event tap touched).
 - **`--reload` / `--quit` talk to the running daemon over
   Distributed Notification Center** (`com.stroke.app.control`,
   see [Sources/StrokeApp/Control.swift](Sources/StrokeApp/Control.swift)

@@ -100,6 +100,22 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
     /// vanishingly unlikely with any real producer.
     private static let replaySentinel: Int64 = 0x5354_524B_E115
 
+    /// Probe whether a session event tap can be installed right now —
+    /// the definitive Accessibility check for `stroke --doctor`. Creates
+    /// a listen-only tap, never adds it to a run loop, and tears it down
+    /// immediately (safe alongside a running daemon — taps coexist).
+    public static func canInstallTap() -> Bool {
+        let mask: CGEventMask = 1 << CGEventType.mouseMoved.rawValue
+        guard let tap = CGEvent.tapCreate(
+            tap: .cgSessionEventTap, place: .headInsertEventTap,
+            options: .listenOnly, eventsOfInterest: mask,
+            callback: { _, _, e, _ in Unmanaged.passUnretained(e) },
+            userInfo: nil
+        ) else { return false }
+        CGEvent.tapEnable(tap: tap, enable: false)
+        return true
+    }
+
     public init(trigger: Trigger, minStrokePx: Int,
                 maxStrokeMs: Int = 0, isRecording: Bool = false) {
         self.trigger = trigger
