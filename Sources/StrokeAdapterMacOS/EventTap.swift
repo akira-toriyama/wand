@@ -30,6 +30,20 @@ import CoreGraphics
 import Foundation
 import StrokeCore
 
+/// One live trail update for the gesture overlay. Named fields beat a
+/// 4-tuple here: `point` and the two strings (pattern / bundleID) plus
+/// `expired` are easy to transpose positionally.
+public struct TrailSample {
+    /// Cursor location in CG global coords (Y-down).
+    public let point: CGPoint
+    /// Gesture-so-far recognised from all samples to date.
+    public let pattern: String
+    /// Cursor-anchored target's bundle id.
+    public let bundleID: String
+    /// Stroke has already exceeded `maxStrokeMs` (won't fire).
+    public let expired: Bool
+}
+
 public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
 
     // Configuration -----------------------------------------------------
@@ -57,20 +71,18 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
     /// tap callback). Recognition / dispatch are unaffected — the
     /// overlay is a passive observer of the same stream.
     ///
-    /// `onSample(point, pattern, bundleID, expired)` carries the trail
-    /// point (CG global coords), the gesture-so-far recognised from all
-    /// samples to date, the cursor-anchored target's bundle id, and
-    /// whether the stroke has already blown the `maxStrokeMs` budget —
-    /// enough for the App layer to decide whether the in-progress
-    /// stroke currently matches a rule (and colour the trail), without
-    /// EventTap needing to know about rules. `onStrokeEnd` fires once
-    /// on button-up so the overlay clears.
+    /// `onSample` delivers a `TrailSample` (point + gesture-so-far +
+    /// target bundle id + expired flag) — enough for the App layer to
+    /// decide whether the in-progress stroke currently matches a rule
+    /// (and colour the trail), without EventTap needing to know about
+    /// rules. `onStrokeEnd` fires once on button-up so the overlay
+    /// clears.
     ///
     /// Not `@Sendable` (unlike `handler`, which the protocol requires)
     /// so the closures can capture the non-Sendable `GestureOverlay`.
     /// Safe because everything here runs on the main thread; the
     /// enclosing class is already `@unchecked Sendable` on that basis.
-    public var onSample: ((CGPoint, String, String, Bool) -> Void)?
+    public var onSample: ((TrailSample) -> Void)?
     public var onStrokeEnd: (() -> Void)?
 
     // Per-stroke capture state -----------------------------------------
@@ -256,7 +268,9 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
         guard let onSample else { return }
         let pattern = Recognition.recognize(samples: samples,
                                              minStrokePx: minStrokePx).patternString
-        onSample(cg, pattern, currentTarget?.bundleID ?? "", strokeExpired)
+        onSample(TrailSample(point: cg, pattern: pattern,
+                             bundleID: currentTarget?.bundleID ?? "",
+                             expired: strokeExpired))
     }
 
     /// Convert CG global coords (Y grows down) to the Y-up convention
@@ -293,9 +307,7 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
                       + "— replayed click")
             // Recorder wants to see misses too — that's how the user
             // learns "I moved 12px but the threshold is 16."
-            if isRecording, let target, let h = handler {
-                h(StrokeEvent(target: target, samples: captured))
-            }
+            if isRecording { deliver(target, captured) }
             return nil
         }
 
@@ -306,23 +318,29 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
         if expired {
             Log.line("event-tap: \(recognised.patternString) recognised but "
                      + "stroke exceeded \(maxStrokeMs)ms — abandoned")
-            if isRecording, let target, let h = handler {
-                h(StrokeEvent(target: target, samples: captured))
-            }
+            if isRecording { deliver(target, captured) }
             return nil
         }
 
         Log.debug("event-tap: up — samples=\(captured.count), "
                   + "pattern=\(recognised.patternString)")
-        if let target, let h = handler {
-            h(StrokeEvent(target: target, samples: captured))
-        } else {
+        if !deliver(target, captured) {
             Log.line("event-tap: pattern \(recognised.patternString) "
                      + "recognised but no AX target was resolved at "
                      + "stroke start — gesture dropped (cursor on Dock, "
                      + "menu bar, or another non-AX surface?)")
         }
         return nil
+    }
+
+    /// Hand a completed stroke to the controller / recorder. Returns
+    /// `false` (and delivers nothing) when there's no target or no
+    /// handler — the caller logs that case.
+    @discardableResult
+    private func deliver(_ target: Target?, _ samples: [Sample]) -> Bool {
+        guard let target, let handler else { return false }
+        handler(StrokeEvent(target: target, samples: samples))
+        return true
     }
 
     // MARK: - Replay

@@ -150,22 +150,21 @@ enum StrokeApp {
             // no rule wants, the app is excluded, or the stroke has
             // already run past maxStrokeMs (so the user sees it won't
             // fire).
-            source.onSample = { point, pattern, bundleID, expired in
+            source.onSample = { s in
                 var valid = false
                 var label: String? = nil
-                if !expired,
-                   !Matcher.isExcluded(bundleID: bundleID, by: excludes) {
-                    if pattern.isEmpty {
+                if !s.expired {
+                    if s.pattern.isEmpty {
                         valid = true                 // just started — neutral
-                    } else if let rule = Matcher.match(pattern: pattern,
-                                                       bundleID: bundleID,
-                                                       rules: rules) {
+                    } else if let rule = Matcher.resolve(
+                        pattern: s.pattern, bundleID: s.bundleID,
+                        rules: rules, excludes: excludes) {
                         valid = true
                         label = rule.name            // show what it'll do
                     }
                 }
                 MainActor.assumeIsolated {
-                    overlay.addPoint(point, valid: valid, label: label)
+                    overlay.addPoint(s.point, valid: valid, label: label)
                 }
             }
             source.onStrokeEnd = {

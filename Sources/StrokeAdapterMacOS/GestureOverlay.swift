@@ -32,8 +32,8 @@ public final class GestureOverlay {
         let v = TrailView(frame: CGRect(origin: .zero, size: frame.size))
         v.matchColor = Self.nsColor(match) ?? .systemBlue
         v.noMatchColor = Self.nsColor(noMatch) ?? .systemRed
-        v.strokeWidth = CGFloat(max(1, min(40, width)))
-        v.originOffset = frame.origin   // global Cocoa origin of the union
+        v.strokeWidth = CGFloat(width)   // already clamped by StrokeConfig
+        v.originOffset = frame.origin    // global Cocoa origin of the union
         self.view = v
 
         let w = NSWindow(contentRect: frame, styleMask: .borderless,
@@ -147,8 +147,12 @@ private final class TrailView: NSView {
         self.valid = valid
         self.label = label
         // CG global (origin top-left, Y-down) → Cocoa global (origin
-        // bottom-left of the primary display, Y-up). Flip about the
-        // primary screen's height; the primary is the screen whose
+        // bottom-left of the primary display, Y-up). Flipping about the
+        // primary screen's height is correct for ALL displays, not
+        // just the primary: both coordinate systems are anchored to
+        // the primary, so a point above it (CG y < 0) maps to Cocoa
+        // y > primaryH and a point below to y < 0, exactly as a
+        // secondary display sits. The primary is the screen whose
         // Cocoa origin is (0,0).
         let primaryH = NSScreen.screens
             .first(where: { $0.frame.origin == .zero })?.frame.height
