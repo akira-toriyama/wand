@@ -109,6 +109,10 @@ width = 3
 #                                            "zoom" | "raise"
 #   action-type = "shell"  + action-cmd  = "open -a Terminal …"
 #
+# `name` is also shown in the overlay while you're drawing a shape
+# that matches this rule, so you can see what it'll do before
+# releasing — make it human-readable.
+#
 # Shell actions receive these env vars describing the target:
 #   STROKE_TARGET_BUNDLE_ID, STROKE_TARGET_PID,
 #   STROKE_TARGET_TITLE,     STROKE_TARGET_FRAME (x,y,w,h)

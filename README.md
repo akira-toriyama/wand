@@ -41,8 +41,10 @@ the shape forming; it clears the moment you release. The trail is
 **colored by whether the shape so far matches a rule** — one color
 while it's a valid gesture for the window under the cursor, another
 once it forms a shape no rule wants (set up `DR` but drew `DL`?
-you'll see it turn). Colors, width, and on/off live in the
-`[overlay]` section of `config.toml`.
+you'll see it turn). When it matches, the rule's `name` is shown
+next to the cursor so you know what it'll do before you release.
+Colors, width, and on/off live in the `[overlay]` section of
+`config.toml`.
 
 Actions target the window **under the cursor**, not whichever window
 holds keyboard focus: `ax` actions operate on it directly, `key`

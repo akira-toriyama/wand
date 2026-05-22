@@ -148,12 +148,21 @@ enum StrokeApp {
             // cursor-anchored target; "no match" once it forms a shape
             // no rule wants, or the app is excluded.
             source.onSample = { point, pattern, bundleID in
-                let valid = !Matcher.isExcluded(bundleID: bundleID, by: excludes)
-                    && (pattern.isEmpty
-                        || Matcher.match(pattern: pattern,
-                                         bundleID: bundleID,
-                                         rules: rules) != nil)
-                MainActor.assumeIsolated { overlay.addPoint(point, valid: valid) }
+                var valid = false
+                var label: String? = nil
+                if !Matcher.isExcluded(bundleID: bundleID, by: excludes) {
+                    if pattern.isEmpty {
+                        valid = true                 // just started — neutral
+                    } else if let rule = Matcher.match(pattern: pattern,
+                                                       bundleID: bundleID,
+                                                       rules: rules) {
+                        valid = true
+                        label = rule.name            // show what it'll do
+                    }
+                }
+                MainActor.assumeIsolated {
+                    overlay.addPoint(point, valid: valid, label: label)
+                }
             }
             source.onStrokeEnd = {
                 MainActor.assumeIsolated { overlay.clear() }

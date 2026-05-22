@@ -58,10 +58,12 @@ public final class GestureOverlay {
 
     /// Append one trail point (CG global coords, Y-down). `valid`
     /// recolors the whole trail: the match color when the stroke so
-    /// far matches a rule, the no-match color otherwise. Coalesced
-    /// redraws keep this cheap even at the per-mouse-move rate.
-    public func addPoint(_ cg: CGPoint, valid: Bool) {
-        view.append(cg, valid: valid)
+    /// far matches a rule, the no-match color otherwise. `label` (the
+    /// matched rule's name, or nil) is drawn near the cursor so the
+    /// user sees what the gesture will do. Coalesced redraws keep this
+    /// cheap even at the per-mouse-move rate.
+    public func addPoint(_ cg: CGPoint, valid: Bool, label: String?) {
+        view.append(cg, valid: valid, label: label)
     }
 
     /// Clear the trail (stroke ended).
@@ -135,13 +137,15 @@ private final class TrailView: NSView {
 
     private var points: [CGPoint] = []   // already in view-local coords
     private var valid = true             // current match state of the trail
+    private var label: String?           // matched rule's label, if any
 
     override var isFlipped: Bool { false }   // Cocoa default (Y-up)
     override func hitTest(_ point: NSPoint) -> NSView? { nil }   // click-through
 
     /// Convert a CG global point (Y-down) to view-local (Y-up) coords.
-    func append(_ cg: CGPoint, valid: Bool) {
+    func append(_ cg: CGPoint, valid: Bool, label: String?) {
         self.valid = valid
+        self.label = label
         // CG global (origin top-left, Y-down) → Cocoa global (origin
         // bottom-left of the primary display, Y-up). Flip about the
         // primary screen's height; the primary is the screen whose
@@ -156,8 +160,9 @@ private final class TrailView: NSView {
     }
 
     func reset() {
-        guard !points.isEmpty else { return }
+        guard !points.isEmpty || label != nil else { return }
         points.removeAll(keepingCapacity: true)
+        label = nil
         needsDisplay = true
     }
 
@@ -171,5 +176,34 @@ private final class TrailView: NSView {
         for p in points.dropFirst() { path.line(to: p) }
         (valid ? matchColor : noMatchColor).withAlphaComponent(0.85).setStroke()
         path.stroke()
+
+        if let label, !label.isEmpty, let cursor = points.last {
+            drawLabel(label, near: cursor)
+        }
+    }
+
+    /// Draw the matched rule's label as a rounded "pill" just above-
+    /// right of the cursor: dark translucent background, light text.
+    private func drawLabel(_ text: String, near cursor: CGPoint) {
+        let font = NSFont.systemFont(ofSize: 14, weight: .medium)
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: font, .foregroundColor: NSColor.white,
+        ]
+        let str = NSAttributedString(string: text, attributes: attrs)
+        let textSize = str.size()
+        let padX: CGFloat = 10, padY: CGFloat = 6, gap: CGFloat = 16
+        var pill = CGRect(x: cursor.x + gap, y: cursor.y + gap,
+                          width: textSize.width + padX * 2,
+                          height: textSize.height + padY * 2)
+        // Keep the pill inside the view so it isn't clipped at edges.
+        pill.origin.x = min(pill.origin.x, bounds.maxX - pill.width - 4)
+        pill.origin.x = max(pill.origin.x, 4)
+        pill.origin.y = min(pill.origin.y, bounds.maxY - pill.height - 4)
+        pill.origin.y = max(pill.origin.y, 4)
+
+        let bg = NSBezierPath(roundedRect: pill, xRadius: 8, yRadius: 8)
+        NSColor.black.withAlphaComponent(0.7).setFill()
+        bg.fill()
+        str.draw(at: CGPoint(x: pill.minX + padX, y: pill.minY + padY))
     }
 }
