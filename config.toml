@@ -41,10 +41,12 @@ modifiers = []
 # tolerant of jitter. Clamped 4..200.
 min-stroke-px = 16
 
-# Maximum time (ms) from button-down to button-up for a stroke to
-# count as a gesture. Draw slower than this and it's abandoned (no
-# action fires) — handy so an ordinary, deliberate right-drag isn't
-# read as a gesture. 0 = no limit. Clamped 100..60000 when set.
+# Maximum time (ms) a single segment may take — the clock resets on
+# every turn, so it's a per-segment budget, not a whole-stroke one. A
+# multi-segment gesture gets the full budget for each leg; only a
+# stalled single direction (an ordinary, deliberate right-drag) runs
+# past it and is abandoned (no action fires). 0 = no limit. Clamped
+# 100..60000 when set.
 max-stroke-ms = 0
 
 # Sampling cadence. Clamped 30..240.

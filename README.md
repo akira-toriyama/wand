@@ -113,10 +113,12 @@ axis directions are not recognised yet. App filters support
 keystroke), `ax` (`close` / `minimize` / `zoom` / `raise`), and
 `shell` (any command).
 
-`[recognition] max-stroke-ms` caps how long a gesture may take —
-draw slower than that and it's abandoned (so an ordinary deliberate
-right-drag isn't read as a gesture). `0` (default) = no limit; the
-trail turns the no-match color once you've run past the budget.
+`[recognition] max-stroke-ms` caps how long any one segment may take
+— the clock resets on every turn, so a multi-segment gesture gets the
+full budget per leg and only a stalled single direction (an ordinary
+deliberate right-drag) runs past it and is abandoned. `0` (default) =
+no limit; the trail turns the no-match color once a segment runs past
+the budget.
 
 ## CLI
 
