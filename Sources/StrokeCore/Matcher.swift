@@ -29,6 +29,17 @@ public enum Matcher {
         return nil
     }
 
+    /// The rule a gesture would fire: `nil` if the app is excluded or
+    /// nothing matches. The single definition of "this gesture acts"
+    /// — the Controller dispatches its result, the overlay colors by
+    /// whether it's non-nil. Keeping the exclude+match policy in one
+    /// place stops the two call sites from drifting.
+    public static func resolve(pattern: String, bundleID: String,
+                               rules: [Rule], excludes: [String]) -> Rule? {
+        if isExcluded(bundleID: bundleID, by: excludes) { return nil }
+        return match(pattern: pattern, bundleID: bundleID, rules: rules)
+    }
+
     /// `true` when `bundleID` matches any glob in `excludes`. Used
     /// by the Controller to honour `[recognition] exclude-apps`
     /// before any rule is even considered.
