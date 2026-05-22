@@ -44,5 +44,11 @@ let package = Package(
                 "StrokeAdapterMacOS",
             ]),
         .testTarget(name: "StrokeCoreTests", dependencies: ["StrokeCore"]),
+        // Drives the synthetic MouseSource end-to-end through Core's
+        // recognition + matching — the real consumer of
+        // StrokeAdapterTest that the docs describe.
+        .testTarget(
+            name: "StrokeIntegrationTests",
+            dependencies: ["StrokeCore", "StrokeAdapterTest"]),
     ]
 )
