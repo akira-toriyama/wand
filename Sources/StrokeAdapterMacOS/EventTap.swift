@@ -130,6 +130,17 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
             return Unmanaged.passUnretained(event)
         }
 
+        // Hot path: .mouseMoved fires hundreds/sec. It's only a drag
+        // sample while a stroke is in progress; when idle it's a
+        // guaranteed pass-through. Short-circuit here, before the
+        // field reads below, so the idle firehose costs one enum
+        // compare + a bool. (We never synthesize .mouseMoved, so the
+        // replaySentinel check doesn't apply to it.)
+        if type == .mouseMoved {
+            return capturing ? handleDrag(event: event)
+                             : Unmanaged.passUnretained(event)
+        }
+
         // Pass through events we ourselves synthesized.
         if event.getIntegerValueField(.eventSourceUserData)
             == Self.replaySentinel {
@@ -181,8 +192,7 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
         // events, AppKit never processes them, so the AppKit-side
         // cache that backs NSEvent.mouseLocation never updates. Every
         // subsequent drag callback would then see the at-button-down
-        // position — exactly the `max|dx|=0` symptom we debugged in
-        // the M2 first-run.
+        // position — the `max|dx|=0` symptom (every sample identical).
         let cg = event.location
         downPoint = cg
         currentTarget = AXTarget.resolveAt(point: cg)
@@ -229,21 +239,11 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
                                                 minStrokePx: minStrokePx)
         if recognised.isEmpty {
             replayClick(at: downPoint)
-            // Spans tell us *why* recognition was empty: tiny spans
-            // mean the user barely moved; medium spans across both
-            // axes mean they wiggled but never crossed the threshold
-            // in a single dominant-axis push.
-            var info = "samples=\(captured.count)"
-            if let first = captured.first {
-                var mx: CGFloat = 0, my: CGFloat = 0
-                for s in captured {
-                    mx = max(mx, abs(s.p.x - first.p.x))
-                    my = max(my, abs(s.p.y - first.p.y))
-                }
-                info += ", max|dx|=\(Int(mx)), max|dy|=\(Int(my))"
-            }
-            Log.debug("event-tap: no stroke recognised "
-                      + "(\(info), threshold=\(minStrokePx)) — replayed click")
+            let (dx, dy) = captured.span
+            Log.debug("event-tap: no stroke recognised (samples="
+                      + "\(captured.count), max|dx|=\(Int(dx)), "
+                      + "max|dy|=\(Int(dy)), threshold=\(minStrokePx)) "
+                      + "— replayed click")
             // Recorder wants to see misses too — that's how the user
             // learns "I moved 12px but the threshold is 16."
             if isRecording, let target, let h = handler {

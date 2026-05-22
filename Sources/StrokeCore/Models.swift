@@ -26,6 +26,21 @@ extension Array where Element == Direction {
     }
 }
 
+extension Array where Element == Sample {
+    /// Largest absolute displacement from the first sample on each
+    /// axis. Diagnostic for "why was nothing recognised" — a tiny
+    /// span means the user barely moved.
+    public var span: (dx: CGFloat, dy: CGFloat) {
+        guard let first = first else { return (0, 0) }
+        var dx: CGFloat = 0, dy: CGFloat = 0
+        for s in self {
+            dx = Swift.max(dx, abs(s.p.x - first.p.x))
+            dy = Swift.max(dy, abs(s.p.y - first.p.y))
+        }
+        return (dx, dy)
+    }
+}
+
 // MARK: - Trigger
 
 /// Which mouse button (and optional modifier set) starts capturing a
@@ -87,6 +102,14 @@ public enum Action: Sendable, Equatable {
     ///   STROKE_TARGET_BUNDLE_ID, STROKE_TARGET_PID,
     ///   STROKE_TARGET_TITLE, STROKE_TARGET_FRAME.
     case shell(String)
+
+    /// Verbs accepted by `.ax`. The single source of truth shared by
+    /// config validation (a typo → the rule drops at load, surfaced
+    /// by `--validate`) and the dispatcher's switch. Without parse-
+    /// time validation an unknown verb would load fine and silently
+    /// no-op at dispatch — inconsistent with the "typo can never
+    /// break recognition, the bad rule just drops" config policy.
+    public static let axVerbs: Set<String> = ["close", "minimize", "zoom", "raise"]
 }
 
 // MARK: - Stroke sample
@@ -118,12 +141,11 @@ public struct Target: Sendable, Equatable {
     public let bundleID: String
     public let title: String
     public let frame: CGRect
-    /// CGWindowID of the resolved window (0 when unknown — e.g. the
-    /// M1/M2 stub returned a pid-only target). Used as the side-table
-    /// key in the adapter to map this value-type back to a live
-    /// `AXUIElement` at action-dispatch time. Stored as `UInt32` so
-    /// Core can carry it around without depending on CoreGraphics's
-    /// `CGWindowID` typedef.
+    /// CGWindowID of the resolved window (0 when the window couldn't
+    /// be resolved). Used as the side-table key in the adapter to map
+    /// this value-type back to a live `AXUIElement` at action-dispatch
+    /// time. Stored as `UInt32` so Core can carry it around without
+    /// depending on CoreGraphics's `CGWindowID` typedef.
     public let windowID: UInt32
     public init(pid: Int32, bundleID: String, title: String,
                 frame: CGRect, windowID: UInt32 = 0) {

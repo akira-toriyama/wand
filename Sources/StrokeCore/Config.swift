@@ -42,55 +42,29 @@ public struct StrokeConfig: Sendable {
 
         // [trigger]
         let trig = doc.tables["trigger"] ?? [:]
-        let button: Trigger.Button = {
-            if case .string(let s) = trig["button"] ?? .string(""),
-               let b = Trigger.Button(rawValue: s.lowercased()) {
-                return b
-            }
-            return .right
-        }()
-        let mods: Set<Modifier> = {
-            guard case .stringArray(let arr) = trig["modifiers"]
-                ?? .stringArray([]) else { return [] }
-            return Set(arr.compactMap { Modifier(rawValue: $0.lowercased()) })
-        }()
+        let button = Trigger.Button(rawValue: trig.string("button").lowercased())
+            ?? .right
+        let mods = Set(trig.strings("modifiers")
+            .compactMap { Modifier(rawValue: $0.lowercased()) })
 
-        // [recognition]
+        // [recognition] — clamp out-of-range to keep a typo from
+        // breaking recognition (the rule still loads, just bounded).
         let reco = doc.tables["recognition"] ?? [:]
-        let minPx: Int = {
-            if case .int(let i) = reco["min-stroke-px"] ?? .int(16) {
-                return max(4, min(200, i))
-            }
-            return 16
-        }()
-        let hz: Int = {
-            if case .int(let i) = reco["sample-hz"] ?? .int(120) {
-                return max(30, min(240, i))
-            }
-            return 120
-        }()
-        let excludes: [String] = {
-            if case .stringArray(let arr) = reco["exclude-apps"]
-                ?? .stringArray([]) { return arr }
-            return []
-        }()
+        let minPx = max(4, min(200, reco.int("min-stroke-px", 16)))
+        let hz = max(30, min(240, reco.int("sample-hz", 120)))
+        let excludes = reco.strings("exclude-apps")
 
         // [[rules]]
         let rules: [Rule] = (doc.arrays["rules"] ?? []).compactMap { row in
-            guard case .string(let pattern) = row["pattern"] ?? .string(""),
-                  !pattern.isEmpty
-            else { return nil }
-            let name: String = {
-                if case .string(let s) = row["name"] ?? .string("") { return s }
-                return pattern
-            }()
-            let apps: [String] = {
-                if case .stringArray(let arr) = row["apps"]
-                    ?? .stringArray([]) { return arr }
-                return ["*"]
-            }()
+            let pattern = row.string("pattern")
+            guard !pattern.isEmpty else { return nil }
             guard let action = parseAction(row) else { return nil }
-            return Rule(name: name, pattern: pattern, apps: apps, action: action)
+            let name = row.string("name")
+            let apps = row.strings("apps")
+            return Rule(name: name.isEmpty ? pattern : name,
+                        pattern: pattern,
+                        apps: apps.isEmpty ? ["*"] : apps,
+                        action: action)
         }
 
         return StrokeConfig(
@@ -118,13 +92,34 @@ public struct StrokeConfig: Sendable {
             if case .string(let k) = row["action-keys"] ?? .string(""),
                !k.isEmpty { return .key(k) }
         case "ax":
-            if case .string(let v) = row["action-verb"] ?? .string(""),
-               !v.isEmpty { return .ax(v) }
+            if case .string(let v) = row["action-verb"] ?? .string("") {
+                let verb = v.lowercased()
+                if Action.axVerbs.contains(verb) { return .ax(verb) }
+            }
         case "shell":
             if case .string(let c) = row["action-cmd"] ?? .string(""),
                !c.isEmpty { return .shell(c) }
         default: break
         }
         return nil
+    }
+}
+
+// Typed accessors over a parsed TOML table — collapse the repeated
+// `if case .string(let s) = x ?? .string("")` extraction to one call.
+// A wrong-typed or missing key yields the fallback (config policy:
+// never throw on a typo).
+private extension [String: TOMLValue] {
+    func string(_ key: String, _ fallback: String = "") -> String {
+        if case .string(let s) = self[key] { return s }
+        return fallback
+    }
+    func int(_ key: String, _ fallback: Int) -> Int {
+        if case .int(let i) = self[key] { return i }
+        return fallback
+    }
+    func strings(_ key: String, _ fallback: [String] = []) -> [String] {
+        if case .stringArray(let a) = self[key] { return a }
+        return fallback
     }
 }

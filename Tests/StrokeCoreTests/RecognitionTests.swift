@@ -101,4 +101,40 @@ final class RecognitionTests: XCTestCase {
             XCTAssertEqual(v, "minimize")
         } else { XCTFail("expected .ax") }
     }
+
+    func testUnknownAXVerbDropsRule() {
+        // A typo'd verb must drop the rule at parse time (visible to
+        // --validate) rather than load and silently no-op at dispatch.
+        let toml = """
+        [[rules]]
+        pattern = "L"
+        action-type = "ax"
+        action-verb = "clsoe"
+
+        [[rules]]
+        pattern = "R"
+        action-type = "ax"
+        action-verb = "ZOOM"
+        """
+        let cfg = StrokeConfig.parse(toml)
+        XCTAssertEqual(cfg.rules.count, 1, "typo'd verb rule should drop")
+        XCTAssertEqual(cfg.rules[0].pattern, "R")
+        // Verb is normalised to lowercase so dispatch matching is stable.
+        if case .ax(let v) = cfg.rules[0].action {
+            XCTAssertEqual(v, "zoom")
+        } else { XCTFail("expected .ax") }
+    }
+
+    func testRuleNameDefaultsToPattern() {
+        let toml = """
+        [[rules]]
+        pattern = "DR"
+        action-type = "key"
+        action-keys = "cmd+w"
+        """
+        let cfg = StrokeConfig.parse(toml)
+        XCTAssertEqual(cfg.rules.count, 1)
+        XCTAssertEqual(cfg.rules[0].name, "DR")
+        XCTAssertEqual(cfg.rules[0].apps, ["*"])
+    }
 }

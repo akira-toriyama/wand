@@ -1,6 +1,6 @@
 // Stroke recognition: samples → direction sequence.
 //
-// Pure logic, no AppKit / no CG event types. Algorithm (M2):
+// Pure logic, no AppKit / no CG event types. Algorithm:
 //
 //   1. Walk samples accumulating displacement.
 //   2. When |dx| or |dy| since the last anchor exceeds

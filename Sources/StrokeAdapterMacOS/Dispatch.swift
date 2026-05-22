@@ -10,9 +10,6 @@
 //                     button. No focus switch needed.
 //   .shell("cmd …")   spawn /bin/sh -c with STROKE_TARGET_*
 //                     environment variables populated from `target`.
-//
-// M1: skeletons only. Logging proves the right rule fired against
-// the right target without yet causing side effects.
 
 import AppKit
 import ApplicationServices
@@ -65,9 +62,9 @@ public enum Dispatch {
     ///
     /// Order mirrors facet's `AX.focus`: AX-level app frontmost,
     /// make this window main + focused, then raise it last so it
-    /// lands on top. If we never resolved an AX window (M1/M2
-    /// fallback, or cursor was over a non-AX surface), fall back to
-    /// app-level activate — at least the app comes forward.
+    /// lands on top. If we never resolved an AX window (cursor was
+    /// over a non-AX surface like the Dock), fall back to app-level
+    /// activate — at least the app comes forward.
     private static func raiseSpecificWindow(target: Target) {
         guard let window = AXTarget.liveElement(for: target) else {
             Log.line("dispatch.key: no live AX window for "

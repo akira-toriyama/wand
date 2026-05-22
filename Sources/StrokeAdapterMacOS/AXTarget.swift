@@ -54,12 +54,9 @@ public enum AXTarget {
     /// `nil` if AX is not granted, no window sits there, or the
     /// system was too slow to answer within `axTimeout`.
     public static func resolveAt(point: CGPoint) -> Target? {
-        let sys = AXUIElementCreateSystemWide()
-        AXUIElementSetMessagingTimeout(sys, axTimeout)
-
         var hit: AXUIElement?
         let err = AXUIElementCopyElementAtPosition(
-            sys, Float(point.x), Float(point.y), &hit
+            systemWide, Float(point.x), Float(point.y), &hit
         )
         guard err == .success, let element = hit else {
             Log.debug("AX: copyElementAtPosition at \(point) failed: \(err)")
@@ -99,8 +96,8 @@ public enum AXTarget {
 
     /// Live `AXUIElement` previously registered for `target` (by
     /// pid + windowID). Used by `Dispatch.runAX`. Nil if the entry
-    /// has been evicted from the LRU or the target was the M1/M2
-    /// fallback (windowID == 0). Pid-only matching is intentionally
+    /// has been evicted from the LRU or the window couldn't be
+    /// resolved (windowID == 0). Pid-only matching is intentionally
     /// not provided — a stale match against the wrong window of the
     /// same multi-window app is worse than silently no-op'ing.
     public static func liveElement(for target: Target) -> AXUIElement? {
@@ -156,6 +153,17 @@ public enum AXTarget {
     /// 0.25 s matches facet's setting.
     private static let axTimeout: Float = 0.25
     private static let maxWalkDepth = 16
+
+    /// The system-wide AX element is a stable singleton — build it
+    /// (and set the messaging timeout) once rather than per stroke.
+    /// `nonisolated(unsafe)`: only touched from `resolveAt`, which
+    /// runs on the main thread (event-tap callback), same invariant
+    /// as `liveElements`.
+    private nonisolated(unsafe) static let systemWide: AXUIElement = {
+        let sys = AXUIElementCreateSystemWide()
+        AXUIElementSetMessagingTimeout(sys, axTimeout)
+        return sys
+    }()
 
     private static func walkToWindow(from start: AXUIElement) -> AXUIElement? {
         var current = start

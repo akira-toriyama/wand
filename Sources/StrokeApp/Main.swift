@@ -218,17 +218,10 @@ enum StrokeApp {
             let dirs = Recognition.recognize(samples: event.samples,
                                               minStrokePx: cfg.minStrokePx)
             let pattern = dirs.isEmpty ? "(too short)" : dirs.patternString
-            var span = ""
-            if let first = event.samples.first {
-                var mx: CGFloat = 0, my: CGFloat = 0
-                for s in event.samples {
-                    mx = max(mx, abs(s.p.x - first.p.x))
-                    my = max(my, abs(s.p.y - first.p.y))
-                }
-                span = "  max|dx|=\(Int(mx)) max|dy|=\(Int(my))"
-            }
+            let (dx, dy) = event.samples.span
             let line = "pattern=\(pattern)  samples=\(event.samples.count)"
-                + "\(span)  target=\(event.target.bundleID)\n"
+                + "  max|dx|=\(Int(dx)) max|dy|=\(Int(dy))"
+                + "  target=\(event.target.bundleID)\n"
             FileHandle.standardOutput.write(Data(line.utf8))
         }
 
