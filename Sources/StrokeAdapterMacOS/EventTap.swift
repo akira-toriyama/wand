@@ -1,49 +1,23 @@
-// CGEventTap-based MouseSource. Captures stroke samples from the
-// configured trigger button (right-mouse by default) and emits one
-// `StrokeEvent` per completed stroke.
+// CGEventTap-based MouseSource. Down/drag are swallowed; on button-up
+// either the stroke recognised → handler fires and the up is swallowed
+// too, or it was effectively a click → we synthesise a fresh down+up
+// (tagged with `replaySentinel` so we ignore it when it loops back).
 //
-// Lifecycle:
-//   1. `start(_:)` installs a `.defaultTap` CGEventTap on the
-//      `.cgSessionEventTap` location, hooked into the main run loop.
-//   2. On trigger button-down (with required modifiers): resolve the
-//      cursor-anchored window via `AXTarget.resolveAt(point:)`, begin
-//      sampling. Down event is swallowed.
-//   3. Each dragged event: append a `Sample`. Drag is swallowed so
-//      stray drag-selection doesn't fire.
-//   4. On button-up:
-//        a. If `Recognition.recognize(...)` returned ≥1 direction the
-//           stroke is "real" — deliver to handler, swallow up.
-//        b. Otherwise the user effectively just clicked. Synthesize a
-//           fresh down+up at the original location so the OS still
-//           sees a normal click (right-click menu, middle-click paste,
-//           …). Original up is still swallowed; the synthesized pair
-//           is tagged with `replaySentinel` so we can ignore it when
-//           it loops back through our own tap.
-//
-// Threading: the tap is added to `CFRunLoopGetMain()` in `.commonModes`,
-// so the C callback runs on the main thread. All MacOSMouseSource state
-// mutation lives on main — `@unchecked Sendable` is justified by that
-// single-threaded invariant.
+// Threading: tap callback is on the main thread (`CFRunLoopGetMain()`
+// in `.commonModes`); all state mutation lives there. `@unchecked
+// Sendable` is justified by that single-threaded invariant.
 
 import AppKit
 import CoreGraphics
 import Foundation
 import StrokeCore
 
-/// One live trail update for the gesture overlay. Named fields beat a
-/// 4-tuple here: `point` and the two strings (pattern / bundleID) plus
-/// `expired` are easy to transpose positionally.
 public struct TrailSample {
-    /// Cursor location in CG global coords (Y-down).
-    public let point: CGPoint
-    /// Gesture-so-far recognised from all samples to date.
+    public let point: CGPoint      // CG global coords, Y-down
     public let pattern: String
-    /// Cursor-anchored target's bundle id.
     public let bundleID: String
-    /// Stroke has already exceeded `maxStrokeMs` (won't fire).
-    public let expired: Bool
-    /// Stroke has been scribble-cancelled (latched; won't fire).
-    public let cancelled: Bool
+    public let expired: Bool       // exceeded maxStrokeMs
+    public let cancelled: Bool     // scribble-cancelled (latched)
 }
 
 public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
@@ -70,25 +44,10 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
     private var runLoopSource: CFRunLoopSource?
     private var handler: (@Sendable (StrokeEvent) -> Void)?
 
-    /// Live trail hooks for the gesture overlay (set at startup, both
-    /// optional). `onSample` fires for the button-down point and each
-    /// drag point in **CG global coords** (Y-down — what the overlay
-    /// converts from). `onStrokeEnd` fires once when the button comes
-    /// up, so the overlay can clear. Both run on the main thread (the
-    /// tap callback). Recognition / dispatch are unaffected — the
-    /// overlay is a passive observer of the same stream.
-    ///
-    /// `onSample` delivers a `TrailSample` (point + gesture-so-far +
-    /// target bundle id + expired flag) — enough for the App layer to
-    /// decide whether the in-progress stroke currently matches a rule
-    /// (and colour the trail), without EventTap needing to know about
-    /// rules. `onStrokeEnd` fires once on button-up so the overlay
-    /// clears.
-    ///
-    /// Not `@Sendable` (unlike `handler`, which the protocol requires)
-    /// so the closures can capture the non-Sendable `GestureOverlay`.
-    /// Safe because everything here runs on the main thread; the
-    /// enclosing class is already `@unchecked Sendable` on that basis.
+    /// Overlay hooks; both run on the main-thread tap callback. Not
+    /// `@Sendable` (unlike the protocol's `handler`) so the closures
+    /// can capture the non-Sendable `GestureOverlay` — safe because
+    /// everything here is main-bound.
     public var onSample: ((TrailSample) -> Void)?
     public var onStrokeEnd: (() -> Void)?
 
@@ -169,7 +128,6 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
     // Reversal counting moved to `Recognition.reversals` (Core) so the
     // pure logic is unit-testable without an AX/CG stack.
 
-    // MARK: - MouseSource
 
     public func start(_ handler: @escaping @Sendable (StrokeEvent) -> Void) {
         self.handler = handler
@@ -219,7 +177,6 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
         Log.line("event-tap: stop")
     }
 
-    // MARK: - Callback dispatch
 
     private func handle(type: CGEventType,
                         event: CGEvent) -> Unmanaged<CGEvent>? {
@@ -452,7 +409,6 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
         return true
     }
 
-    // MARK: - Replay
 
     /// Synthesize a fresh trigger-button down+up pair at `point` (CG
     /// screen coords) so a no-motion gesture is indistinguishable from
@@ -478,7 +434,6 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
         }
     }
 
-    // MARK: - Trigger ↔ CGEvent helpers
 
     private static func eventMask(for button: Trigger.Button) -> CGEventMask {
         // Some virtual-HID layers (Karabiner-Elements, Logitech Options,
@@ -530,7 +485,6 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
         }
     }
 
-    // MARK: - Modifier ↔ CGEvent flags
 
     private static let allModifierFlags: CGEventFlags = [
         .maskCommand, .maskAlternate, .maskControl,

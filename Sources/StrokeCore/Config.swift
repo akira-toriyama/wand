@@ -1,11 +1,7 @@
-// stroke configuration. Single source of truth lives at
-// ~/.config/stroke/config.toml — never written, never auto-generated,
-// never persisted from the CLI (same policy as facet). To make a
-// change stick, the user edits the file and restarts (or
-// `stroke --reload`).
-//
-// Unknown / out-of-range values clamp to defaults — a typo can
-// never break the daemon.
+// stroke is config.toml-driven, read-only from the daemon's
+// perspective: the file is the source of truth, the CLI never writes
+// it. Unknown / out-of-range values clamp to defaults — a typo can
+// never break recognition.
 
 import Foundation
 
@@ -75,18 +71,15 @@ public struct StrokeConfig: Sendable {
     static func parse(_ text: String) -> StrokeConfig {
         let doc = parseTOMLSubset(text)
 
-        // [trigger]
         let trig = doc.tables["trigger"] ?? [:]
         let button = Trigger.Button(rawValue: trig.string("button").lowercased())
             ?? .right
         let mods = Set(trig.strings("modifiers")
             .compactMap { Modifier(rawValue: $0.lowercased()) })
 
-        // [recognition] — clamp out-of-range to keep a typo from
-        // breaking recognition (the rule still loads, just bounded).
-        // Each clamp logs when the parsed value differs from the user
-        // input so a typo like `min-stroke-px = 9999` is visible in
-        // `/tmp/stroke.log` instead of silently capped.
+        // Each clamp helper logs when the parsed value differs from
+        // user input, so a typo like `min-stroke-px = 9999` is visible
+        // in /tmp/stroke.log instead of silently capping.
         let reco = doc.tables["recognition"] ?? [:]
         let minPx = clampInt(reco, key: "min-stroke-px",
                              default: 16, lo: 4, hi: 200)
@@ -100,7 +93,6 @@ public struct StrokeConfig: Sendable {
                           default: 120, lo: 30, hi: 240)
         let excludes = reco.strings("exclude-apps")
 
-        // [overlay]
         let ov = doc.tables["overlay"] ?? [:]
         let overlayEnabled = ov.bool("enabled", true)
         let overlayColor = { let c = ov.string("color"); return c.isEmpty ? "#3b82f6" : c }()
@@ -108,10 +100,9 @@ public struct StrokeConfig: Sendable {
         let overlayWidth = clampInt(ov, key: "width",
                                     default: 3, lo: 1, hi: 40)
 
-        // [[rules]] — silently dropping rules (empty pattern, missing
-        // action, unknown action-type) used to make typos invisible.
-        // Log each drop with the reason so `stroke --validate` and the
-        // daemon's log both surface them.
+        // Log every dropped rule with its position + reason so
+        // `--validate` and the daemon log both surface them — silent
+        // `compactMap`-of-nil was the worst typo footgun.
         let rules: [Rule] = (doc.arrays["rules"] ?? []).enumerated()
             .compactMap { idx, row in
                 let label = "[[rules]][\(idx)]"

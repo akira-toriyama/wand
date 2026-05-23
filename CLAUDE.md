@@ -314,6 +314,30 @@ decisions. Subsections ordered broad → narrow.
   *(reviewed 2026-05-22)* — `_AXUIElementGetWindow` symbol used
   to resolve serverID from an AXUIElement. Same usage as facet's
   `AXFocus.swift`.
+- [CGWindowListCopyWindowInfo](https://developer.apple.com/documentation/coregraphics/1455214-cgwindowlistcopywindowinfo)
+  *(reviewed 2026-05-23)* — `AXTarget.windowAtPointViaCG`'s fallback
+  source-of-truth. When `AXUIElementCopyElementAtPosition` returns an
+  orphan renderer element (Chrome page content), this gives the
+  on-screen window list in z-order with frame + owner pid; we then
+  re-acquire the AX peer via `kAXWindows` on the owning app.
+
+### Formats / conventions
+
+- [TOML 1.0.0 spec](https://toml.io/en/v1.0.0)
+  *(reviewed 2026-05-23)* — what the hand-rolled
+  `parseTOMLSubset` approximates. We intentionally support a strict
+  subset (no inline tables, no nested arrays-of-arrays, dotted-key
+  style for `[[rules]]` rows). New `.toml` features must justify the
+  added parser surface against the "≈100-line parser" budget.
+- [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/)
+  *(reviewed 2026-05-23)* — type / scope grammar
+  `<type>(<scope>)<!>: <subject>`. `docs/commit-convention.md` is
+  the project-local rules; CI enforces this via `commit-lint.yml`.
+- [Gitmoji](https://gitmoji.dev/)
+  *(reviewed 2026-05-23)* — the leading emoji on each commit
+  (`:sparkles:` feat, `:bug:` fix, `:lock:` security, `:memo:` docs,
+  `:test_tube:` test, …). Same convention as facet — mirror that
+  list when in doubt.
 
 ### GitHub
 

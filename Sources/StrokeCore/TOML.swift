@@ -1,22 +1,15 @@
-// Minimal TOML parser, ported from facet's FacetCore/TOML.swift.
-// Keeps stroke zero-dep (no SwiftPM TOML library pulled in).
+// Minimal TOML subset — kept in-tree to avoid pulling a SwiftPM
+// dependency. Strict subset of toml.io v1.0:
 //
-// Supported:
-//   - `[section]` headers
-//   - `key = value` lines, where value is int / "string" / bool /
-//     array literal `[ "a", "b" ]`
-//   - `[[array-of-tables]]` headers (each occurrence appends a new
-//     table — used by `[[rules]]`)
-//   - `#` line comments and inline `# …` comments outside quoted
-//     strings
-//   - Anything else is silently skipped (a typo only loses that one
-//     line — the rest of the file still loads, per facet's policy)
+//   ✓ `[section]` and `[[array-of-tables]]` headers
+//   ✓ int / "string" / bool / `[ "a", "b" ]` literal arrays
+//   ✓ `#` line + inline comments (outside quoted strings)
+//   ✗ inline tables `{ a = 1 }` — `[[rules]]` uses dotted-key style
+//     (action-type / action-keys / action-verb / action-cmd) instead
 //
-// Empty section name `""` is used for top-level keys. Inline tables
-// (`{ a = 1, b = 2 }`) are NOT yet supported — `[[rules]]` actions
-// are decomposed via dotted-key TOML (action-type / action-keys /
-// action-verb / action-cmd) instead. See config.toml for the
-// canonical schema.
+// Anything we can't parse is silently skipped: a typo only loses the
+// one line, the rest still loads. That promise is what lets the
+// daemon survive any config edit.
 
 import Foundation
 

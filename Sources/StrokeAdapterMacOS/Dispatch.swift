@@ -1,15 +1,6 @@
-// Action execution against a cursor-anchored Target.
-//
-// Three variants, each dispatching to the captured Target (NOT the
-// currently-focused window — that's the whole point of the
-// cursor-anchored design):
-//
-//   .key("cmd+w")     raise(target), then post the key combo
-//   .ax("close")      AXUIElementPerformAction on the target's
-//                     close button / minimize attribute / zoom
-//                     button. No focus switch needed.
-//   .shell("cmd …")   spawn /bin/sh -c with STROKE_TARGET_*
-//                     environment variables populated from `target`.
+// Action execution against the cursor-anchored Target (not the
+// focused window — that's the whole point). Shape of each variant
+// lives on `Action` in Models.swift; this file dispatches them.
 
 import AppKit
 import ApplicationServices
@@ -26,7 +17,6 @@ public enum Dispatch {
         }
     }
 
-    // MARK: - .key
 
     /// Delay between activating the target app and posting the
     /// keystroke. Activation is asynchronous — the new app takes a
@@ -108,18 +98,11 @@ public enum Dispatch {
         up.post(tap: .cghidEventTap)
     }
 
-    // MARK: - .ax
 
-    /// Operate on the cursor-anchored window directly via AX — no
-    /// app activation, no focus theft, no keystroke. The window
-    /// handle was stashed in `AXTarget.liveElements` at stroke start;
-    /// we just look it up by `(pid, windowID)`.
-    ///
-    /// Verbs:
-    ///   close     — press kAXCloseButtonAttribute
-    ///   minimize  — set kAXMinimizedAttribute = true
-    ///   zoom      — press kAXZoomButtonAttribute (green button)
-    ///   raise     — kAXRaiseAction on the window itself
+    /// Direct AX action on the captured window — no app activation,
+    /// no focus theft, no keystroke. Verb set lives in
+    /// `Action.axVerbs` (Models.swift); a typo dropped the rule at
+    /// parse time, so the switch's default is unreachable in practice.
     private static func runAX(_ verb: String, target: Target) {
         Log.line("dispatch.ax: \(verb) → \(target.bundleID) "
                  + "(pid \(target.pid), wid \(target.windowID))")
@@ -187,7 +170,6 @@ public enum Dispatch {
         }
     }
 
-    // MARK: - .shell
 
     /// Run a shell command for a `.shell` action.
     ///

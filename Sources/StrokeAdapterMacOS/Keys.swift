@@ -1,16 +1,6 @@
-// "cmd+shift+t" → (CGEventFlags, CGKeyCode) parser used by
-// `Dispatch.runKey`. Kept separate from Dispatch.swift so the
-// key-name table doesn't drown out the dispatch logic.
-//
-// Recognised modifier names (case-insensitive, both forms allowed):
-//   cmd | command   opt | option | alt   ctrl | control   shift   fn
-//
-// Key names (case-insensitive): all ASCII letters and digits, common
-// symbols, return / tab / space / escape / arrow keys / function
-// keys F1–F12 / home / end / pageup / pagedown / delete / backspace.
-// US-QWERTY keycodes — there is no global "logical-name → keycode"
-// map on macOS, so the rule writer is implicitly typing on that
-// layout.
+// "cmd+shift+t" → (CGEventFlags, CGKeyCode) parser. Keycodes are
+// US-QWERTY because macOS has no global "logical-name → keycode"
+// map — the rule writer is implicitly typing on that layout.
 
 import CoreGraphics
 import StrokeCore
