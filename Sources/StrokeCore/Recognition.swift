@@ -1,24 +1,14 @@
-// Stroke recognition: samples → direction sequence.
-//
-// Pure logic, no AppKit / no CG event types. Algorithm:
-//
-//   1. Walk samples accumulating displacement.
-//   2. When |dx| or |dy| since the last anchor exceeds
-//      ``minStrokePx``, emit a Direction whose axis is the dominant
-//      one, then reset the anchor to that sample.
-//   3. Coalesce consecutive duplicate directions (continuing in the
-//      same direction is one stroke, not many).
-//
-// Dominant-axis quantisation is a stable, easy-to-explain shape
-// recogniser for short directional flicks — keeps the mental model
-// "draw a path of arrow keys" rather than anything fancier.
+// Dominant-axis quantisation:
+//   walk samples; when |dx| or |dy| since the last anchor exceeds
+//   minStrokePx, emit a Direction on the dominant axis and reset the
+//   anchor. Coalesce consecutive duplicates so a long single stroke
+//   is one direction, not many. Keeps the mental model "draw a path
+//   of arrow keys" instead of something fancier.
 
 import CoreGraphics
 
 public enum Recognition {
 
-    /// Convert a captured sample stream into a direction sequence.
-    /// `minStrokePx` from `StrokeConfig.minStrokePx`.
     public static func recognize(samples: [Sample], minStrokePx: Int) -> [Direction] {
         guard samples.count >= 2, minStrokePx > 0 else { return [] }
         var out: [Direction] = []

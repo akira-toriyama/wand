@@ -1,21 +1,15 @@
 // Wires MouseSource → Recognition → Matcher → Dispatch, plus the
-// runtime IPC channel used by `stroke --reload` / `stroke --quit`.
-//
-// The Controller owns no AppKit / UI state — it's a single-purpose
-// coordinator. Lives in StrokeApp (the executable) rather than Core
-// because the adapter selection (real vs synthetic) and the IPC
-// surface are both app-startup concerns.
+// DNC IPC channel used by `stroke --reload` / `stroke --quit`. Lives
+// in App (not Core) because adapter selection and IPC are startup
+// concerns. `@unchecked Sendable` because `config` mutation lives
+// only on the main thread (stroke handler + DNC observer both run
+// there).
 
 import AppKit
 import Foundation
 import StrokeCore
 import StrokeAdapterMacOS
 
-// `@unchecked Sendable`: the only mutable state (`config`) is read
-// and written exclusively on the main thread — the stroke handler
-// runs on the event-tap callback (main run loop) and `reload()` is
-// invoked from the main-queue DNC observer. No cross-thread access,
-// so no lock is needed.
 public final class Controller: @unchecked Sendable {
 
     private let source: MouseSource
@@ -58,7 +52,6 @@ public final class Controller: @unchecked Sendable {
 
     public func stop() { source.stop() }
 
-    // MARK: - Stroke handling
 
     private func handle(_ event: StrokeEvent) {
         let cfg = config
@@ -113,7 +106,6 @@ public final class Controller: @unchecked Sendable {
         }
     }
 
-    // MARK: - Reload
 
     /// Re-read `~/.config/stroke/config.toml` and swap the in-memory
     /// rules + excludes. Trigger and `minStrokePx` are not swapped
@@ -135,7 +127,6 @@ public final class Controller: @unchecked Sendable {
         writeStatus()
     }
 
-    // MARK: - Status file (for `stroke --status`)
 
     private func writeStatus() {
         let fmt = ISO8601DateFormatter()
@@ -165,7 +156,6 @@ public final class Controller: @unchecked Sendable {
         try? s.write(toFile: statusPath, atomically: true, encoding: .utf8)
     }
 
-    // MARK: - CLI ↔ daemon IPC
 
     private func installCLIControl() {
         let dnc = DistributedNotificationCenter.default()

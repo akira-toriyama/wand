@@ -1,17 +1,8 @@
-// StrokeCore — backend-neutral domain types.
-//
-// The Adapter layer translates real mouse events into these; views
-// (if any are ever added) and matching only see these. No AppKit, no
-// CGEvent, no AXUIElement — see docs/architecture.md.
-
 import CoreGraphics
 import Foundation
 
-// MARK: - Direction
-
-/// Cardinal direction of a single stroke segment. The `L U R D`
-/// alphabet is single-letter (grep-friendly in logs, easy to type
-/// in TOML). Scroll-axis directions are not recognised yet.
+/// `L U R D` is single-letter on purpose: grep-friendly in logs and
+/// easy to type in TOML. Scroll-axis directions are not recognised yet.
 public enum Direction: Character, Sendable, Hashable, CaseIterable {
     case left  = "L"
     case up    = "U"
@@ -20,14 +11,12 @@ public enum Direction: Character, Sendable, Hashable, CaseIterable {
 }
 
 extension Array where Element == Direction {
-    /// Canonical pattern string (e.g. `[.down, .right] → "DR"`).
     public var patternString: String {
         String(map { $0.rawValue })
     }
 }
 
 extension Direction {
-    /// Arrow glyph for display (the overlay shows arrows, not letters).
     public var arrow: String {
         switch self {
         case .left:  return "←"
@@ -53,17 +42,11 @@ extension Array where Element == Sample {
     }
 }
 
-// MARK: - Trigger
-
-/// Which mouse button (and optional modifier set) starts capturing a
-/// stroke. Matches the `[trigger]` section of config.toml.
 public struct Trigger: Sendable, Equatable {
     public enum Button: String, Sendable, CaseIterable {
         case right, middle, side1, side2
     }
     public let button: Button
-    /// Required modifier keys at the moment the button goes down.
-    /// Empty set = no modifier required.
     public let modifiers: Set<Modifier>
     public init(button: Button, modifiers: Set<Modifier> = []) {
         self.button = button
@@ -75,18 +58,13 @@ public enum Modifier: String, Sendable, Hashable, CaseIterable {
     case cmd, opt, ctrl, shift, fn
 }
 
-// MARK: - Rule + Action
-
-/// One row in `[[rules]]`. Matches if `pattern` equals the recognised
-/// direction string AND `apps` matches the **cursor-anchored target**
-/// window's bundle id (NOT the focused app — see the cursor-anchored
-/// section in README).
+/// One row in `[[rules]]`. `apps` matches the **cursor-anchored
+/// target** window's bundle id, not the focused app — the whole point
+/// of the project. Wildcards `*` / `?`; entries starting with `!`
+/// exclude (e.g. `!com.apple.dt.Xcode`).
 public struct Rule: Sendable, Equatable {
     public let name: String
     public let pattern: String
-    /// Bundle-id glob list. Wildcards `*` and `?` supported.
-    /// `["*"]` (or empty) matches every app. Entries starting with
-    /// `!` exclude (e.g. `!com.apple.dt.Xcode`).
     public let apps: [String]
     public let action: Action
 
@@ -98,37 +76,19 @@ public struct Rule: Sendable, Equatable {
     }
 }
 
-/// What to do when a rule matches. The dispatcher (in
-/// StrokeAdapterMacOS) executes each variant against the
-/// cursor-anchored target window captured at stroke start.
 public enum Action: Sendable, Equatable {
-    /// Synthesize a keyboard shortcut. The target is raised first
-    /// so the keystroke lands on the right window.
-    /// Example: `cmd+w`, `cmd+shift+t`.
-    case key(String)
-    /// Invoke an AX action on the target window directly (no focus
-    /// switch needed). `verb` ∈ close | minimize | zoom | raise.
-    case ax(String)
-    /// Run a shell command. The dispatcher injects environment
-    /// variables identifying the target window:
-    ///   STROKE_TARGET_BUNDLE_ID, STROKE_TARGET_PID,
-    ///   STROKE_TARGET_TITLE, STROKE_TARGET_FRAME.
-    case shell(String)
+    case key(String)        // e.g. `cmd+w`; the target is raised first
+    case ax(String)         // `verb` ∈ axVerbs (no focus switch)
+    case shell(String)      // env: STROKE_TARGET_BUNDLE_ID / PID / TITLE / FRAME
 
-    /// Verbs accepted by `.ax`. The single source of truth shared by
-    /// config validation (a typo → the rule drops at load, surfaced
-    /// by `--validate`) and the dispatcher's switch. Without parse-
-    /// time validation an unknown verb would load fine and silently
-    /// no-op at dispatch — inconsistent with the "typo can never
-    /// break recognition, the bad rule just drops" config policy.
+    /// Source of truth shared by config validation (a typo drops the
+    /// rule at load) and the dispatcher's switch — drift between the
+    /// two would silently load no-op rules.
     public static let axVerbs: Set<String> = ["close", "minimize", "zoom", "raise"]
 }
 
-// MARK: - Stroke sample
-
-/// One mouse position sample captured during gesture recording.
-/// `t` is seconds since the stroke started (NOT wall-clock) so
-/// recognition is reproducible from a fixture.
+/// `t` is seconds since stroke start (NOT wall-clock) so recognition
+/// is reproducible from a fixture.
 public struct Sample: Sendable, Equatable {
     public let p: CGPoint
     public let t: TimeInterval
@@ -138,16 +98,9 @@ public struct Sample: Sendable, Equatable {
     }
 }
 
-// MARK: - Target
-
-/// The window the stroke is acting on, resolved by the adapter at
-/// stroke *start* (button-down) via AXUIElementCopyElementAtPosition.
-/// Stored as plain data so Core can reason about app filtering
-/// without depending on AX types.
-///
-/// This is the spine of the project: actions always dispatch to
-/// this target, never to the currently-focused window at
-/// stroke-end time.
+/// The window the stroke acts on. Resolved at *button-down* time —
+/// actions dispatch to **this** window, never to whichever has focus
+/// at button-up. Plain data so Core stays free of AX types.
 public struct Target: Sendable, Equatable {
     public let pid: Int32
     public let bundleID: String

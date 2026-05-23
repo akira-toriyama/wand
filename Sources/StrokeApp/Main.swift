@@ -1,23 +1,12 @@
-// stroke entry point. Three modes (server / client / standalone),
-// chosen by CLI flag — mirrors facet's split:
+// Entry point. Three modes chosen by CLI flag: server (no flag —
+// install tap, wait), client (`--reload` / `--quit` / `--status` —
+// post DNC to the running server), standalone (`--validate` /
+// `--doctor` / `--test` / `--record` / `--help`).
 //
-//   1. **Server mode** (no recognised flag): wake the AppKit run
-//      loop, install the CGEventTap, install the IPC observer, wait
-//      for strokes until killed.
-//
-//   2. **Client mode** (`--reload` / `--quit`): post a Distributed
-//      Notification to the running server, exit. Refuses if no
-//      server is running (exit 3) so silent broadcasts to nobody
-//      don't leave the user wondering why nothing happened.
-//
-//   3. **Standalone mode** (`--validate` / `--record` / `--help`):
-//      self-contained; no IPC, no running server expected.
-//      `--record` does install its own event tap and refuses if a
-//      server is already running (would conflict on the tap).
-//
-// `@main enum StrokeApp` (NOT top-level code in main.swift) so
-// XCTest can `@testable import StrokeApp` later without launching
-// the daemon. Same trap as facet — don't reintroduce main.swift.
+// `@main enum StrokeApp` — NOT top-level `main.swift`. The enum
+// form lets a future XCTest `@testable import StrokeApp` work
+// without launching the daemon (same trap as facet/ws-tabs —
+// don't reintroduce main.swift).
 
 import AppKit
 import Foundation
@@ -130,7 +119,6 @@ enum StrokeApp {
         runServer()
     }
 
-    // MARK: - Server mode
 
     @MainActor
     private static func runServer() -> Never {
@@ -215,7 +203,6 @@ enum StrokeApp {
         exit(0)
     }
 
-    // MARK: - Doctor
 
     /// Health report: Accessibility, config, daemon, event tap. Exit 0
     /// if everything's green, 1 if any check fails.
@@ -279,7 +266,6 @@ enum StrokeApp {
         exit(ok ? 0 : 1)
     }
 
-    // MARK: - Test (dry-run a pattern against the rules)
 
     /// `--test PATTERN [bundle-id]`: resolve which rule a pattern would
     /// fire. With a bundle id, report the single firing rule (honouring
@@ -325,7 +311,6 @@ enum StrokeApp {
         }
     }
 
-    // MARK: - Overlay label helpers
 
     /// Render a `L U R D` pattern as arrow glyphs (`DL` → `↓←`).
     private static func arrows(_ pattern: String) -> String {
@@ -347,7 +332,6 @@ enum StrokeApp {
         return GestureHint(shape: arrows(pattern), rows: Array(rows))
     }
 
-    // MARK: - Status
 
     /// Print the running daemon's status (rule count, trigger, last
     /// gesture …) from the status file it maintains. Exit 3 if no
@@ -366,7 +350,6 @@ enum StrokeApp {
         exit(0)
     }
 
-    // MARK: - Client mode (IPC)
 
     /// Post `cmd` to the running daemon via DistributedNotificationCenter,
     /// then exit. Refuses (exit 3) if no daemon is running so the
@@ -421,7 +404,6 @@ enum StrokeApp {
         return false
     }
 
-    // MARK: - Record mode
 
     /// Interactive recorder. Installs an event tap in "recording"
     /// mode (no actions fire, every stroke including too-short ones

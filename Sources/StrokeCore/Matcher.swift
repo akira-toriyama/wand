@@ -1,23 +1,7 @@
-// Rule matching: (pattern, target bundle id) → first matching Rule.
-//
-// Pure logic, used by the Controller. "First match wins" — easy to
-// reason about and matches the way users naturally read rule files
-// top-to-bottom.
-//
-// App filter syntax:
-//   "*"                — matches every bundle id
-//   "com.apple.Safari" — exact
-//   "*chrome*"         — `*` / `?` glob (case-insensitive)
-//   "!com.apple.dt.Xcode" — exclusion; if any entry matches as
-//                          exclusion, the rule is rejected even if
-//                          a positive entry matched
-
 import Foundation
 
 public enum Matcher {
 
-    /// First rule whose pattern equals `pattern` AND whose `apps`
-    /// filter allows `bundleID`. Returns `nil` if nothing matches.
     public static func match(pattern: String,
                              bundleID: String,
                              rules: [Rule]) -> Rule? {
@@ -29,12 +13,10 @@ public enum Matcher {
         return nil
     }
 
-    /// Rules whose pattern **starts with** `prefix` and whose `apps`
-    /// filter allows `bundleID` — the live "what can I still complete
-    /// this into?" set for the overlay's gesture-assist. Includes an
-    /// exact match (`pattern == prefix`) since that's a prefix too.
-    /// Excludes are the caller's concern (the overlay suppresses hints
-    /// for excluded apps).
+    /// Rules whose pattern **starts with** `prefix` — drives the
+    /// overlay's gesture-assist (what's reachable from here). An exact
+    /// match (`pattern == prefix`) is included since that's a prefix
+    /// of itself.
     public static func candidates(prefix: String, bundleID: String,
                                   rules: [Rule]) -> [Rule] {
         guard !prefix.isEmpty else { return [] }
@@ -44,27 +26,26 @@ public enum Matcher {
         }
     }
 
-    /// The rule a gesture would fire: `nil` if the app is excluded or
-    /// nothing matches. The single definition of "this gesture acts"
-    /// — the Controller dispatches its result, the overlay colors by
-    /// whether it's non-nil. Keeping the exclude+match policy in one
-    /// place stops the two call sites from drifting.
+    /// Single source of truth for "this gesture acts." Controller and
+    /// overlay both call it so the dispatch decision and the trail
+    /// color can't drift apart.
     public static func resolve(pattern: String, bundleID: String,
                                rules: [Rule], excludes: [String]) -> Rule? {
         if isExcluded(bundleID: bundleID, by: excludes) { return nil }
         return match(pattern: pattern, bundleID: bundleID, rules: rules)
     }
 
-    /// `true` when `bundleID` matches any glob in `excludes`. Used
-    /// by the Controller to honour `[recognition] exclude-apps`
-    /// before any rule is even considered.
     public static func isExcluded(bundleID: String, by excludes: [String]) -> Bool {
         let bid = bundleID.lowercased()
         return excludes.contains { glob($0.lowercased(), bid) }
     }
 
-    /// Whether the per-rule `apps` filter permits `bundleID`.
-    /// Empty filter is permissive. Exclusions (`!…`) always win.
+    /// Per-rule `apps` filter:
+    ///   `"*"`                — matches every bundle id
+    ///   `"com.apple.Safari"` — exact (case-insensitive)
+    ///   `"*chrome*"`         — `*` / `?` glob
+    ///   `"!com.apple.dt.X"`  — exclusion; any matching `!` wins
+    /// Empty filter is permissive.
     static func appsAllow(_ filters: [String], bundleID: String) -> Bool {
         if filters.isEmpty { return true }
         var anyPositive = false
@@ -81,10 +62,9 @@ public enum Matcher {
         return anyPositive ? anyMatch : true
     }
 
-    /// `*` and `?` glob, case-insensitive (caller lowercases inputs).
+    /// Case sensitivity: caller lowercases both sides before calling.
     static func glob(_ pattern: String, _ s: String) -> Bool {
         let p = Array(pattern), t = Array(s)
-        // Iterative algorithm with `*` backtracking.
         var pi = 0, ti = 0
         var starPi = -1, starTi = 0
         while ti < t.count {

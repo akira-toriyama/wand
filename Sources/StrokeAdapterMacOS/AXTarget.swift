@@ -1,29 +1,12 @@
 // Cursor-anchored window targeting — the spine of the project.
+// `resolveAt(point:)` at button-down freezes which window sits under
+// the cursor; actions later dispatch to *that* window regardless of
+// focus. Two resolution paths: the AX-walk (normal apps), and the
+// CGWindowList fallback (Chrome's multi-process renderer area
+// returns AX elements whose parent chain never reaches a window).
 //
-// At stroke *start* (button-down) we resolve which window sits under
-// the cursor and freeze that as the stroke's target. Actions later
-// dispatch to *that* window regardless of which app gains focus
-// while the user is drawing.
-//
-// Pipeline:
-//
-//   1. systemWide = AXUIElementCreateSystemWide()
-//   2. AXUIElementCopyElementAtPosition(systemWide, x, y, &elt)
-//   3. Walk `elt`'s parent chain via kAXParentAttribute until role
-//      is kAXWindowRole — that's the window.
-//   4. Read kAXTitleAttribute, kAXPositionAttribute, kAXSizeAttribute.
-//   5. Resolve pid via AXUIElementGetPid; bundle id via
-//      NSRunningApplication(processIdentifier:).
-//   6. Look up CGWindowID via the private `_AXUIElementGetWindow`
-//      (same dlsym trick facet's AX module uses).
-//   7. Stash the live `AXUIElement` in `liveElements` keyed by
-//      (pid, windowID) so `Dispatch.runAX` can find it later. Return
-//      the pure-data `Target`.
-//
-// Threading: every call happens on the main thread — the CGEventTap
-// callback in EventTap.swift runs on `CFRunLoopGetMain()` and the
-// Controller's handler invokes resolveAt synchronously from there.
-// No locking needed on `liveElements`.
+// Threading: every call is main-thread (tap callback → Controller
+// → resolveAt), so `liveElements` needs no lock.
 
 import AppKit
 import ApplicationServices
@@ -46,7 +29,6 @@ private let axGetWindow: AXGetWindowFn? = {
 
 public enum AXTarget {
 
-    // MARK: - Resolution
 
     /// Resolve the window under `point` (CG global screen coords —
     /// origin top-left, Y grows down — exactly what
@@ -203,7 +185,6 @@ public enum AXTarget {
         return element
     }
 
-    // MARK: - AX permission prompt
 
     /// Current trust state, without prompting — for `stroke --doctor`.
     public static func isTrusted() -> Bool { AXIsProcessTrusted() }
@@ -231,7 +212,6 @@ public enum AXTarget {
         }
     }
 
-    // MARK: - Side-table (live AXUIElements keyed by pid+windowID)
 
     private struct SideKey: Hashable {
         let pid: Int32
@@ -256,7 +236,6 @@ public enum AXTarget {
         }
     }
 
-    // MARK: - AX helpers
 
     /// AX round-trip budget — generous (a busy Chrome can take 50+ ms)
     /// but bounded so a hung app can't stall the event-tap thread.

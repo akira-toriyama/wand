@@ -1,17 +1,9 @@
-// Translucent gesture-trail HUD. While the user draws, the path is
-// stroked on a transparent, click-through window that floats above
-// every app; on button-up the trail clears.
-//
-// Layer note: this is the project's one piece of on-screen UI. stroke
-// is otherwise headless (LSUIElement). It lives in StrokeAdapterMacOS
-// — same layer as EventTap — because it's pure AppKit/CG rendering
-// fed by the event-tap sample stream; spinning up a separate View
-// module (facet-style) isn't worth it for a single overlay. Core
-// stays UI-free: the trail points arrive as plain `CGPoint`s.
-//
-// Threading: `addPoint` / `clear` are called from the event-tap
-// callback (main thread). AppKit windows/views must be touched on
-// main, so this is correct by construction — no dispatching needed.
+// Translucent gesture-trail HUD — the project's only on-screen UI
+// (stroke is otherwise headless / LSUIElement). Lives in the adapter
+// layer next to EventTap because it's pure AppKit/CG rendering fed by
+// the sample stream; Core stays UI-free (points cross the seam as
+// plain `CGPoint`). Threading: `addPoint` / `clear` fire on the
+// event-tap main-thread callback, which is where AppKit wants them.
 
 import AppKit
 import CoreGraphics
@@ -91,7 +83,6 @@ public final class GestureOverlay {
         view.reset()
     }
 
-    // MARK: - Geometry
 
     /// Cocoa-coordinate union of every screen — the window covers the
     /// whole virtual desktop so a gesture on any display is drawn.
@@ -104,7 +95,6 @@ public final class GestureOverlay {
         return u
     }
 
-    // MARK: - Color parsing
 
     private static func nsColor(_ s: String) -> NSColor? {
         let t = s.trimmingCharacters(in: .whitespaces).lowercased()
@@ -145,7 +135,6 @@ public final class GestureOverlay {
     }
 }
 
-// MARK: - Trail view
 
 private final class TrailView: NSView {
     var matchColor: NSColor = .systemBlue

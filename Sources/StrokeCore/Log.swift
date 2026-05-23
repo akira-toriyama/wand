@@ -1,22 +1,11 @@
-// Two-level log, ported from facet's FacetCore/Log.swift.
-//
-//   - ``Log.line(_:)``  always on. Stroke recognised, rule matched,
-//                       AX target failures — anything the developer
-//                       wants to see after the fact.
-//   - ``Log.debug(_:)`` only when ``debugMode == true`` (set from
-//                       ``stroke --debug``). Use freely for sample
-//                       ticks, event-tap callbacks. Zero overhead
-//                       in normal runs (one bool check).
-//
-// Output:
-//   - File ``/tmp/stroke.log`` — always (both levels).
-//   - stderr — only when ``debugMode == true`` so a backgrounded
-//     ``stroke &`` doesn't pollute the launching shell.
+// Two-level log: `Log.line` always-on, `Log.debug` gated by
+// `debugMode` (set once at startup from `--debug`). Both write to
+// /tmp/stroke.log; stderr only mirrors under --debug so a
+// backgrounded `stroke &` doesn't pollute the launching shell.
 
 import Foundation
 
-/// Set once at startup by ``Main.swift`` from the ``--debug`` flag.
-/// Write-once, then read-only — never mutated after the agent starts.
+/// Write-once at startup from `--debug`. Never mutated after that.
 nonisolated(unsafe) public var debugMode = false
 
 public enum Log {
