@@ -156,6 +156,10 @@ enum StrokeApp {
             // no rule wants, the app is excluded, or the stroke has
             // already run past maxStrokeMs (so the user sees it won't
             // fire).
+            // Cache the target app icon across drag samples — a single
+            // NSRunningApplication lookup per stroke (the bundleID is
+            // frozen at button-down) keeps the per-sample path cheap.
+            var lastIconBundle = ""
             source.onSample = { s in
                 var valid = false
                 var hint: GestureHint? = nil      // nil only before any direction
@@ -176,11 +180,27 @@ enum StrokeApp {
                                         prefix: s.pattern, bundleID: s.bundleID,
                                         rules: rules))
                 }
+                // Resolve the badge icon at most once per stroke. The
+                // bundleID is set at button-down and never changes
+                // within a stroke, so this fires on the first sample
+                // that carries a non-empty bundleID and is a no-op
+                // afterwards.
+                let iconToSet: NSImage??
+                if !s.bundleID.isEmpty && s.bundleID != lastIconBundle {
+                    lastIconBundle = s.bundleID
+                    iconToSet = NSRunningApplication
+                        .runningApplications(withBundleIdentifier: s.bundleID)
+                        .first?.icon
+                } else {
+                    iconToSet = nil
+                }
                 MainActor.assumeIsolated {
+                    if let icon = iconToSet { overlay.setOriginIcon(icon) }
                     overlay.addPoint(s.point, valid: valid, hint: hint)
                 }
             }
             source.onStrokeEnd = {
+                lastIconBundle = ""
                 MainActor.assumeIsolated { overlay.clear() }
             }
             Log.line("overlay: enabled (match=\(cfg.overlayColor), "
