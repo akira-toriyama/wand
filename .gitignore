@@ -12,6 +12,10 @@ Package.resolved
 # App bundles produced by local build scripts (M5)
 *.app/
 
+# Icon generator scratch (scripts/make-icon.sh)
+.icon-build/
+Stroke.iconset/
+
 # Code signing (M5: setup-signing-cert.sh writes the identity name here)
 .signing-id
 

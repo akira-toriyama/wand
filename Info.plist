@@ -9,6 +9,8 @@
   <string>stroke</string>
   <key>CFBundleExecutable</key>
   <string>stroke</string>
+  <key>CFBundleIconFile</key>
+  <string>Stroke</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
