@@ -97,25 +97,16 @@ public struct StrokeConfig: Sendable {
         let reco = doc.tables["recognition"] ?? [:]
         let minPx = clampInt(reco, key: "min-stroke-px",
                              default: 16, lo: 4, hi: 200)
-        // `max-segment-ms` is the canonical key. `max-stroke-ms` is
-        // the legacy alias — kept for one release as a courtesy after
-        // PR #6 rewrote the semantic from total-stroke to per-segment;
-        // the old name now mis-describes what it does.
-        let maxMs: Int = {
-            if reco["max-segment-ms"] != nil {
-                return clampMs(reco, key: "max-segment-ms",
-                               default: 0, lo: 100, hi: 60000)
-            }
-            if reco["max-stroke-ms"] != nil {
-                Log.line("config: `max-stroke-ms` is deprecated; rename "
-                         + "to `max-segment-ms` (same semantic — the "
-                         + "value is the per-segment timeout, with the "
-                         + "clock resetting on each direction change)")
-                return clampMs(reco, key: "max-stroke-ms",
-                               default: 0, lo: 100, hi: 60000)
-            }
-            return 0
-        }()
+        let maxMs = clampMs(reco, key: "max-segment-ms",
+                            default: 0, lo: 100, hi: 60000)
+        // v1.5 accepted `max-stroke-ms` as a deprecated alias; v2.0
+        // drops it. Warn loudly so a stale config doesn't silently
+        // run with `0` (= no timeout).
+        if reco["max-stroke-ms"] != nil {
+            Log.line("config: `max-stroke-ms` was removed in v2.0 — "
+                     + "rename to `max-segment-ms` (same semantic). "
+                     + "Until you do, the timeout is unset (0 = no limit).")
+        }
         let cancelRev = clampMs(reco, key: "cancel-reversals",
                                 default: 2, lo: 1, hi: 20)
         let cancelWin = clampMs(reco, key: "cancel-window-ms",

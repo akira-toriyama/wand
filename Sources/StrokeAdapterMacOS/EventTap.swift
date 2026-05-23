@@ -186,7 +186,27 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
     /// `trigger` is intentionally not swappable here — the event mask
     /// is fixed at `tapCreate` time, and a button change needs a full
     /// restart (Controller.reload logs the warning).
+    ///
+    /// If a stroke is in progress when the swap arrives, the captured
+    /// `samples` were threshold-checked against the OLD `minStrokePx`
+    /// while subsequent samples would use the new one — a real
+    /// recognition-state inconsistency. We cancel the in-progress
+    /// gesture cleanly: drop samples, clear the overlay, no replay
+    /// (the user moved on purpose). The chance of saving config.toml
+    /// mid-drag is small; correctness wins here.
     public func updateConfig(_ cfg: StrokeConfig) {
+        if capturing {
+            Log.line("event-tap: [recognition] config swapped mid-stroke "
+                     + "— cancelling the in-progress gesture to keep "
+                     + "recognition state consistent")
+            capturing = false
+            samples.removeAll(keepingCapacity: true)
+            currentTarget = nil
+            cancelled = false
+            reversalTimes.removeAll(keepingCapacity: true)
+            lastDirCount = 0
+            onStrokeEnd?()
+        }
         minStrokePx = cfg.minStrokePx
         maxSegmentMs = cfg.maxSegmentMs
         cancelReversals = cfg.cancelReversals
