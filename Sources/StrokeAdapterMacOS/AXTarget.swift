@@ -58,40 +58,101 @@ public enum AXTarget {
         let err = AXUIElementCopyElementAtPosition(
             systemWide, Float(point.x), Float(point.y), &hit
         )
-        guard err == .success, let element = hit else {
-            Log.debug("AX: copyElementAtPosition at \(point) failed: \(err)")
-            return nil
+        if err == .success, let element = hit,
+           let window = walkToWindow(from: element) {
+            return finalize(window: window, point: point, via: "ax-walk")
         }
 
-        guard let window = walkToWindow(from: element) else {
-            Log.debug("AX: no kAXWindowRole in parent chain — "
-                      + "likely menu bar / desktop / Dock")
-            return nil
+        // Fallback: Chrome (and any multi-process renderer) sometimes
+        // returns an element whose parent chain doesn't reach a window —
+        // the cursor was on page content drawn by a helper process, so
+        // the AX hierarchy is orphaned from the browser-process window.
+        // Look the on-screen window up by frame via CGWindowList and
+        // re-acquire its AX peer from the owning app.
+        if let (window, _) = windowAtPointViaCG(point: point) {
+            return finalize(window: window, point: point, via: "cg-window")
         }
+
+        Log.debug("AX: no kAXWindowRole in parent chain at \(point) "
+                  + "and no on-screen window found there — "
+                  + "likely menu bar / desktop / Dock")
+        return nil
+    }
+
+    /// Read the metadata off `window`, register it for `.ax` dispatch,
+    /// and log how we found it. Shared by the direct AX-walk path and
+    /// the CGWindowList fallback so they record identical Targets.
+    private static func finalize(window: AXUIElement,
+                                  point: CGPoint, via: String) -> Target {
         AXUIElementSetMessagingTimeout(window, axTimeout)
-
         var pid: pid_t = 0
         AXUIElementGetPid(window, &pid)
-
         let title = string(window, kAXTitleAttribute) ?? ""
         let frame = readFrame(window)
         let bundleID = NSRunningApplication(processIdentifier: pid)?
             .bundleIdentifier ?? ""
-
         var wid: UInt32 = 0
         _ = axGetWindow?(window, &wid)
-
-        let target = Target(
-            pid: pid,
-            bundleID: bundleID,
-            title: title,
-            frame: frame,
-            windowID: wid
-        )
+        let target = Target(pid: pid, bundleID: bundleID,
+                            title: title, frame: frame, windowID: wid)
         register(window, for: target)
-        Log.debug("AX: resolved point=\(point) → "
+        Log.debug("AX: resolved point=\(point) via \(via) → "
                   + "\(bundleID) wid=\(wid) title=\"\(title)\"")
         return target
+    }
+
+    /// Topmost normal-level on-screen window whose frame contains
+    /// `point`, paired with its AX peer (re-acquired through the
+    /// owning app so the renderer-process orphaning doesn't bite).
+    /// Returns `nil` for menu bar / desktop / Dock hits.
+    private static func windowAtPointViaCG(point: CGPoint)
+        -> (AXUIElement, pid_t)?
+    {
+        let opts: CGWindowListOption =
+            [.optionOnScreenOnly, .excludeDesktopElements]
+        guard let list = CGWindowListCopyWindowInfo(opts, kCGNullWindowID)
+                as? [[String: Any]]
+        else { return nil }
+        // CGWindowListCopyWindowInfo returns windows in front-to-back
+        // z-order; first hit is what the cursor visually sits on.
+        for info in list {
+            guard let layer = info[kCGWindowLayer as String] as? Int,
+                  layer == 0,
+                  let bounds = info[kCGWindowBounds as String]
+                    as? [String: CGFloat],
+                  let pid = info[kCGWindowOwnerPID as String] as? pid_t,
+                  let wid = info[kCGWindowNumber as String] as? UInt32
+            else { continue }
+            let rect = CGRect(x: bounds["X"] ?? 0, y: bounds["Y"] ?? 0,
+                              width: bounds["Width"] ?? 0,
+                              height: bounds["Height"] ?? 0)
+            guard rect.contains(point) else { continue }
+            if let ax = findAXWindow(pid: pid, windowID: wid) {
+                return (ax, pid)
+            }
+        }
+        return nil
+    }
+
+    /// AX window element belonging to `pid` whose CGWindowID matches.
+    /// Iterates the app's kAXWindows; `_AXUIElementGetWindow` gives the
+    /// id of each, exactly the same private API the success path uses.
+    private static func findAXWindow(pid: pid_t,
+                                      windowID: UInt32) -> AXUIElement? {
+        let app = AXUIElementCreateApplication(pid)
+        AXUIElementSetMessagingTimeout(app, axTimeout)
+        var val: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(
+                app, kAXWindowsAttribute as CFString, &val) == .success,
+              let windows = val as? [AXUIElement]
+        else { return nil }
+        for w in windows {
+            var wid: UInt32 = 0
+            if axGetWindow?(w, &wid) == .success, wid == windowID {
+                return w
+            }
+        }
+        return nil
     }
 
     /// Live `AXUIElement` previously registered for `target` (by
