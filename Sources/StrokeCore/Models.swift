@@ -98,6 +98,62 @@ public struct Sample: Sendable, Equatable {
     }
 }
 
+/// Exit-animation kind for the assist cards in the gesture overlay.
+/// Raw values match the `[effect]` strings in `config.toml` so the
+/// parser is a one-liner. `.random` is a selector — the adapter
+/// resolves it to one of the renderable cases per card at queue time.
+public enum Effect: String, Sendable, Hashable, CaseIterable {
+    case none
+    case drop
+    case rise
+    case slideLeft = "slide-left"
+    case slideRight = "slide-right"
+    case explode
+    case vibrate
+    case fade
+    case fireworks
+    case confetti
+    case random
+
+    /// How long the animation runs before the card is pruned. `.none`
+    /// and `.random` are nonsensical here (the adapter resolves the
+    /// latter first); 0 is just a placeholder so the switch stays
+    /// exhaustive.
+    public var duration: TimeInterval {
+        switch self {
+        case .none, .random:         return 0
+        case .vibrate:               return 0.45
+        case .fireworks, .confetti:  return 0.9
+        default:                     return 0.35
+        }
+    }
+
+    /// Pool that `.random` chooses from — every concrete renderable
+    /// effect, excluding `.none` and the selector itself.
+    public static let randomPool: [Effect] =
+        Effect.allCases.filter { $0 != .none && $0 != .random }
+}
+
+/// Overall size of the chosen `Effect`s. Multiplier is read by the
+/// adapter to scale translation distance, scale delta, vibration
+/// amplitude, and particle birth-rate / velocity. Lives in Core so the
+/// parsing layer can store a typed value instead of a raw string.
+public enum Intensity: String, Sendable, Hashable, CaseIterable {
+    case subtle
+    case normal
+    case bold
+    case wild
+
+    public var multiplier: CGFloat {
+        switch self {
+        case .subtle: return 0.6
+        case .normal: return 1.0
+        case .bold:   return 1.6
+        case .wild:   return 2.5
+        }
+    }
+}
+
 /// The window the stroke acts on. Resolved at *button-down* time —
 /// actions dispatch to **this** window, never to whichever has focus
 /// at button-up. Plain data so Core stays free of AX types.

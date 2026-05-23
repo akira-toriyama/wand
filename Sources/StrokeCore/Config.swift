@@ -48,25 +48,16 @@ public struct StrokeConfig: Sendable {
     /// Scale-in pop on the origin badge.
     public var overlayAnimEnabled: Bool
     /// Exit animation when an assist card becomes unreachable mid-
-    /// gesture (the user picked a different direction). Names are
-    /// the config strings: `none`, `drop`, `rise`, `slide-left`,
-    /// `slide-right`, `explode`, `vibrate`, `fade`, `fireworks`,
-    /// `confetti`, `random` (pick one of the others each time).
-    /// Unknown values clamp to `none`.
-    public var effectUnmatch: String
+    /// gesture (the user picked a different direction). Unknown
+    /// config values clamp to `.none`.
+    public var effectUnmatch: Effect
     /// Exit animation when the firing card actually fires at button-
-    /// up. Same vocabulary as `effectUnmatch`. Particle effects
-    /// (`fireworks`, `confetti`) read more naturally on match.
-    public var effectMatch: String
-    /// Overall size of the chosen effects. Named so the TOML parser
-    /// stays int-only:
-    ///   `subtle` 0.6×  — minimal motion, small particles
-    ///   `normal` 1.0×  — the calibrated default
-    ///   `bold`   1.6×  — bigger throws, denser particles
-    ///   `wild`   2.5×  — over-the-top
-    /// Unknown values clamp to `normal`. Applied uniformly to both
-    /// `unmatch` and `match`.
-    public var effectIntensity: String
+    /// up. Particle effects (`fireworks`, `confetti`) read more
+    /// naturally here.
+    public var effectMatch: Effect
+    /// Overall size of the chosen effects. Applied uniformly to both
+    /// `unmatch` and `match`. Unknown config values clamp to `.normal`.
+    public var effectIntensity: Intensity
 
     public static let `default` = StrokeConfig(
         trigger: Trigger(button: .right, modifiers: []),
@@ -84,9 +75,9 @@ public struct StrokeConfig: Sendable {
         overlayBlurEnabled: true,
         overlayBadgeSize: 56,
         overlayAnimEnabled: true,
-        effectUnmatch: "none",
-        effectMatch: "none",
-        effectIntensity: "normal"
+        effectUnmatch: .none,
+        effectMatch: .none,
+        effectIntensity: .normal
     )
 
     /// The single source-of-truth path. Shared by `load()` and the
@@ -148,38 +139,15 @@ public struct StrokeConfig: Sendable {
                                         default: 56, lo: 32, hi: 96)
         let overlayAnimEnabled = ov.bool("anim-enabled", true)
 
+        // Same typo-tolerant policy as `[recognition]`: unknown names
+        // log + clamp to default, never throw.
         let ef = doc.tables["effect"] ?? [:]
-        // Unknown names silently fall back to "none" — same typo-
-        // tolerant policy as the rest of `[recognition]`.
-        let effectKinds: Set<String> = [
-            "none", "drop", "rise", "slide-left", "slide-right",
-            "explode", "vibrate", "fade", "fireworks", "confetti",
-            "random",
-        ]
-        func resolveEffect(_ key: String) -> String {
-            let v = ef.string(key).lowercased()
-            if v.isEmpty { return "none" }
-            if effectKinds.contains(v) { return v }
-            Log.line("config: [effect].\(key) = \"\(v)\" not recognised "
-                     + "— falling back to \"none\" "
-                     + "(valid: \(effectKinds.sorted().joined(separator: ", ")))")
-            return "none"
-        }
-        let effectUnmatch = resolveEffect("unmatch")
-        let effectMatch = resolveEffect("match")
-        let intensityKinds: Set<String> = ["subtle", "normal", "bold", "wild"]
-        let intensityRaw = ef.string("intensity").lowercased()
-        let effectIntensity: String
-        if intensityRaw.isEmpty {
-            effectIntensity = "normal"
-        } else if intensityKinds.contains(intensityRaw) {
-            effectIntensity = intensityRaw
-        } else {
-            Log.line("config: [effect].intensity = \"\(intensityRaw)\" not "
-                     + "recognised — falling back to \"normal\" "
-                     + "(valid: \(intensityKinds.sorted().joined(separator: ", ")))")
-            effectIntensity = "normal"
-        }
+        let effectUnmatch: Effect = parseEnum(
+            ef, key: "unmatch", section: "effect", default: .none)
+        let effectMatch: Effect = parseEnum(
+            ef, key: "match", section: "effect", default: .none)
+        let effectIntensity: Intensity = parseEnum(
+            ef, key: "intensity", section: "effect", default: .normal)
 
         // Log every dropped rule with its position + reason so
         // `--validate` and the daemon log both surface them — silent
@@ -252,6 +220,24 @@ public struct StrokeConfig: Sendable {
                      + "(allowed \(lo)..\(hi))")
         }
         return clamped
+    }
+
+    /// Parse a string-keyed enum from a TOML table. Empty / missing
+    /// → silent default; unknown name → loud log + default with the
+    /// full vocabulary listed (so a typo is fixable from the log
+    /// alone). `CaseIterable` powers the valid-set; `RawRepresentable
+    /// where RawValue == String` powers the lookup.
+    private static func parseEnum<E>(
+        _ table: [String: TOMLValue], key: String, section: String,
+        default def: E
+    ) -> E where E: RawRepresentable & CaseIterable, E.RawValue == String {
+        let raw = table.string(key).lowercased()
+        if raw.isEmpty { return def }
+        if let v = E(rawValue: raw) { return v }
+        let valid = E.allCases.map(\.rawValue).sorted().joined(separator: ", ")
+        Log.line("config: [\(section)].\(key) = \"\(raw)\" not recognised "
+                 + "— falling back to \"\(def.rawValue)\" (valid: \(valid))")
+        return def
     }
 
     /// Same as `clampInt`, but treats `<= 0` as "feature off" rather

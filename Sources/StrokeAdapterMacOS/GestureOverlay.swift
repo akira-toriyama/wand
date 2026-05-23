@@ -105,8 +105,9 @@ public final class GestureOverlay {
         view.badgeSize = CGFloat(cfg.overlayBadgeSize)
         view.animEnabled = cfg.overlayAnimEnabled
         view.setBlurEnabled(cfg.overlayBlurEnabled)
-        view.setEffects(unmatch: cfg.effectUnmatch, match: cfg.effectMatch,
-                        intensity: cfg.effectIntensity)
+        view.effectUnmatch = cfg.effectUnmatch
+        view.effectMatch = cfg.effectMatch
+        view.effectIntensity = cfg.effectIntensity.multiplier
         if cfg.overlayEnabled {
             if !window.isVisible { window.orderFrontRegardless() }
         } else if window.isVisible {
@@ -187,27 +188,15 @@ private final class TrailView: NSView {
     var badgeEnabled: Bool = true
     var badgeSize: CGFloat = 56
     var animEnabled: Bool = true
-    /// Exit-animation kinds from `[effect]`. See `Effect` enum.
-    /// Set via `setEffects(unmatch:match:intensity:)` so the
-    /// string→enum mapping stays in one place (called from init +
-    /// hot-reload).
-    fileprivate var effectUnmatch: Effect = .none
-    fileprivate var effectMatch: Effect = .none
-    /// Overall size multiplier — scales translation distance, scale
-    /// deltas, vibration amplitude, and particle birth-rate /
-    /// velocity. 1.0 is `normal`; the named levels map below.
-    fileprivate var effectIntensity: CGFloat = 1.0
-
-    func setEffects(unmatch: String, match: String, intensity: String) {
-        effectUnmatch = Effect(rawValue: unmatch) ?? .none
-        effectMatch = Effect(rawValue: match) ?? .none
-        switch intensity.lowercased() {
-        case "subtle": effectIntensity = 0.6
-        case "bold":   effectIntensity = 1.6
-        case "wild":   effectIntensity = 2.5
-        default:       effectIntensity = 1.0
-        }
-    }
+    /// Exit-animation kinds from `[effect]`. Typed values come straight
+    /// from `StrokeConfig` — `GestureOverlay.applyConfig` assigns them
+    /// on init + hot-reload.
+    var effectUnmatch: Effect = .none
+    var effectMatch: Effect = .none
+    /// Pre-resolved multiplier from `Intensity.multiplier` — scales
+    /// translation distance, scale deltas, vibration amplitude, and
+    /// particle birth-rate / velocity.
+    var effectIntensity: CGFloat = 1.0
 
     fileprivate var points: [CGPoint] = []  // already in view-local coords
     fileprivate var valid = true            // current match state of the trail
@@ -229,46 +218,6 @@ private final class TrailView: NSView {
     fileprivate enum CardKind: Hashable {
         case direction(Character)
         case fires
-    }
-
-    /// Animation kinds for exit effects. Raw values match config
-    /// strings so a `[effect]` lookup stays a one-liner. `.random`
-    /// is a sentinel — `resolveRandom` swaps it for a real kind each
-    /// time a card is queued, so a stroke that drops several cards
-    /// sees variety instead of all the same shuffle.
-    fileprivate enum Effect: String {
-        case none
-        case drop
-        case rise
-        case slideLeft = "slide-left"
-        case slideRight = "slide-right"
-        case explode
-        case vibrate
-        case fade
-        case fireworks
-        case confetti
-        case random
-
-        /// Pool that `.random` chooses from — every concrete effect
-        /// except `.none` and the sentinel itself.
-        fileprivate static let randomPool: [Effect] = [
-            .drop, .rise, .slideLeft, .slideRight,
-            .explode, .vibrate, .fade, .fireworks, .confetti,
-        ]
-
-        /// Duration in seconds. Animations longer than this finish
-        /// fully transparent and are pruned from `exitingCards`.
-        /// `.random` resolves before this is read, so it inherits
-        /// the chosen kind's duration; the case here is just to keep
-        /// the switch exhaustive.
-        var duration: TimeInterval {
-            switch self {
-            case .none, .random:         return 0
-            case .vibrate:               return 0.45
-            case .fireworks, .confetti:  return 0.9
-            default:                     return 0.35
-            }
-        }
     }
 
     /// Swap `.random` for a concrete pick at queue time — per-card,
@@ -312,6 +261,11 @@ private final class TrailView: NSView {
     private var prevCardsByKind: [CardKind: CardLayout] = [:]
     /// In-flight exit animations. Drained by `tickExitAnimations`.
     fileprivate var exitingCards: [ExitingCard] = []
+    /// True while a `tickExitAnimations` is queued on the main loop —
+    /// `kickExitAnimationTick` checks it before scheduling, so the
+    /// concurrent `layoutHUD` + `reset` callers can't stack timers
+    /// that then each reschedule themselves into an avalanche.
+    private var tickScheduled = false
 
     /// Behind-window vibrant blur, masked to the union of all current
     /// card + badge rounded rects so blur only appears where the HUD
@@ -609,22 +563,25 @@ private final class TrailView: NSView {
             mask.path = maskPath
         }
 
-        // Diff against previous layout to drive `unmatch` effects.
-        // Any kind that was present last time but isn't now → its
-        // card became unreachable mid-gesture → animate it out.
-        let newByKind = Dictionary(uniqueKeysWithValues:
-            cardLayouts.map { ($0.kind, $0) })
-        if effectUnmatch != .none {
-            let now = CACurrentMediaTime()
-            for (kind, oldLayout) in prevCardsByKind where newByKind[kind] == nil {
-                let e = resolveRandom(effectUnmatch)
-                exitingCards.append(ExitingCard(
-                    layout: oldLayout, effect: e, startedAt: now))
-                scheduleParticleEffect(oldLayout, effect: e)
+        // Diff drives the unmatch effect and feeds reset()'s match
+        // effect — skip both bookkeeping and dict construction when
+        // neither hook is active (this runs on every mouse-move).
+        if effectUnmatch != .none || effectMatch != .none {
+            let newByKind = Dictionary(uniqueKeysWithValues:
+                cardLayouts.map { ($0.kind, $0) })
+            if effectUnmatch != .none {
+                let now = CACurrentMediaTime()
+                for (kind, oldLayout) in prevCardsByKind
+                    where newByKind[kind] == nil {
+                    let e = resolveRandom(effectUnmatch)
+                    exitingCards.append(ExitingCard(
+                        layout: oldLayout, effect: e, startedAt: now))
+                    scheduleParticleEffect(oldLayout, effect: e)
+                }
             }
+            prevCardsByKind = newByKind
+            kickExitAnimationTick()
         }
-        prevCardsByKind = newByKind
-        kickExitAnimationTick()
     }
 
     /// Emit a CAEmitterLayer for particle effects. No-op for the non-
@@ -642,16 +599,18 @@ private final class TrailView: NSView {
         }
     }
 
-    /// Drive redraws while exit animations are running. Cheap: only
-    /// schedules a follow-up when `exitingCards` is non-empty.
+    /// Drive redraws while exit animations are running. Idempotent —
+    /// the `tickScheduled` flag absorbs repeat calls within a frame.
     private func kickExitAnimationTick() {
-        guard !exitingCards.isEmpty else { return }
+        guard !exitingCards.isEmpty, !tickScheduled else { return }
+        tickScheduled = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0 / 60) {
             [weak self] in self?.tickExitAnimations()
         }
     }
 
     private func tickExitAnimations() {
+        tickScheduled = false
         let now = CACurrentMediaTime()
         exitingCards.removeAll { (now - $0.startedAt) >= $0.effect.duration }
         hudContent.needsDisplay = true
@@ -665,10 +624,9 @@ private final class TrailView: NSView {
         let emitter = CAEmitterLayer()
         emitter.emitterSize = CGSize(width: rect.width, height: 1)
         emitter.emitterShape = .line
-        // Particles wear small alpha-modulated dots — we generate the
-        // image inline so there's no asset to ship and the colour
-        // comes from the cell's `color` channel.
-        let dot = Self.dotImage(diameter: 6)
+        // Particles wear small alpha-modulated dots; colour comes from
+        // each cell's `color` channel multiplying the white texel.
+        let dot = Self.particleDot
         let palette: [NSColor] = [
             .systemBlue, .systemGreen, .systemYellow,
             .systemOrange, .systemPink, .systemPurple,
@@ -698,19 +656,20 @@ private final class TrailView: NSView {
             return cell
         }
         emitter.emitterCells = cells
+        // Cocoa is Y-up: fireworks emit at the card's bottom edge
+        // with longitude +π/2 (towards larger Y), confetti at the top
+        // edge with -π/2.
         if effect == .fireworks {
-            // Bottom of card, particles fly UP. Cocoa Y-up: the
-            // emitter sits at minY and direction is +π/2.
             emitter.emitterPosition = CGPoint(
                 x: rect.midX, y: rect.minY + 4)
             for cell in emitter.emitterCells ?? [] {
-                cell.emissionLongitude = .pi / 2     // up
+                cell.emissionLongitude = .pi / 2
             }
-        } else { // confetti
+        } else {
             emitter.emitterPosition = CGPoint(
                 x: rect.midX, y: rect.maxY - 4)
             for cell in emitter.emitterCells ?? [] {
-                cell.emissionLongitude = -.pi / 2    // down
+                cell.emissionLongitude = -.pi / 2
             }
         }
         // Brief burst: birthRate goes to 0 after a short window so
@@ -721,7 +680,11 @@ private final class TrailView: NSView {
         return emitter
     }
 
-    private static func dotImage(diameter d: CGFloat) -> CGImage {
+    /// Cached white-disc texel shared by every emitter cell — no point
+    /// re-rasterising the same 6×6 image on each fireworks burst.
+    private static let particleDot: CGImage = makeParticleDot(diameter: 6)
+
+    private static func makeParticleDot(diameter d: CGFloat) -> CGImage {
         let cs = CGColorSpaceCreateDeviceRGB()
         let ctx = CGContext(
             data: nil, width: Int(d), height: Int(d),
@@ -849,10 +812,8 @@ private final class HUDContentView: NSView {
     }
 
     /// Draw one card (fill + border + text). `alpha` multiplies into
-    /// the CGContext so the entire card fades uniformly; `dx`/`dy`/`scale`
-    /// place the rect through the exit animation. The non-exiting path
-    /// passes alpha=1 / dx=dy=0 / scale=1 — identity — so layout looks
-    /// identical to before the refactor.
+    /// the CGContext so the entire card fades uniformly; `dx`/`dy`/
+    /// `scale` place the rect through the exit animation.
     private func drawCard(_ c: TrailView.CardLayout,
                           in o: TrailView,
                           alpha: CGFloat,
@@ -888,7 +849,7 @@ private final class HUDContentView: NSView {
     /// scale=1, alpha=1; the function eases them away on the chosen
     /// axis. Particle effects (`fireworks`, `confetti`) fade the card
     /// fast so the CAEmitterLayer carries the show.
-    private func exitTransform(for effect: TrailView.Effect,
+    private func exitTransform(for effect: Effect,
                                 progress p: CGFloat,
                                 intensity k: CGFloat)
         -> (dx: CGFloat, dy: CGFloat, scale: CGFloat, alpha: CGFloat) {
