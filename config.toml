@@ -47,10 +47,6 @@ min-stroke-px = 16
 # stalled single direction (an ordinary, deliberate right-drag) runs
 # past it and is abandoned (no action fires). 0 = no limit. Clamped
 # 100..60000 when set.
-#
-# Legacy alias `max-stroke-ms` is still accepted but logs a
-# deprecation warning at load — the name dates from before the
-# per-segment rewrite and is misleading now.
 max-segment-ms = 0
 
 # Scribble-to-cancel: the number of 180° direction reversals (a quick

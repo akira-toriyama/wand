@@ -36,6 +36,11 @@ public final class Controller: @unchecked Sendable {
     /// Last reload timestamp + cause, surfaced via `--status`.
     private var lastReload: (when: Date, cause: String) =
         (Date(), "initial-load")
+    /// Frozen at init so we can diff later edits against startup. A
+    /// `[trigger]` change or `overlay.enabled = false → true` only
+    /// takes effect on restart; `--status` flags the divergence so
+    /// users notice without needing to scan the log.
+    private let startupConfig: StrokeConfig
     /// Fires after `reload()` swaps the in-memory config, with the new
     /// snapshot. Used by the overlay wiring to hot-apply `[overlay]`
     /// changes (colours, badge toggles, blur, …) without a restart.
@@ -44,6 +49,7 @@ public final class Controller: @unchecked Sendable {
     public init(source: MouseSource, config: StrokeConfig) {
         self.source = source
         self.config = config
+        self.startupConfig = config
     }
 
     public func start() {
@@ -116,10 +122,14 @@ public final class Controller: @unchecked Sendable {
 
     /// Re-read `~/.config/stroke/config.toml` and swap the in-memory
     /// config. Rules, excludes, every `[recognition]` timing knob, and
-    /// the full `[overlay]` block apply live. Only `[trigger]` (button
-    /// + modifiers) requires a daemon restart — the event mask is
-    /// baked into the running `tapCreate`; everything else is just
-    /// re-read on the next sample.
+    /// (mostly) the full `[overlay]` block apply live. Two transitions
+    /// require a full daemon restart, since the underlying object was
+    /// never created at startup (or is baked into `tapCreate`'s mask):
+    ///   - `[trigger]` (button / modifiers)
+    ///   - `[overlay].enabled = false → true` when the window was
+    ///     never instantiated
+    /// Both are flagged here and surfaced in `--status` as
+    /// `pending-restart`.
     public func reload(cause: String = "manual") {
         let new = StrokeConfig.load()
         let oldRules = config.rules.count, newRules = new.rules.count
@@ -127,6 +137,11 @@ public final class Controller: @unchecked Sendable {
             Log.line("controller: reload — [trigger] changed; full restart "
                      + "required to apply (the event mask is baked into the "
                      + "running tap at startup)")
+        }
+        if new.overlayEnabled && !startupConfig.overlayEnabled {
+            Log.line("controller: reload — [overlay].enabled was false at "
+                     + "startup so no overlay window exists; flipping to "
+                     + "true now needs a full daemon restart")
         }
         config = new
         lastReload = (Date(), cause)
@@ -145,6 +160,20 @@ public final class Controller: @unchecked Sendable {
             : recentGestures.enumerated()
                 .map { "  \($0.offset + 1). \($0.element)" }
                 .joined(separator: "\n")
+        // Restart-required diff against startup. Two cases:
+        // - `[trigger]` is baked into `tapCreate`'s event mask
+        // - overlay.enabled = false → true: the window was never
+        //   created at startup, so applyConfig has nothing to show
+        var pending: [String] = []
+        if config.trigger != startupConfig.trigger {
+            pending.append("[trigger]")
+        }
+        if config.overlayEnabled && !startupConfig.overlayEnabled {
+            pending.append("[overlay].enabled = false→true")
+        }
+        let pendingLine = pending.isEmpty
+            ? ""
+            : "\npending-restart: \(pending.joined(separator: ", "))"
         let s = """
         pid=\(ProcessInfo.processInfo.processIdentifier)
         rules=\(config.rules.count)
@@ -158,7 +187,7 @@ public final class Controller: @unchecked Sendable {
         dispatched=\(counterDispatched) \
         no-rule=\(counterNoRule) excluded=\(counterExcluded)
         last-reload=\(fmt.string(from: lastReload.when)) \
-        (\(lastReload.cause))
+        (\(lastReload.cause))\(pendingLine)
         recent:
         \(recent)
         """

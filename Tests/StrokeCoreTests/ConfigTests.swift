@@ -42,18 +42,12 @@ final class ConfigTests: XCTestCase {
             "[recognition]\nmax-segment-ms = 999999").maxSegmentMs, 60000)
     }
 
-    func testMaxStrokeMsLegacyAlias() {
-        // `max-stroke-ms` is the deprecated alias — still parsed for
-        // backwards compatibility, with a `config: deprecated` log line.
+    func testMaxStrokeMsRemovedInV2() {
+        // `max-stroke-ms` was removed in v2.0. A stale config that
+        // still uses it gets the default (0 = no timeout) and a
+        // log line — it must NOT silently map to maxSegmentMs.
         XCTAssertEqual(StrokeConfig.parse(
-            "[recognition]\nmax-stroke-ms = 1500").maxSegmentMs, 1500)
-        // New key wins when both are present.
-        let both = StrokeConfig.parse("""
-        [recognition]
-        max-stroke-ms = 800
-        max-segment-ms = 1500
-        """)
-        XCTAssertEqual(both.maxSegmentMs, 1500)
+            "[recognition]\nmax-stroke-ms = 1500").maxSegmentMs, 0)
     }
 
     func testCancelReversals() {

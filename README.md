@@ -125,8 +125,7 @@ take — the clock resets on every turn, so a multi-segment gesture
 gets the full budget per leg and only a stalled single direction (an
 ordinary deliberate right-drag) runs past it and is abandoned. `0`
 (default) = no limit; the trail turns the no-match color once a
-segment runs past the budget. (`max-stroke-ms` is accepted as a
-deprecated alias — same value, deprecation logged at load.)
+segment runs past the budget.
 
 `[recognition] cancel-reversals` is the escape hatch: scribble the
 cursor back and forth and the in-progress gesture is abandoned on the
@@ -161,6 +160,16 @@ client commands — they exit 3 with a
 helpful message if the daemon isn't running. `--record` is the
 reverse — it refuses if the daemon *is* running, because both
 would fight over the same CGEventTap.
+
+**Two transitions need a daemon restart** — everything else hot-reloads:
+- `[trigger]` (button / modifiers) — baked into the running tap's
+  event mask at `tapCreate` time
+- `[overlay].enabled = false → true` — when the daemon started with
+  overlay disabled, the window was never created; flipping it on
+  later has nothing to attach to
+
+Both surface in `stroke --status` as a `pending-restart:` line, and
+in `/tmp/stroke.log` at reload time.
 
 ## Contributing
 
