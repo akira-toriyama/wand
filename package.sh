@@ -36,6 +36,12 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$PLIST" "$APP/Contents/Info.plist"
 cp .build/release/stroke "$APP/Contents/MacOS/stroke"   # = CFBundleExecutable
+# CFBundleIconFile = Stroke (set in Info.plist) tells Launch Services
+# to look for Stroke.icns in Resources/. Committed binary lives in
+# assets/; regenerate with scripts/make-icon.sh.
+if [[ -f assets/Stroke.icns ]]; then
+  cp assets/Stroke.icns "$APP/Contents/Resources/Stroke.icns"
+fi
 
 # Identity precedence: $CODESIGN_ID > .signing-id file > ad-hoc ("-").
 ID="${CODESIGN_ID:-}"
