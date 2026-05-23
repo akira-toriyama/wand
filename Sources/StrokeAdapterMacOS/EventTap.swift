@@ -238,7 +238,12 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
         // documented recovery is to simply flip it back on.
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
             if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
-            Log.debug("event-tap: re-enabled after disable (\(type.rawValue))")
+            // Promoted to Log.line: a flapping tap is a real symptom
+            // (system load, handler too slow) the user should be able
+            // to see without `--debug`. Repeated firings are still
+            // single lines — readable, not a flood.
+            Log.line("event-tap: re-enabled after disable "
+                     + "(\(type.rawValue))")
             return Unmanaged.passUnretained(event)
         }
 
@@ -318,8 +323,17 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
         samples.append(Sample(p: Self.flipY(cg), t: 0))
         emitTrailSample(cg)
 
-        Log.debug("event-tap: down at \(cg) → "
-                  + "target=\(currentTarget?.bundleID ?? "nil")")
+        // `Log.line` (not debug) so the gold-standard trace survives in
+        // production logs — without this the user-visible failure modes
+        // ("clicked but no gesture fired") have no log entry at all.
+        if let t = currentTarget {
+            Log.line("event-tap: down at \(cg) → \(t.bundleID) "
+                     + "(pid \(t.pid), wid \(t.windowID))")
+        } else {
+            Log.line("event-tap: down at \(cg) → target=nil "
+                     + "(cursor on Dock / menu bar / desktop / "
+                     + "renderer area where AX walk + CG fallback both failed)")
+        }
         return nil
     }
 
@@ -393,10 +407,15 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
         if recognised.isEmpty {
             replayClick(at: downPoint)
             let (dx, dy) = captured.span
-            Log.debug("event-tap: no stroke recognised (samples="
-                      + "\(captured.count), max|dx|=\(Int(dx)), "
-                      + "max|dy|=\(Int(dy)), threshold=\(minStrokePx)) "
-                      + "— replayed click")
+            // `Log.line` so the diagnostic ("samples=N, max|dx|=…,
+            // threshold=…") is visible without `--debug`. This is the
+            // single most useful line for "I drew but nothing fired" —
+            // the CLAUDE.md runbook reads it as the interpretation map.
+            Log.line("event-tap: no stroke recognised on "
+                     + "\(target?.bundleID ?? "<no-target>") (samples="
+                     + "\(captured.count), max|dx|=\(Int(dx)), "
+                     + "max|dy|=\(Int(dy)), threshold=\(minStrokePx)) "
+                     + "— replayed click")
             // Recorder wants to see misses too — that's how the user
             // learns "I moved 12px but the threshold is 16."
             if isRecording { deliver(target, captured) }
@@ -423,8 +442,8 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
             return nil
         }
 
-        Log.debug("event-tap: up — samples=\(captured.count), "
-                  + "pattern=\(recognised.patternString)")
+        Log.line("event-tap: up — samples=\(captured.count), "
+                 + "pattern=\(recognised.patternString)")
         if !deliver(target, captured) {
             Log.line("event-tap: pattern \(recognised.patternString) "
                      + "recognised but no AX target was resolved at "

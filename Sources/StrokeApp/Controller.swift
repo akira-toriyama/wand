@@ -24,8 +24,21 @@ public final class Controller: @unchecked Sendable {
     /// reload takes effect on the very next stroke without
     /// reinstalling the event tap.
     private var config: StrokeConfig
-    /// Last recognised gesture, for `stroke --status`.
-    private var lastGesture: String?
+    /// Last few recognised gestures (newest last), for `stroke --status` —
+    /// a ring buffer big enough to read out "user drew DR then D then DRU"
+    /// while diagnosing remotely.
+    private var recentGestures: [String] = []
+    private let recentGesturesCap = 5
+    /// Counters surfaced via `--status`. Numbers survive between gestures
+    /// so a remote agent can see "the daemon HAS seen events" even when
+    /// no recent gesture matches.
+    private var counterRecognised = 0
+    private var counterDispatched = 0
+    private var counterNoRule = 0
+    private var counterExcluded = 0
+    /// Last reload timestamp + cause, surfaced via `--status`.
+    private var lastReload: (when: Date, cause: String) =
+        (Date(), "initial-load")
 
     public init(source: MouseSource, config: StrokeConfig) {
         self.source = source
@@ -51,28 +64,53 @@ public final class Controller: @unchecked Sendable {
         let cfg = config
         let target = event.target
         if Matcher.isExcluded(bundleID: target.bundleID, by: cfg.excludeApps) {
-            Log.debug("controller: excluded app \(target.bundleID)")
+            counterExcluded += 1
+            Log.line("controller: excluded app \(target.bundleID)")
+            writeStatus()
             return
         }
         let dirs = Recognition.recognize(samples: event.samples,
                                           minStrokePx: cfg.minStrokePx)
         guard !dirs.isEmpty else {
-            Log.debug("controller: stroke too short — ignored")
+            // Reachable only if EventTap and Controller disagree on
+            // recognition — i.e. either threshold drift after reload, or
+            // a real bug. Either way it's worth surfacing without --debug.
+            Log.line("controller: EventTap delivered but Recognition "
+                     + "found 0 directions on \(target.bundleID) "
+                     + "(samples=\(event.samples.count), "
+                     + "minStrokePx=\(cfg.minStrokePx)) — ignored")
             return
         }
+        counterRecognised += 1
         let pattern = dirs.patternString
         Log.line("controller: recognised \(pattern) on \(target.bundleID)")
         let rule = Matcher.match(pattern: pattern, bundleID: target.bundleID,
                                  rules: cfg.rules)
-        lastGesture = "\(pattern) on \(target.bundleID)"
-            + (rule.map { " → \"\($0.name)\"" } ?? " (no rule)")
-        writeStatus()
+        record("\(pattern) on \(target.bundleID)"
+               + (rule.map { " → \"\($0.name)\"" } ?? " (no rule)"))
         guard let rule else {
-            Log.debug("controller: no rule matched \(pattern) / \(target.bundleID)")
+            counterNoRule += 1
+            let n = Matcher.candidates(prefix: pattern,
+                                       bundleID: target.bundleID,
+                                       rules: cfg.rules).count
+            Log.line("controller: no rule matched \(pattern) for "
+                     + "\(target.bundleID) — check `apps` filter in "
+                     + "config.toml (\(n) prefix candidate(s))")
+            writeStatus()
             return
         }
+        counterDispatched += 1
         Log.line("controller: → rule \"\(rule.name)\"")
+        writeStatus()
         Dispatch.execute(rule.action, on: target)
+    }
+
+    /// Append to the ring buffer, dropping the oldest entry past the cap.
+    private func record(_ entry: String) {
+        recentGestures.append(entry)
+        if recentGestures.count > recentGesturesCap {
+            recentGestures.removeFirst(recentGestures.count - recentGesturesCap)
+        }
     }
 
     // MARK: - Reload
@@ -81,7 +119,7 @@ public final class Controller: @unchecked Sendable {
     /// rules + excludes. Trigger and `minStrokePx` are not swapped
     /// live — those are baked into the running event tap; logging
     /// flags them so the user knows a full restart is needed.
-    public func reload() {
+    public func reload(cause: String = "manual") {
         let new = StrokeConfig.load()
         let oldRules = config.rules.count, newRules = new.rules.count
         if new.trigger != config.trigger
@@ -91,21 +129,38 @@ public final class Controller: @unchecked Sendable {
                      + "apply (event tap won't pick them up live)")
         }
         config = new
-        Log.line("controller: reload — \(oldRules) → \(newRules) rule(s)")
+        lastReload = (Date(), cause)
+        Log.line("controller: reload (\(cause)) — "
+                 + "\(oldRules) → \(newRules) rule(s)")
         writeStatus()
     }
 
     // MARK: - Status file (for `stroke --status`)
 
     private func writeStatus() {
+        let fmt = ISO8601DateFormatter()
+        let recent = recentGestures.isEmpty
+            ? "(none yet)"
+            : recentGestures.enumerated()
+                .map { "  \($0.offset + 1). \($0.element)" }
+                .joined(separator: "\n")
         let s = """
         pid=\(ProcessInfo.processInfo.processIdentifier)
         rules=\(config.rules.count)
         trigger=\(config.trigger.button.rawValue)
         min-stroke-px=\(config.minStrokePx)
         max-stroke-ms=\(config.maxStrokeMs)
+        cancel-reversals=\(config.cancelReversals)
+        cancel-window-ms=\(config.cancelWindowMs)
+        sample-hz=\(config.sampleHz)
         overlay=\(config.overlayEnabled ? "on" : "off")
-        last=\(lastGesture ?? "(none yet)")
+        counters: recognised=\(counterRecognised) \
+        dispatched=\(counterDispatched) \
+        no-rule=\(counterNoRule) excluded=\(counterExcluded)
+        last-reload=\(fmt.string(from: lastReload.when)) \
+        (\(lastReload.cause))
+        recent:
+        \(recent)
         """
         try? s.write(toFile: statusPath, atomically: true, encoding: .utf8)
     }
@@ -127,7 +182,7 @@ public final class Controller: @unchecked Sendable {
                 Log.line("ipc: cmd=\(cmd)")
                 switch cmd {
                 case "quit":   NSApp.terminate(nil)
-                case "reload": self?.reload()
+                case "reload": self?.reload(cause: "ipc")
                 default:
                     Log.line("ipc: unknown command \"\(cmd)\" — ignored")
                 }

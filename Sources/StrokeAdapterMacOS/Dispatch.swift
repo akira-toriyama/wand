@@ -87,14 +87,25 @@ public enum Dispatch {
 
     private static func postKey(flags: CGEventFlags, code: CGKeyCode) {
         let src = CGEventSource(stateID: .hidSystemState)
-        let down = CGEvent(keyboardEventSource: src,
-                           virtualKey: code, keyDown: true)
-        let up = CGEvent(keyboardEventSource: src,
-                         virtualKey: code, keyDown: false)
-        down?.flags = flags
-        up?.flags = flags
-        down?.post(tap: .cghidEventTap)
-        up?.post(tap: .cghidEventTap)
+        guard let down = CGEvent(keyboardEventSource: src,
+                                  virtualKey: code, keyDown: true),
+              let up = CGEvent(keyboardEventSource: src,
+                                virtualKey: code, keyDown: false)
+        else {
+            // Both CGEvent ctors return optional even though they're
+            // typed otherwise in older SDKs — when they fail the
+            // keystroke is silently dropped. The trace would end with
+            // `dispatch.key: cmd+w → …` and the user would think it
+            // worked, so this needs to surface.
+            Log.line("dispatch.key: CGEvent allocation failed "
+                     + "(code=\(code), flags=\(flags.rawValue)) — "
+                     + "keystroke dropped")
+            return
+        }
+        down.flags = flags
+        up.flags = flags
+        down.post(tap: .cghidEventTap)
+        up.post(tap: .cghidEventTap)
     }
 
     // MARK: - .ax
@@ -124,9 +135,13 @@ public enum Dispatch {
         case "zoom":
             pressChild(of: window, attribute: kAXZoomButtonAttribute)
         case "minimize":
-            setBool(window, kAXMinimizedAttribute, true)
+            setBool(window, kAXMinimizedAttribute, true, verb: verb)
         case "raise":
-            AXUIElementPerformAction(window, kAXRaiseAction as CFString)
+            let err = AXUIElementPerformAction(
+                window, kAXRaiseAction as CFString)
+            if err != .success {
+                Log.line("dispatch.ax: raise failed err=\(err.rawValue)")
+            }
         default:
             Log.line("dispatch.ax: unknown verb \"\(verb)\" — "
                      + "expected close | minimize | zoom | raise")
@@ -144,16 +159,25 @@ public enum Dispatch {
             Log.line("dispatch.ax: window has no \(attribute)")
             return
         }
-        AXUIElementPerformAction(btn as! AXUIElement,
-                                  kAXPressAction as CFString)
+        let err = AXUIElementPerformAction(
+            btn as! AXUIElement, kAXPressAction as CFString)
+        if err != .success {
+            Log.line("dispatch.ax: press \(attribute) failed "
+                     + "err=\(err.rawValue)")
+        }
     }
 
     private static func setBool(_ e: AXUIElement,
-                                 _ attribute: String, _ value: Bool) {
-        AXUIElementSetAttributeValue(
+                                 _ attribute: String, _ value: Bool,
+                                 verb: String) {
+        let err = AXUIElementSetAttributeValue(
             e, attribute as CFString,
             (value ? kCFBooleanTrue : kCFBooleanFalse) as CFTypeRef
         )
+        if err != .success {
+            Log.line("dispatch.ax: \(verb) (\(attribute)) failed "
+                     + "err=\(err.rawValue)")
+        }
     }
 
     // MARK: - .shell
@@ -171,6 +195,16 @@ public enum Dispatch {
             "\(Int(target.frame.minX)),\(Int(target.frame.minY))," +
             "\(Int(target.frame.width)),\(Int(target.frame.height))"
         p.environment = env
+        // Surface non-zero exits — a silent failing shell command was
+        // the most under-diagnosed `.shell` failure mode previously
+        // (the spawn-success line above made it look successful even
+        // when the command itself errored).
+        p.terminationHandler = { proc in
+            if proc.terminationStatus != 0 {
+                Log.line("dispatch.shell: exited "
+                         + "rc=\(proc.terminationStatus): \(cmd)")
+            }
+        }
         do { try p.run() } catch {
             Log.line("dispatch.shell: spawn failed — \(error)")
         }

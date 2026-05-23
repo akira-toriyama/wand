@@ -84,16 +84,20 @@ public struct StrokeConfig: Sendable {
 
         // [recognition] — clamp out-of-range to keep a typo from
         // breaking recognition (the rule still loads, just bounded).
+        // Each clamp logs when the parsed value differs from the user
+        // input so a typo like `min-stroke-px = 9999` is visible in
+        // `/tmp/stroke.log` instead of silently capped.
         let reco = doc.tables["recognition"] ?? [:]
-        let minPx = max(4, min(200, reco.int("min-stroke-px", 16)))
-        // 0 = no limit; otherwise clamp to a sane 100ms..60s window.
-        let maxMs = { let m = reco.int("max-stroke-ms", 0); return m <= 0 ? 0 : max(100, min(60000, m)) }()
-        // 0 = off; otherwise at least 1 reversal, capped so a typo can't
-        // demand an unreachable scribble.
-        let cancelRev = { let n = reco.int("cancel-reversals", 2); return n <= 0 ? 0 : max(1, min(20, n)) }()
-        // 0 = any speed; otherwise clamp to a sane 100ms..5s window.
-        let cancelWin = { let m = reco.int("cancel-window-ms", 500); return m <= 0 ? 0 : max(100, min(5000, m)) }()
-        let hz = max(30, min(240, reco.int("sample-hz", 120)))
+        let minPx = clampInt(reco, key: "min-stroke-px",
+                             default: 16, lo: 4, hi: 200)
+        let maxMs = clampMs(reco, key: "max-stroke-ms",
+                            default: 0, lo: 100, hi: 60000)
+        let cancelRev = clampMs(reco, key: "cancel-reversals",
+                                default: 2, lo: 1, hi: 20)
+        let cancelWin = clampMs(reco, key: "cancel-window-ms",
+                                default: 500, lo: 100, hi: 5000)
+        let hz = clampInt(reco, key: "sample-hz",
+                          default: 120, lo: 30, hi: 240)
         let excludes = reco.strings("exclude-apps")
 
         // [overlay]
@@ -101,20 +105,37 @@ public struct StrokeConfig: Sendable {
         let overlayEnabled = ov.bool("enabled", true)
         let overlayColor = { let c = ov.string("color"); return c.isEmpty ? "#3b82f6" : c }()
         let overlayColorNoMatch = { let c = ov.string("color-no-match"); return c.isEmpty ? "#ef4444" : c }()
-        let overlayWidth = max(1, min(40, ov.int("width", 3)))
+        let overlayWidth = clampInt(ov, key: "width",
+                                    default: 3, lo: 1, hi: 40)
 
-        // [[rules]]
-        let rules: [Rule] = (doc.arrays["rules"] ?? []).compactMap { row in
-            let pattern = row.string("pattern")
-            guard !pattern.isEmpty else { return nil }
-            guard let action = parseAction(row) else { return nil }
-            let name = row.string("name")
-            let apps = row.strings("apps")
-            return Rule(name: name.isEmpty ? pattern : name,
-                        pattern: pattern,
-                        apps: apps.isEmpty ? ["*"] : apps,
-                        action: action)
-        }
+        // [[rules]] — silently dropping rules (empty pattern, missing
+        // action, unknown action-type) used to make typos invisible.
+        // Log each drop with the reason so `stroke --validate` and the
+        // daemon's log both surface them.
+        let rules: [Rule] = (doc.arrays["rules"] ?? []).enumerated()
+            .compactMap { idx, row in
+                let label = "[[rules]][\(idx)]"
+                    + (row.string("name").isEmpty
+                       ? "" : " \(row.string("name"))")
+                let pattern = row.string("pattern")
+                guard !pattern.isEmpty else {
+                    Log.line("config: dropped \(label) — missing or empty "
+                             + "`pattern`")
+                    return nil
+                }
+                guard let action = parseAction(row) else {
+                    Log.line("config: dropped \(label) — invalid or missing "
+                             + "action (need action-type + matching "
+                             + "action-keys / action-verb / action-cmd)")
+                    return nil
+                }
+                let name = row.string("name")
+                let apps = row.strings("apps")
+                return Rule(name: name.isEmpty ? pattern : name,
+                            pattern: pattern,
+                            apps: apps.isEmpty ? ["*"] : apps,
+                            action: action)
+            }
 
         return StrokeConfig(
             trigger: Trigger(button: button, modifiers: mods),
@@ -140,6 +161,38 @@ public struct StrokeConfig: Sendable {
     ///     action-keys = "cmd+w"         # for type=key
     ///     action-verb = "close"         # for type=ax
     ///     action-cmd  = "open ..."      # for type=shell
+    /// Clamp a `[lo, hi]` integer, logging when the parsed value
+    /// differs from what the user wrote. Used for every fixed-range
+    /// knob — covers the "user typed 9999 and it silently capped to
+    /// 200" foot-gun.
+    private static func clampInt(_ table: [String: TOMLValue],
+                                  key: String, default def: Int,
+                                  lo: Int, hi: Int) -> Int {
+        let raw = table.int(key, def)
+        let clamped = max(lo, min(hi, raw))
+        if raw != clamped {
+            Log.line("config: \(key) = \(raw) clamped to \(clamped) "
+                     + "(allowed \(lo)..\(hi))")
+        }
+        return clamped
+    }
+
+    /// Same as `clampInt`, but treats `<= 0` as "feature off" rather
+    /// than clamping up to `lo`. For knobs where 0 is a documented
+    /// opt-out (max-stroke-ms, cancel-reversals, cancel-window-ms).
+    private static func clampMs(_ table: [String: TOMLValue],
+                                 key: String, default def: Int,
+                                 lo: Int, hi: Int) -> Int {
+        let raw = table.int(key, def)
+        if raw <= 0 { return 0 }
+        let clamped = max(lo, min(hi, raw))
+        if raw != clamped {
+            Log.line("config: \(key) = \(raw) clamped to \(clamped) "
+                     + "(allowed 0 or \(lo)..\(hi))")
+        }
+        return clamped
+    }
+
     private static func parseAction(_ row: [String: TOMLValue]) -> Action? {
         guard case .string(let type) = row["action-type"] ?? .string("")
         else { return nil }

@@ -58,24 +58,32 @@ public enum AXTarget {
         let err = AXUIElementCopyElementAtPosition(
             systemWide, Float(point.x), Float(point.y), &hit
         )
-        if err == .success, let element = hit,
-           let window = walkToWindow(from: element) {
+        // Distinguish the three failure modes — a future remote-diagnosis
+        // session needs to know *why* a gesture was dropped, not just
+        // "AX returned nil." Three real causes, three lines:
+        //   - copyElementAtPosition itself failed (rare; permission)
+        //   - parent chain didn't reach a window (Chrome renderer area)
+        //   - cg-window also empty (real Dock / menu / desktop)
+        if err != .success {
+            Log.debug("AX: copyElementAtPosition failed at \(point) "
+                      + "err=\(err.rawValue)")
+        } else if let element = hit,
+                  let window = walkToWindow(from: element) {
             return finalize(window: window, point: point, via: "ax-walk")
         }
 
-        // Fallback: Chrome (and any multi-process renderer) sometimes
-        // returns an element whose parent chain doesn't reach a window —
-        // the cursor was on page content drawn by a helper process, so
-        // the AX hierarchy is orphaned from the browser-process window.
-        // Look the on-screen window up by frame via CGWindowList and
-        // re-acquire its AX peer from the owning app.
         if let (window, _) = windowAtPointViaCG(point: point) {
+            // Worth logging at debug that we needed the fallback — when
+            // the user reports flaky behaviour on a specific app, a tail
+            // of `via cg-window` lines is the signal that ax-walk is
+            // structurally failing there (multi-process renderer etc.).
             return finalize(window: window, point: point, via: "cg-window")
         }
 
-        Log.debug("AX: no kAXWindowRole in parent chain at \(point) "
-                  + "and no on-screen window found there — "
-                  + "likely menu bar / desktop / Dock")
+        Log.line("AX: no window resolvable at \(point) — "
+                 + "ax-walk failed and CGWindowList found no on-screen "
+                 + "window there. Cursor was likely on Dock / menu bar / "
+                 + "desktop. Gesture dropped.")
         return nil
     }
 

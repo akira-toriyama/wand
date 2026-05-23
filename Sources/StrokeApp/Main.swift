@@ -207,7 +207,7 @@ enum StrokeApp {
         // the process lifetime via `app.run()`.
         let watcher = ConfigWatcher(path: StrokeConfig.path) {
             Log.line("config: file changed — reloading")
-            controller.reload()
+            controller.reload(cause: "file-change")
         }
         watcher.start()
 
@@ -250,6 +250,31 @@ enum StrokeApp {
         ok = ok && tap
         print(line(tap, "Event tap:",
                    tap ? "can install" : "cannot install (needs Accessibility)"))
+
+        // Tuned values — the same ones the daemon would apply. Lets a
+        // remote diagnosis confirm what's in effect without parsing
+        // config.toml independently.
+        print(line(true, "Tuning:",
+                   "min-stroke-px=\(cfg.minStrokePx) "
+                   + "max-stroke-ms=\(cfg.maxStrokeMs) "
+                   + "cancel-reversals=\(cfg.cancelReversals) "
+                   + "cancel-window-ms=\(cfg.cancelWindowMs) "
+                   + "sample-hz=\(cfg.sampleHz)"))
+
+        // Rule patterns — confirms the user's edits parsed where they
+        // expect. Truncate at 12 to keep --doctor scannable.
+        if !cfg.rules.isEmpty {
+            print("  ·  Rules:")
+            let maxShown = 12
+            for r in cfg.rules.prefix(maxShown) {
+                let appList = r.apps.joined(separator: ",")
+                print("       \(r.pattern.padding(toLength: 6, withPad: " ", startingAt: 0))"
+                      + "\(r.name)  [\(appList)]")
+            }
+            if cfg.rules.count > maxShown {
+                print("       … +\(cfg.rules.count - maxShown) more")
+            }
+        }
 
         exit(ok ? 0 : 1)
     }
@@ -430,7 +455,9 @@ enum StrokeApp {
             guard !dirs.isEmpty else {
                 FileHandle.standardOutput.write(Data((
                     "(too short)  samples=\(event.samples.count)  "
-                    + "max|dx|=\(Int(dx)) max|dy|=\(Int(dy))\n"
+                    + "max|dx|=\(Int(dx)) max|dy|=\(Int(dy))  "
+                    + "threshold=\(cfg.minStrokePx)  "
+                    + "target=\(event.target.bundleID)\n"
                 ).utf8))
                 return
             }
