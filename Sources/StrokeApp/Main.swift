@@ -29,30 +29,33 @@ enum StrokeApp {
           stroke --debug               verbose log to stderr +
                                        /tmp/stroke.log
 
-        CLIENT COMMANDS (talk to a running stroke daemon)
+        CLIENT COMMANDS — need a running daemon (exit 3 if none)
           stroke --reload              re-read ~/.config/stroke/config.toml
-                                       without restarting (also automatic
-                                       on file save; rules + excludes only —
-                                       trigger/minStrokePx need a full restart)
-          stroke --status              print rule count, trigger, last gesture
+                                       (also automatic on file save).
+                                       Live: [[rules]] / exclude-apps /
+                                       [recognition] timing / [overlay].
+                                       Restart only: [trigger].
+          stroke --status              print rule count, trigger, last
+                                       gestures, counters, last reload
           stroke --quit                terminate the running daemon
 
-        STANDALONE COMMANDS
+        STANDALONE COMMANDS — no daemon required (--record refuses if one runs)
           stroke --validate            parse config.toml; exit 0 if valid
-          stroke --doctor              health check: Accessibility,
-                                       config, daemon, event tap
+          stroke --doctor              health check: Accessibility, config,
+                                       daemon, event tap, tuning + rules
           stroke --test PATTERN [APP]  dry-run: which rule would fire for
                                        a pattern (optionally for a bundle id)
-          stroke --record              interactive recorder: draw a
-                                       gesture, get a paste-ready
-                                       [[rules]] snippet on stdout.
-                                       Refuses if the daemon is running.
+          stroke --record              interactive recorder: draw a gesture,
+                                       get a paste-ready [[rules]] snippet
+                                       on stdout. Refuses if the daemon is
+                                       running (would fight over the tap).
           stroke --help                this help
 
         EXIT CODES
           0   success
           2   bad flag / invalid config
-          3   client command but no running daemon found
+          3   precondition mismatch: client cmd with no daemon, or
+              --record with a daemon running
 
         CONFIG
           ~/.config/stroke/config.toml is the single source of truth.
@@ -131,7 +134,7 @@ enum StrokeApp {
         let source = MacOSMouseSource(
             trigger: cfg.trigger,
             minStrokePx: cfg.minStrokePx,
-            maxStrokeMs: cfg.maxStrokeMs,
+            maxSegmentMs: cfg.maxSegmentMs,
             cancelReversals: cfg.cancelReversals,
             cancelWindowMs: cfg.cancelWindowMs
         )
@@ -270,7 +273,7 @@ enum StrokeApp {
         // config.toml independently.
         print(line(true, "Tuning:",
                    "min-stroke-px=\(cfg.minStrokePx) "
-                   + "max-stroke-ms=\(cfg.maxStrokeMs) "
+                   + "max-segment-ms=\(cfg.maxSegmentMs) "
                    + "cancel-reversals=\(cfg.cancelReversals) "
                    + "cancel-window-ms=\(cfg.cancelWindowMs)"))
 
@@ -364,8 +367,11 @@ enum StrokeApp {
     /// daemon is running.
     private static func runStatus() -> Never {
         guard isServerRunning() else {
-            FileHandle.standardError.write(Data(
-                "stroke: no daemon running\n".utf8))
+            FileHandle.standardError.write(Data((
+                "stroke: --status needs a running daemon (it reads the "
+                + "status file the daemon maintains). Start one with "
+                + "`stroke` first.\n"
+            ).utf8))
             exit(3)
         }
         if let s = try? String(contentsOfFile: statusPath, encoding: .utf8) {

@@ -115,30 +115,24 @@ public final class Controller: @unchecked Sendable {
 
 
     /// Re-read `~/.config/stroke/config.toml` and swap the in-memory
-    /// config. Rules, excludes, and the full `[overlay]` block are
-    /// applied live. The trigger and every `[recognition]` timing knob
-    /// (`min-stroke-px`, `max-stroke-ms`, `cancel-reversals`,
-    /// `cancel-window-ms`) are baked into the running CGEventTap at
-    /// startup and need a full daemon restart to take effect — the
-    /// warning below names each one that actually changed.
+    /// config. Rules, excludes, every `[recognition]` timing knob, and
+    /// the full `[overlay]` block apply live. Only `[trigger]` (button
+    /// + modifiers) requires a daemon restart — the event mask is
+    /// baked into the running `tapCreate`; everything else is just
+    /// re-read on the next sample.
     public func reload(cause: String = "manual") {
         let new = StrokeConfig.load()
         let oldRules = config.rules.count, newRules = new.rules.count
-        var restartRequired: [String] = []
-        if new.trigger != config.trigger { restartRequired.append("trigger") }
-        if new.minStrokePx != config.minStrokePx { restartRequired.append("min-stroke-px") }
-        if new.maxStrokeMs != config.maxStrokeMs { restartRequired.append("max-stroke-ms") }
-        if new.cancelReversals != config.cancelReversals { restartRequired.append("cancel-reversals") }
-        if new.cancelWindowMs != config.cancelWindowMs { restartRequired.append("cancel-window-ms") }
-        if !restartRequired.isEmpty {
-            Log.line("controller: reload — \(restartRequired.joined(separator: ", ")) "
-                     + "changed in config; full restart required to apply "
-                     + "(those values are baked into the running event tap)")
+        if new.trigger != config.trigger {
+            Log.line("controller: reload — [trigger] changed; full restart "
+                     + "required to apply (the event mask is baked into the "
+                     + "running tap at startup)")
         }
         config = new
         lastReload = (Date(), cause)
         Log.line("controller: reload (\(cause)) — "
                  + "\(oldRules) → \(newRules) rule(s)")
+        source.updateConfig(new)
         onConfigChanged?(new)
         writeStatus()
     }
@@ -156,7 +150,7 @@ public final class Controller: @unchecked Sendable {
         rules=\(config.rules.count)
         trigger=\(config.trigger.button.rawValue)
         min-stroke-px=\(config.minStrokePx)
-        max-stroke-ms=\(config.maxStrokeMs)
+        max-segment-ms=\(config.maxSegmentMs)
         cancel-reversals=\(config.cancelReversals)
         cancel-window-ms=\(config.cancelWindowMs)
         overlay=\(config.overlayEnabled ? "on" : "off")

@@ -32,14 +32,28 @@ final class ConfigTests: XCTestCase {
             "[recognition]\nmin-stroke-px = 999").minStrokePx, 200) // high clamp
     }
 
-    func testMaxStrokeMs() {
-        XCTAssertEqual(StrokeConfig.parse("").maxStrokeMs, 0)
+    func testMaxSegmentMs() {
+        XCTAssertEqual(StrokeConfig.parse("").maxSegmentMs, 0)
         XCTAssertEqual(StrokeConfig.parse(
-            "[recognition]\nmax-stroke-ms = 1500").maxStrokeMs, 1500)
+            "[recognition]\nmax-segment-ms = 1500").maxSegmentMs, 1500)
         XCTAssertEqual(StrokeConfig.parse(
-            "[recognition]\nmax-stroke-ms = 50").maxStrokeMs, 100)
+            "[recognition]\nmax-segment-ms = 50").maxSegmentMs, 100)
         XCTAssertEqual(StrokeConfig.parse(
-            "[recognition]\nmax-stroke-ms = 999999").maxStrokeMs, 60000)
+            "[recognition]\nmax-segment-ms = 999999").maxSegmentMs, 60000)
+    }
+
+    func testMaxStrokeMsLegacyAlias() {
+        // `max-stroke-ms` is the deprecated alias — still parsed for
+        // backwards compatibility, with a `config: deprecated` log line.
+        XCTAssertEqual(StrokeConfig.parse(
+            "[recognition]\nmax-stroke-ms = 1500").maxSegmentMs, 1500)
+        // New key wins when both are present.
+        let both = StrokeConfig.parse("""
+        [recognition]
+        max-stroke-ms = 800
+        max-segment-ms = 1500
+        """)
+        XCTAssertEqual(both.maxSegmentMs, 1500)
     }
 
     func testCancelReversals() {

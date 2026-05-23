@@ -103,17 +103,30 @@ Pattern alphabet is `L U R D` (left / up / right / down) —
 same-direction motion into one segment (`LLLL…` is `L`, not `LL`).
 A rule whose pattern repeats a direction (`DRR`, `LL`, …) is
 unreachable; `stroke --validate` drops it loudly. Scroll-axis
-directions are not recognised yet. App filters support `*` / `?`
-globs and `!` exclusions. Action types are `key` (a keystroke),
-`ax` (`close` / `minimize` / `zoom` / `raise`), and `shell` (any
-command).
+directions are not recognised yet. Action types are `key` (a
+keystroke), `ax` (`close` / `minimize` / `zoom` / `raise`), and
+`shell` (any command).
 
-`[recognition] max-stroke-ms` caps how long any one segment may take
-— the clock resets on every turn, so a multi-segment gesture gets the
-full budget per leg and only a stalled single direction (an ordinary
-deliberate right-drag) runs past it and is abandoned. `0` (default) =
-no limit; the trail turns the no-match color once a segment runs past
-the budget.
+`apps` is a glob list with positive entries (`*chrome*`,
+`com.apple.Safari`, `*` for any) and `!`-prefixed exclusions. The
+rule applies when **at least one positive entry matches** (or none
+exists) **and no `!` entry matches**. Case-insensitive. Examples:
+
+| `apps =` | Applies to |
+|---|---|
+| `["*chrome*"]` | only Chrome (or anything whose bundle id contains "chrome") |
+| `[]` *or* `["*"]` | every app |
+| `["!com.apple.dt.Xcode"]` | every app **except** Xcode |
+| `["*", "!*.chrome.beta*"]` | every app except Chrome's beta channel |
+| `["*chrome*", "*safari*"]` | Chrome OR Safari |
+
+`[recognition] max-segment-ms` caps how long any one segment may
+take — the clock resets on every turn, so a multi-segment gesture
+gets the full budget per leg and only a stalled single direction (an
+ordinary deliberate right-drag) runs past it and is abandoned. `0`
+(default) = no limit; the trail turns the no-match color once a
+segment runs past the budget. (`max-stroke-ms` is accepted as a
+deprecated alias — same value, deprecation logged at load.)
 
 `[recognition] cancel-reversals` is the escape hatch: scribble the
 cursor back and forth and the in-progress gesture is abandoned on the
@@ -173,6 +186,39 @@ For a local `Stroke.app` with persistent Accessibility grant:
                                   #   Homebrew install without TCC collision
 ./stop.sh                         # kill everything stroke
 ```
+
+## Troubleshooting
+
+**`event-tap: tapCreate failed — is Accessibility granted?`** in
+`/tmp/stroke.log`. macOS dropped (or never had) the Accessibility
+grant for this binary. Two ways out:
+- **Quick**: re-grant in System Settings → Privacy & Security →
+  Accessibility (toggle the `stroke` / `Stroke` entry off and on, or
+  `+` the binary if missing). Re-launch.
+- **Sticky**: run `./setup-signing-cert.sh` once. It creates a stable
+  self-signed cert in the login keychain; `package.sh` / `run.sh`
+  pick it up and sign every rebuild with the same identity, so the
+  TCC grant survives. Each subsequent `swift build` would otherwise
+  ad-hoc-sign with a new identity and look like a "new app" to TCC.
+
+**`security find-identity -v -p codesigning` returns 0** but
+`./run.sh` still signs the bundle. That's expected — `find-identity
+-v` filters for codesigning-trusted identities, and a self-signed
+cert isn't trusted as a CA. The cert is still in the keychain and
+`codesign --sign "<name>"` finds it by Common Name. Confirm with
+`security find-certificate -c "stroke Local Signing"`.
+
+**Gesture doesn't fire on a Chrome page's content area.** The AX
+walk-to-window fails through Chrome's renderer process; stroke falls
+back to `CGWindowListCopyWindowInfo`. The log line reads
+`AX: resolved … via cg-window → com.google.Chrome …` — if you see
+`via ax-walk` for the same area you're fine. If you see neither,
+the cursor was likely on the menu bar / Dock / desktop.
+
+**A rule with `pattern = "DRR"` or similar repeats never fires.** By
+design — the recogniser coalesces same-direction motion, so `DRR`
+is unreachable. `stroke --validate` drops the rule loudly. Use
+distinct directions per segment (`DR` plus a follow-on like `DRU`).
 
 ## License
 

@@ -12,7 +12,7 @@ public struct StrokeConfig: Sendable {
     /// still count as a gesture. A slower drag is abandoned (no
     /// action). `0` = no limit. Lets you right-drag normally without
     /// it being read as a gesture, as long as you take your time.
-    public var maxStrokeMs: Int
+    public var maxSegmentMs: Int
     /// Number of 180° direction reversals (a back-and-forth scribble)
     /// that cancels the in-progress stroke — once reached, the gesture
     /// is latched dead and releasing fires nothing, no waiting for a
@@ -51,7 +51,7 @@ public struct StrokeConfig: Sendable {
     public static let `default` = StrokeConfig(
         trigger: Trigger(button: .right, modifiers: []),
         minStrokePx: 16,
-        maxStrokeMs: 0,
+        maxSegmentMs: 0,
         cancelReversals: 2,
         cancelWindowMs: 500,
         excludeApps: [],
@@ -97,8 +97,25 @@ public struct StrokeConfig: Sendable {
         let reco = doc.tables["recognition"] ?? [:]
         let minPx = clampInt(reco, key: "min-stroke-px",
                              default: 16, lo: 4, hi: 200)
-        let maxMs = clampMs(reco, key: "max-stroke-ms",
-                            default: 0, lo: 100, hi: 60000)
+        // `max-segment-ms` is the canonical key. `max-stroke-ms` is
+        // the legacy alias — kept for one release as a courtesy after
+        // PR #6 rewrote the semantic from total-stroke to per-segment;
+        // the old name now mis-describes what it does.
+        let maxMs: Int = {
+            if reco["max-segment-ms"] != nil {
+                return clampMs(reco, key: "max-segment-ms",
+                               default: 0, lo: 100, hi: 60000)
+            }
+            if reco["max-stroke-ms"] != nil {
+                Log.line("config: `max-stroke-ms` is deprecated; rename "
+                         + "to `max-segment-ms` (same semantic — the "
+                         + "value is the per-segment timeout, with the "
+                         + "clock resetting on each direction change)")
+                return clampMs(reco, key: "max-stroke-ms",
+                               default: 0, lo: 100, hi: 60000)
+            }
+            return 0
+        }()
         let cancelRev = clampMs(reco, key: "cancel-reversals",
                                 default: 2, lo: 1, hi: 20)
         let cancelWin = clampMs(reco, key: "cancel-window-ms",
@@ -147,7 +164,7 @@ public struct StrokeConfig: Sendable {
         return StrokeConfig(
             trigger: Trigger(button: button, modifiers: mods),
             minStrokePx: minPx,
-            maxStrokeMs: maxMs,
+            maxSegmentMs: maxMs,
             cancelReversals: cancelRev,
             cancelWindowMs: cancelWin,
             excludeApps: excludes,
@@ -189,7 +206,7 @@ public struct StrokeConfig: Sendable {
 
     /// Same as `clampInt`, but treats `<= 0` as "feature off" rather
     /// than clamping up to `lo`. For knobs where 0 is a documented
-    /// opt-out (max-stroke-ms, cancel-reversals, cancel-window-ms).
+    /// opt-out (max-segment-ms, cancel-reversals, cancel-window-ms).
     private static func clampMs(_ table: [String: TOMLValue],
                                  key: String, default def: Int,
                                  lo: Int, hi: Int) -> Int {

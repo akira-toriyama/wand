@@ -16,23 +16,26 @@ public struct TrailSample {
     public let point: CGPoint      // CG global coords, Y-down
     public let pattern: String
     public let bundleID: String
-    public let expired: Bool       // exceeded maxStrokeMs
+    public let expired: Bool       // exceeded maxSegmentMs
     public let cancelled: Bool     // scribble-cancelled (latched)
 }
 
 public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
 
     // Configuration -----------------------------------------------------
+    // `trigger` is baked into the running tap (event mask) and only
+    // changes at restart. The four timing knobs below are mutable so
+    // `updateConfig` can swap them live on the next sample.
     private let trigger: Trigger
-    private let minStrokePx: Int
+    private var minStrokePx: Int
     /// Max time (ms) a single segment may take; `0` = no limit. The
     /// clock resets on each turn, so a stalled single direction is
     /// abandoned at button-up.
-    private let maxStrokeMs: Int
+    private var maxSegmentMs: Int
     /// 180° reversals that scribble-cancel the stroke; `0` = off.
-    private let cancelReversals: Int
+    private var cancelReversals: Int
     /// Window (ms) those reversals must fall within; `0` = any speed.
-    private let cancelWindowMs: Int
+    private var cancelWindowMs: Int
     /// `--record` mode: never fire actions, deliver *every* stroke
     /// (including too-short ones) to the handler so the recorder can
     /// log them, and still replay short clicks so the user keeps a
@@ -57,7 +60,7 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
     private var currentTarget: Target?
     private var strokeStart: TimeInterval = 0
     /// Timestamp of the last "turn" — button-down, or the moment a new
-    /// direction was added to the live pattern. `maxStrokeMs` is measured
+    /// direction was added to the live pattern. `maxSegmentMs` is measured
     /// from here, not from `strokeStart`, so a multi-segment gesture gets
     /// a fresh budget per segment and only a stalled single direction
     /// (the slow deliberate drag we want to ignore) expires.
@@ -99,22 +102,22 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
     }
 
     public init(trigger: Trigger, minStrokePx: Int,
-                maxStrokeMs: Int = 0, cancelReversals: Int = 0,
+                maxSegmentMs: Int = 0, cancelReversals: Int = 0,
                 cancelWindowMs: Int = 0, isRecording: Bool = false) {
         self.trigger = trigger
         self.minStrokePx = minStrokePx
-        self.maxStrokeMs = maxStrokeMs
+        self.maxSegmentMs = maxSegmentMs
         self.cancelReversals = cancelReversals
         self.cancelWindowMs = cancelWindowMs
         self.isRecording = isRecording
     }
 
     /// Has the current segment (time since the last turn) exceeded
-    /// `maxStrokeMs`? Each direction change resets the clock, so the
+    /// `maxSegmentMs`? Each direction change resets the clock, so the
     /// budget is per-segment rather than for the whole stroke.
     private var strokeExpired: Bool {
-        maxStrokeMs > 0
-            && (CACurrentMediaTime() - lastTurn) * 1000 > Double(maxStrokeMs)
+        maxSegmentMs > 0
+            && (CACurrentMediaTime() - lastTurn) * 1000 > Double(maxSegmentMs)
     }
 
     /// Reset the segment clock when a new direction appears.
@@ -175,6 +178,19 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
         runLoopSource = nil
         handler = nil
         Log.line("event-tap: stop")
+    }
+
+    /// Hot-apply the four `[recognition]` timing knobs without
+    /// reinstalling the event tap. The recogniser reads these values
+    /// per-sample, so the swap takes effect on the very next gesture.
+    /// `trigger` is intentionally not swappable here — the event mask
+    /// is fixed at `tapCreate` time, and a button change needs a full
+    /// restart (Controller.reload logs the warning).
+    public func updateConfig(_ cfg: StrokeConfig) {
+        minStrokePx = cfg.minStrokePx
+        maxSegmentMs = cfg.maxSegmentMs
+        cancelReversals = cfg.cancelReversals
+        cancelWindowMs = cfg.cancelWindowMs
     }
 
 
@@ -296,9 +312,9 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
     /// the per-segment expiry clock on each turn, and latch a cancel
     /// once the shape scribbles back and forth. The live pattern drives
     /// all three, so the recognise pass runs whenever any of the overlay,
-    /// `maxStrokeMs`, or `cancelReversals` needs it — skipped otherwise.
+    /// `maxSegmentMs`, or `cancelReversals` needs it — skipped otherwise.
     private func emitTrailSample(_ cg: CGPoint) {
-        guard onSample != nil || maxStrokeMs > 0 || cancelReversals > 0
+        guard onSample != nil || maxSegmentMs > 0 || cancelReversals > 0
         else { return }
         let pattern = Recognition.recognize(samples: samples,
                                              minStrokePx: minStrokePx).patternString
@@ -378,12 +394,12 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
         }
 
         // Recognisable shape but a single segment stalled longer than
-        // `maxStrokeMs` (the clock resets on each turn) — abandon it. No
+        // `maxSegmentMs` (the clock resets on each turn) — abandon it. No
         // replay (they moved, so it wasn't a click) and no dispatch; the
         // whole sequence is already swallowed, so nothing happens.
         if expired {
             Log.line("event-tap: \(recognised.patternString) recognised but "
-                     + "a segment stalled past \(maxStrokeMs)ms — abandoned")
+                     + "a segment stalled past \(maxSegmentMs)ms — abandoned")
             if isRecording { deliver(target, captured) }
             return nil
         }

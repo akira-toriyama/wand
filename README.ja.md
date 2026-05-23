@@ -99,16 +99,29 @@ action-keys = "cmd+w"
 不可**。認識器が同じ方向の連続移動を1つにまとめるため(`LLLL…` は `L`、
 `LL` ではない)、`DRR` / `LL` のように方向を繰り返すパターンは描けず、
 `stroke --validate` が起動時に loudly drop する。スクロール軸方向は
-未対応。アプリフィルタは `*` / `?` グロブと `!` による除外をサポート。
-アクション種別は `key`(キーストローク)、`ax`(`close` / `minimize` /
-`zoom` / `raise`)、`shell`(任意コマンド)。
+未対応。アクション種別は `key`(キーストローク)、`ax`(`close` /
+`minimize` / `zoom` / `raise`)、`shell`(任意コマンド)。
 
-`[recognition] max-stroke-ms` で 1 セグメントの制限時間を設定 —
+`apps` は glob のリスト。正のエントリ(`*chrome*` / `com.apple.Safari`
+/ `*` 全許可) + `!` プレフィクスの除外。**正のいずれかにマッチ**(または
+正がそもそも無い) **かつ `!` のいずれにもマッチしない**ときに発動。
+大文字小文字無視。例:
+
+| `apps =` | 適用先 |
+|---|---|
+| `["*chrome*"]` | Chrome 系のみ |
+| `[]` または `["*"]` | 全アプリ |
+| `["!com.apple.dt.Xcode"]` | Xcode 以外の全アプリ |
+| `["*", "!*.chrome.beta*"]` | Chrome ベータ以外の全アプリ |
+| `["*chrome*", "*safari*"]` | Chrome または Safari |
+
+`[recognition] max-segment-ms` で 1 セグメントの制限時間を設定 —
 **曲がるたびにリセット**されるので、全体ではなく方向ごとの予算。
 複数方向のジェスチャーは各区間にフル予算が与えられ、ひとつの方向で
 止まったまま予算を超えたもの(通常の意図的な右ドラッグ)だけが破棄
 される。`0`(既定)= 無制限。区間が予算を超えると軌跡が no-match
-色に変わる。
+色に変わる。(`max-stroke-ms` も後方互換で受け付けるが、ロード時に
+deprecation warning を出すので、徐々に `max-segment-ms` へ移行を。)
 
 `[recognition] cancel-reversals` は緊急脱出 — カーソルを **ぐしゃぐしゃ
 と往復**させるとその場で進行中のジェスチャーを破棄する(タイムアウト
@@ -167,6 +180,35 @@ AX 権限を永続化したローカル `Stroke.app` を作るなら:
                                   #   (TCC 衝突を避けるための別バンドル id)
 ./stop.sh                         # 動いてる stroke を全部殺す
 ```
+
+## トラブルシュート
+
+**`event-tap: tapCreate failed — is Accessibility granted?`** が
+`/tmp/stroke.log` に出る:macOS が Accessibility 権限を落とした
+(または最初から付いてない)状態。
+- **応急**: System Settings → Privacy & Security → Accessibility で
+  `stroke` のトグルを OFF/ON、または `+` でバイナリを追加 → 再起動
+- **恒久**: `./setup-signing-cert.sh` を 1 回実行。ログインキーチェーンに
+  安定した自己署名証明書を作る。以降 `swift build` / `package.sh` が
+  毎回同じ identity で署名するので、TCC 権限が rebuild を跨いで残る
+
+**`security find-identity -v -p codesigning` が 0 を返す**:
+`-v` は trusted な codesigning identity だけフィルタするフラグで、
+自己署名証明書は CA として trusted ではないため 0 でも正常。
+`codesign --sign "<name>"` は CN マッチで自己署名証明書も使える。
+`security find-certificate -c "stroke Local Signing"` で実在確認可能。
+
+**Chrome のページ本文上でジェスチャーが効かない**:Chrome の
+renderer プロセス側で AX 親チェーンが切れる既知の挙動。stroke は
+`CGWindowListCopyWindowInfo` 経由のフォールバックで対応している
+(ログに `AX: resolved … via cg-window → com.google.Chrome …` と
+出る)。`via ax-walk` でも問題なし。どちらも出ない時は、メニューバー
+/ Dock / デスクトップ上だった可能性が高い。
+
+**`pattern = "DRR"` のような同方向連打のルールが発火しない**:仕様。
+認識器が同方向の連続移動を1つにまとめるため、`DRR` は描けない。
+`stroke --validate` がロード時に明確な理由付きで drop する。
+セグメントごとに異なる方向を組み合わせる(`DR` や `DRU` 等)。
 
 ## ライセンス
 
