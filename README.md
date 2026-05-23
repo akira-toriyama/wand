@@ -98,11 +98,15 @@ action-type = "key"
 action-keys = "cmd+w"
 ```
 
-Pattern alphabet is `L U R D` (left / up / right / down). Scroll-
-axis directions are not recognised yet. App filters support
-`*` / `?` globs and `!` exclusions. Action types are `key` (a
-keystroke), `ax` (`close` / `minimize` / `zoom` / `raise`), and
-`shell` (any command).
+Pattern alphabet is `L U R D` (left / up / right / down) —
+**no consecutive duplicates**, because the recogniser coalesces
+same-direction motion into one segment (`LLLL…` is `L`, not `LL`).
+A rule whose pattern repeats a direction (`DRR`, `LL`, …) is
+unreachable; `stroke --validate` drops it loudly. Scroll-axis
+directions are not recognised yet. App filters support `*` / `?`
+globs and `!` exclusions. Action types are `key` (a keystroke),
+`ax` (`close` / `minimize` / `zoom` / `raise`), and `shell` (any
+command).
 
 `[recognition] max-stroke-ms` caps how long any one segment may take
 — the clock resets on every turn, so a multi-segment gesture gets the

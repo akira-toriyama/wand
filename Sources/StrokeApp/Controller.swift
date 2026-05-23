@@ -16,8 +16,11 @@ public final class Controller: @unchecked Sendable {
     /// Mutated by `reload()` on the main thread. The stroke handler
     /// reads `self.config` per-event (not captured locals) so a
     /// reload takes effect on the very next stroke without
-    /// reinstalling the event tap.
-    private var config: StrokeConfig
+    /// reinstalling the event tap. Exposed read-only so the overlay's
+    /// `onSample` closure reads the same live snapshot — otherwise
+    /// the assist tooltips would stay frozen at startup rules while
+    /// dispatch already saw the new ones.
+    public private(set) var config: StrokeConfig
     /// Last few recognised gestures (newest last), for `stroke --status` —
     /// a ring buffer big enough to read out "user drew DR then D then DRU"
     /// while diagnosing remotely.
@@ -112,17 +115,25 @@ public final class Controller: @unchecked Sendable {
 
 
     /// Re-read `~/.config/stroke/config.toml` and swap the in-memory
-    /// rules + excludes. Trigger and `minStrokePx` are not swapped
-    /// live — those are baked into the running event tap; logging
-    /// flags them so the user knows a full restart is needed.
+    /// config. Rules, excludes, and the full `[overlay]` block are
+    /// applied live. The trigger and every `[recognition]` timing knob
+    /// (`min-stroke-px`, `max-stroke-ms`, `cancel-reversals`,
+    /// `cancel-window-ms`) are baked into the running CGEventTap at
+    /// startup and need a full daemon restart to take effect — the
+    /// warning below names each one that actually changed.
     public func reload(cause: String = "manual") {
         let new = StrokeConfig.load()
         let oldRules = config.rules.count, newRules = new.rules.count
-        if new.trigger != config.trigger
-            || new.minStrokePx != config.minStrokePx {
-            Log.line("controller: reload — trigger / minStrokePx "
-                     + "changed in config; full restart required to "
-                     + "apply (event tap won't pick them up live)")
+        var restartRequired: [String] = []
+        if new.trigger != config.trigger { restartRequired.append("trigger") }
+        if new.minStrokePx != config.minStrokePx { restartRequired.append("min-stroke-px") }
+        if new.maxStrokeMs != config.maxStrokeMs { restartRequired.append("max-stroke-ms") }
+        if new.cancelReversals != config.cancelReversals { restartRequired.append("cancel-reversals") }
+        if new.cancelWindowMs != config.cancelWindowMs { restartRequired.append("cancel-window-ms") }
+        if !restartRequired.isEmpty {
+            Log.line("controller: reload — \(restartRequired.joined(separator: ", ")) "
+                     + "changed in config; full restart required to apply "
+                     + "(those values are baked into the running event tap)")
         }
         config = new
         lastReload = (Date(), cause)
@@ -148,7 +159,6 @@ public final class Controller: @unchecked Sendable {
         max-stroke-ms=\(config.maxStrokeMs)
         cancel-reversals=\(config.cancelReversals)
         cancel-window-ms=\(config.cancelWindowMs)
-        sample-hz=\(config.sampleHz)
         overlay=\(config.overlayEnabled ? "on" : "off")
         counters: recognised=\(counterRecognised) \
         dispatched=\(counterDispatched) \

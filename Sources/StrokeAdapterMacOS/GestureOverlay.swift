@@ -36,28 +36,14 @@ public final class GestureOverlay {
     private let window: NSWindow
     private let view: TrailView
 
-    /// Colors are config strings: `#RGB` / `#RRGGBB` / `#RRGGBBAA`
-    /// or a small set of names (see `nsColor`). `match` is used while
-    /// the in-progress stroke matches a rule (and before it's moved
-    /// enough to recognise anything); `noMatch` while the shape so far
-    /// matches nothing. The boolean toggles + `badgeSize` come from
-    /// `[overlay]` — each independently lets the user dial back a
-    /// piece of the HUD without disabling the whole overlay.
-    public init(match: String, noMatch: String, width: Int,
-                badgeEnabled: Bool = true,
-                blurEnabled: Bool = true,
-                badgeSize: Int = 56,
-                animEnabled: Bool = true) {
+    /// Spin up the window + view, then funnel every `[overlay]` field
+    /// through `applyConfig` so the init and hot-reload paths share
+    /// one setter — no chance of a knob landing in only one of them.
+    public init(_ cfg: StrokeConfig) {
         let frame = Self.unionFrame()
         let v = TrailView(frame: CGRect(origin: .zero, size: frame.size),
-                          blurEnabled: blurEnabled)
-        v.matchColor = Self.nsColor(match) ?? .systemBlue
-        v.noMatchColor = Self.nsColor(noMatch) ?? .systemRed
-        v.strokeWidth = CGFloat(width)   // already clamped by StrokeConfig
+                          blurEnabled: cfg.overlayBlurEnabled)
         v.originOffset = frame.origin    // global Cocoa origin of the union
-        v.badgeEnabled = badgeEnabled
-        v.badgeSize = CGFloat(badgeSize)
-        v.animEnabled = animEnabled
         self.view = v
 
         let w = NSWindow(contentRect: frame, styleMask: .borderless,
@@ -71,6 +57,10 @@ public final class GestureOverlay {
                                 .fullScreenAuxiliary, .ignoresCycle]
         w.contentView = v
         self.window = w
+
+        // Single source of truth: the same setter the hot-reload path
+        // calls. Drops the four-fold knob threading the audit flagged.
+        applyConfig(cfg)
     }
 
     /// Order the (empty, transparent) window on screen. Safe to call
@@ -101,10 +91,12 @@ public final class GestureOverlay {
     /// `ConfigWatcher`. Every overlay field is reflected without a
     /// daemon restart, including `blur-enabled` (the blur subview is
     /// added or removed in place via `TrailView.setBlurEnabled`). The
-    /// only restart-required overlay field is `enabled = true → false`
+    /// only restart-required overlay transition is `enabled = false → true`
     /// when the daemon was started with `enabled = false` (the window
-    /// was never created); the converse (visible → hidden) is handled
-    /// here by ordering the window out.
+    /// was never created, so there's nothing for `applyConfig` to
+    /// attach to). The converse — visible at startup, hidden later —
+    /// is handled here by ordering the window out, and re-shown on
+    /// the next flip back.
     public func applyConfig(_ cfg: StrokeConfig) {
         view.matchColor = Self.nsColor(cfg.overlayColor) ?? .systemBlue
         view.noMatchColor = Self.nsColor(cfg.overlayColorNoMatch) ?? .systemRed

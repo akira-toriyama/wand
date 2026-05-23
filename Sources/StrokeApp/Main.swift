@@ -136,62 +136,54 @@ enum StrokeApp {
             cancelWindowMs: cfg.cancelWindowMs
         )
 
+        // Construct Controller up front so the overlay's onSample
+        // closure can read its live `config` snapshot per-sample,
+        // instead of capturing the startup rules locally. Otherwise
+        // dispatch (which reads `controller.config`) and the assist
+        // tooltips (which would read captured locals) would drift
+        // apart after a hot-reload — the user would see candidate
+        // cards for the OLD rule set while a NEW rule fired.
+        let controller = Controller(source: source, config: cfg)
+
         // Gesture-trail overlay (passive observer of the sample
         // stream). Held for the process lifetime via `app.run()`.
         // Declared `outside` the `if` so the live-reload hook below
         // can hot-apply `[overlay]` changes without a restart.
         var overlay: GestureOverlay?
         if cfg.overlayEnabled {
-            overlay = GestureOverlay(match: cfg.overlayColor,
-                                     noMatch: cfg.overlayColorNoMatch,
-                                     width: cfg.overlayWidth,
-                                     badgeEnabled: cfg.overlayBadgeEnabled,
-                                     blurEnabled: cfg.overlayBlurEnabled,
-                                     badgeSize: cfg.overlayBadgeSize,
-                                     animEnabled: cfg.overlayAnimEnabled)
+            overlay = GestureOverlay(cfg)
             overlay?.show()
-            let rules = cfg.rules
-            let excludes = cfg.excludeApps
-            // The tap callback fires these on the main thread, but
-            // they're not statically @MainActor — assumeIsolated is
-            // the documented bridge (same as the DNC observer).
-            //
-            // Color logic mirrors the Controller's dispatch decision:
-            // the trail is "valid" (match color) when the shape so far
-            // is empty (just started) or exactly matches a rule for the
-            // cursor-anchored target; "no match" once it forms a shape
-            // no rule wants, the app is excluded, or the stroke has
-            // already run past maxStrokeMs (so the user sees it won't
-            // fire).
             // Cache the target app icon across drag samples — a single
             // NSRunningApplication lookup per stroke (the bundleID is
             // frozen at button-down) keeps the per-sample path cheap.
             var lastIconBundle = ""
-            source.onSample = { s in
+            source.onSample = { [weak controller] s in
+                // Read rules + excludes from the live Controller so
+                // a hot-reload is visible to the assist tooltips. The
+                // tap callback fires these on the main thread but
+                // isn't statically @MainActor — `assumeIsolated` is
+                // the documented bridge.
+                guard let live = controller?.config else { return }
                 var valid = false
                 var hint: GestureHint? = nil      // nil only before any direction
                 if s.pattern.isEmpty {
                     valid = !s.expired            // neutral start
                 } else if s.expired || s.cancelled
-                    || Matcher.isExcluded(bundleID: s.bundleID, by: excludes) {
+                    || Matcher.isExcluded(bundleID: s.bundleID,
+                                          by: live.excludeApps) {
                     hint = GestureHint(shape: arrows(s.pattern), rows: [])
                 } else {
-                    // Blue when the *current* shape fires a rule; the
-                    // assist rows show every rule reachable from here
-                    // (so a red, still-incomplete shape shows the way).
+                    // Match color when the *current* shape fires a
+                    // rule; assist rows show every rule reachable
+                    // from here.
                     valid = Matcher.match(pattern: s.pattern,
                                           bundleID: s.bundleID,
-                                          rules: rules) != nil
+                                          rules: live.rules) != nil
                     hint = assistHint(pattern: s.pattern,
                                       candidates: Matcher.candidates(
                                         prefix: s.pattern, bundleID: s.bundleID,
-                                        rules: rules))
+                                        rules: live.rules))
                 }
-                // Resolve the badge icon at most once per stroke. The
-                // bundleID is set at button-down and never changes
-                // within a stroke, so this fires on the first sample
-                // that carries a non-empty bundleID and is a no-op
-                // afterwards.
                 let iconToSet: NSImage??
                 if !s.bundleID.isEmpty && s.bundleID != lastIconBundle {
                     lastIconBundle = s.bundleID
@@ -215,11 +207,10 @@ enum StrokeApp {
                      + "width=\(cfg.overlayWidth))")
         }
 
-        let controller = Controller(source: source, config: cfg)
         // Push `[overlay]` changes to the live overlay so edits take
         // effect without a restart. `applyConfig` covers every
-        // overlay knob; trigger and `min-stroke-px` still need a
-        // restart (Controller.reload already logs the warning).
+        // overlay knob; `[trigger]` and the `[recognition]` timing
+        // knobs still need a restart (Controller.reload logs them).
         if let overlay {
             controller.onConfigChanged = { [weak overlay] new in
                 MainActor.assumeIsolated { overlay?.applyConfig(new) }
@@ -281,8 +272,7 @@ enum StrokeApp {
                    "min-stroke-px=\(cfg.minStrokePx) "
                    + "max-stroke-ms=\(cfg.maxStrokeMs) "
                    + "cancel-reversals=\(cfg.cancelReversals) "
-                   + "cancel-window-ms=\(cfg.cancelWindowMs) "
-                   + "sample-hz=\(cfg.sampleHz)"))
+                   + "cancel-window-ms=\(cfg.cancelWindowMs)"))
 
         // Rule patterns — confirms the user's edits parsed where they
         // expect. Truncate at 12 to keep --doctor scannable.
