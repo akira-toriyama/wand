@@ -7,6 +7,7 @@
 
 import AppKit
 import CoreGraphics
+import StrokeCore
 
 /// What the overlay shows next to the cursor: the shape drawn so far
 /// (as arrows) plus the rules still reachable from it. Each row's
@@ -96,6 +97,29 @@ public final class GestureOverlay {
         view.originIcon = icon
     }
 
+    /// Apply a config change live — drives `[overlay]` hot-reload from
+    /// `ConfigWatcher`. Every overlay field is reflected without a
+    /// daemon restart, including `blur-enabled` (the blur subview is
+    /// added or removed in place via `TrailView.setBlurEnabled`). The
+    /// only restart-required overlay field is `enabled = true → false`
+    /// when the daemon was started with `enabled = false` (the window
+    /// was never created); the converse (visible → hidden) is handled
+    /// here by ordering the window out.
+    public func applyConfig(_ cfg: StrokeConfig) {
+        view.matchColor = Self.nsColor(cfg.overlayColor) ?? .systemBlue
+        view.noMatchColor = Self.nsColor(cfg.overlayColorNoMatch) ?? .systemRed
+        view.strokeWidth = CGFloat(cfg.overlayWidth)
+        view.badgeEnabled = cfg.overlayBadgeEnabled
+        view.badgeSize = CGFloat(cfg.overlayBadgeSize)
+        view.animEnabled = cfg.overlayAnimEnabled
+        view.setBlurEnabled(cfg.overlayBlurEnabled)
+        if cfg.overlayEnabled {
+            if !window.isVisible { window.orderFrontRegardless() }
+        } else if window.isVisible {
+            window.orderOut(nil)
+        }
+    }
+
     /// Clear the trail (stroke ended).
     public func clear() {
         view.reset()
@@ -161,10 +185,11 @@ private final class TrailView: NSView {
     /// Cocoa-global origin of the window; subtracted to get view-local
     /// coords from a global point.
     var originOffset: CGPoint = .zero
-    /// User-visible knobs from `[overlay]`. Set by `GestureOverlay.init`
-    /// from the matching `StrokeConfig` fields and treated as fixed
-    /// for the daemon's life (config reload re-creates the overlay).
-    fileprivate let blurEnabled: Bool
+    /// User-visible knobs from `[overlay]`. All hot-reloadable via
+    /// `GestureOverlay.applyConfig(_:)` — colours and toggles update
+    /// without restart; `setBlurEnabled` even adds/removes the
+    /// `NSVisualEffectView` subview in place.
+    fileprivate var blurEnabled: Bool
     var badgeEnabled: Bool = true
     var badgeSize: CGFloat = 56
     var animEnabled: Bool = true
@@ -285,6 +310,34 @@ private final class TrailView: NSView {
         hudContent.needsDisplay = true
     }
 
+    /// Add or remove the blur subview in place when `[overlay]
+    /// blur-enabled` flips during a hot-reload. No-op if already at
+    /// the requested state.
+    func setBlurEnabled(_ enabled: Bool) {
+        guard enabled != blurEnabled else { return }
+        blurEnabled = enabled
+        if enabled {
+            if blurView.superview == nil {
+                blurView.frame = bounds
+                if blurView.layer?.mask == nil {
+                    let mask = CAShapeLayer()
+                    mask.fillColor = CGColor(srgbRed: 0, green: 0,
+                                              blue: 0, alpha: 1)
+                    blurView.layer?.mask = mask
+                }
+                // Keep hudContent on top of the blur, where it was at
+                // first-launch wiring.
+                addSubview(blurView,
+                           positioned: .below, relativeTo: hudContent)
+            }
+        } else {
+            blurView.removeFromSuperview()
+        }
+        layoutHUD()
+        needsDisplay = true
+        hudContent.needsDisplay = true
+    }
+
     override func draw(_ dirtyRect: NSRect) {
         guard points.count >= 2 else { return }
         let color = valid ? matchColor : noMatchColor
@@ -356,11 +409,35 @@ private final class TrailView: NSView {
                 // dark backdrop is missing too, so the tint goes more
                 // opaque to keep the card a distinct surface.
                 let firesAlpha: CGFloat = blurEnabled ? 0.5 : 0.78
+                // Collision avoidance: when the user has rules that
+                // share a prefix (e.g. `DL` + `DLU` + `DLU`), the
+                // fires card's natural upper-right anchor overlaps
+                // the ↑ directional card's rectangle. Try each
+                // diagonal anchor in turn and pick the first one
+                // that doesn't intersect any directional card. Order
+                // — ↗ ↘ ↙ ↖ — keeps the natural diagonal first so
+                // the simple case (no collision) is unchanged.
+                let anchors: [CGPoint] = [
+                    CGPoint(x: cursor.x + gap,
+                            y: cursor.y + gap),
+                    CGPoint(x: cursor.x + gap,
+                            y: cursor.y - gap - size.height),
+                    CGPoint(x: cursor.x - gap - size.width,
+                            y: cursor.y - gap - size.height),
+                    CGPoint(x: cursor.x - gap - size.width,
+                            y: cursor.y + gap),
+                ]
+                var firesRect = clampedCardRect(at: anchors[0], size: size)
+                for a in anchors {
+                    let r = clampedCardRect(at: a, size: size)
+                    if !cardLayouts.contains(where: { $0.rect.intersects(r) }) {
+                        firesRect = r
+                        break
+                    }
+                }
                 cardLayouts.append(CardLayout(
-                    rect: clampedCardRect(
-                        at: CGPoint(x: cursor.x + gap, y: cursor.y + gap),
-                        size: size),
-                    text: s, fill: accent.withAlphaComponent(firesAlpha)))
+                    rect: firesRect, text: s,
+                    fill: accent.withAlphaComponent(firesAlpha)))
             }
             // With blur disabled, regular cards still need a fill —
             // the frost would have been their backdrop. Re-run and

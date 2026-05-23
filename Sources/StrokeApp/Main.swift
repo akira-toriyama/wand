@@ -138,15 +138,18 @@ enum StrokeApp {
 
         // Gesture-trail overlay (passive observer of the sample
         // stream). Held for the process lifetime via `app.run()`.
+        // Declared `outside` the `if` so the live-reload hook below
+        // can hot-apply `[overlay]` changes without a restart.
+        var overlay: GestureOverlay?
         if cfg.overlayEnabled {
-            let overlay = GestureOverlay(match: cfg.overlayColor,
-                                         noMatch: cfg.overlayColorNoMatch,
-                                         width: cfg.overlayWidth,
-                                         badgeEnabled: cfg.overlayBadgeEnabled,
-                                         blurEnabled: cfg.overlayBlurEnabled,
-                                         badgeSize: cfg.overlayBadgeSize,
-                                         animEnabled: cfg.overlayAnimEnabled)
-            overlay.show()
+            overlay = GestureOverlay(match: cfg.overlayColor,
+                                     noMatch: cfg.overlayColorNoMatch,
+                                     width: cfg.overlayWidth,
+                                     badgeEnabled: cfg.overlayBadgeEnabled,
+                                     blurEnabled: cfg.overlayBlurEnabled,
+                                     badgeSize: cfg.overlayBadgeSize,
+                                     animEnabled: cfg.overlayAnimEnabled)
+            overlay?.show()
             let rules = cfg.rules
             let excludes = cfg.excludeApps
             // The tap callback fires these on the main thread, but
@@ -199,13 +202,13 @@ enum StrokeApp {
                     iconToSet = nil
                 }
                 MainActor.assumeIsolated {
-                    if let icon = iconToSet { overlay.setOriginIcon(icon) }
-                    overlay.addPoint(s.point, valid: valid, hint: hint)
+                    if let icon = iconToSet { overlay?.setOriginIcon(icon) }
+                    overlay?.addPoint(s.point, valid: valid, hint: hint)
                 }
             }
             source.onStrokeEnd = {
                 lastIconBundle = ""
-                MainActor.assumeIsolated { overlay.clear() }
+                MainActor.assumeIsolated { overlay?.clear() }
             }
             Log.line("overlay: enabled (match=\(cfg.overlayColor), "
                      + "noMatch=\(cfg.overlayColorNoMatch), "
@@ -213,6 +216,15 @@ enum StrokeApp {
         }
 
         let controller = Controller(source: source, config: cfg)
+        // Push `[overlay]` changes to the live overlay so edits take
+        // effect without a restart. `applyConfig` covers every
+        // overlay knob; trigger and `min-stroke-px` still need a
+        // restart (Controller.reload already logs the warning).
+        if let overlay {
+            controller.onConfigChanged = { [weak overlay] new in
+                MainActor.assumeIsolated { overlay?.applyConfig(new) }
+            }
+        }
         controller.start()
 
         // Live-reload on config edits (no `--reload` needed). Held for

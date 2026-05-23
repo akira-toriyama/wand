@@ -25,7 +25,7 @@ public enum Log {
     // strictly main-bound (ConfigWatcher debounces on a DispatchSource,
     // shell terminationHandlers fire on an arbitrary queue) — without
     // this lock two callers can `closeFile` each other's handle.
-    nonisolated(unsafe) private static let lock = NSLock()
+    private static let lock = NSLock()
 
     private static func emit(_ s: String, prefix: String) {
         let ts = ISO8601DateFormatter().string(from: Date())

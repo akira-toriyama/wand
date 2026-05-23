@@ -33,6 +33,10 @@ public final class Controller: @unchecked Sendable {
     /// Last reload timestamp + cause, surfaced via `--status`.
     private var lastReload: (when: Date, cause: String) =
         (Date(), "initial-load")
+    /// Fires after `reload()` swaps the in-memory config, with the new
+    /// snapshot. Used by the overlay wiring to hot-apply `[overlay]`
+    /// changes (colours, badge toggles, blur, …) without a restart.
+    public var onConfigChanged: ((StrokeConfig) -> Void)?
 
     public init(source: MouseSource, config: StrokeConfig) {
         self.source = source
@@ -124,6 +128,7 @@ public final class Controller: @unchecked Sendable {
         lastReload = (Date(), cause)
         Log.line("controller: reload (\(cause)) — "
                  + "\(oldRules) → \(newRules) rule(s)")
+        onConfigChanged?(new)
         writeStatus()
     }
 

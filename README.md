@@ -36,28 +36,16 @@ Out of the box (the bundled [`config.toml`](config.toml)):
 | `DRU` down → right → up | close the window | any app |
 | `L` left | minimize the window | any app |
 
-As you draw, a translucent trail follows the cursor so you can see
-the shape forming; it clears the moment you release. The trail is
-**colored by whether the shape so far matches a rule** — one color
-while it's a valid gesture for the window under the cursor, another
-once it forms a shape no rule wants. Next to the cursor it shows the
-shape so far as **arrows** (`↓→`) and a live **gesture-assist** list
-— every rule still reachable from here, showing only what's *left* to
-draw, with the one that fires right now tinted in the match color:
+A translucent trail follows the cursor as you draw — match color
+while the shape so far fires a rule, no-match color once it doesn't.
+Around the cursor, small cards lay out **what's reachable from here**
+in the direction of each card's next arrow, and the one that fires
+right now is tinted in the match color. At the gesture's start point
+a small badge shows the **target app's icon** so the window stroke
+will act on is unambiguous even when keyboard focus sits elsewhere.
 
-```
-↓
-  ←   close tab
-  →↑  close window
-```
-
-So after a `↓` you can see you're on the way to either, and what to
-add. The trail is the match color while the current shape fires a
-rule, the no-match color otherwise. Colors, width, and on/off live in
-the `[overlay]` section of `config.toml`, alongside per-piece toggles
-for the target-app **badge** (`badge-enabled`, `badge-size`), the
-frosted-blur HUD background (`blur-enabled`), and the badge's scale-
-in animation (`anim-enabled`).
+Colors, width, on/off, and per-piece toggles (badge / blur / size /
+animation) live in the `[overlay]` section of `config.toml`.
 
 Actions target the window **under the cursor**, not whichever window
 holds keyboard focus: `ax` actions operate on it directly, `key`
@@ -156,22 +144,6 @@ client commands — they exit 3 with a
 helpful message if the daemon isn't running. `--record` is the
 reverse — it refuses if the daemon *is* running, because both
 would fight over the same CGEventTap.
-
-## Architecture
-
-Hexagonal (Ports & Adapters), three layers:
-
-```
-StrokeApp           @main / CLI / Controller (wires the pipeline)
-    │
-StrokeCore          pure logic: recognition, matching, config.
-    │               No AppKit, no AX, no CGEvent. Fully testable.
-    │
-    ├── StrokeAdapterMacOS    CGEventTap + AX + dispatch
-    └── StrokeAdapterTest     synthetic source for tests
-```
-
-Full write-up: [docs/architecture.md](docs/architecture.md).
 
 ## Contributing
 
