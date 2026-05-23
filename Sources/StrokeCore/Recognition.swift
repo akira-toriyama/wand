@@ -54,4 +54,29 @@ public enum Recognition {
         (a == "L" && b == "R") || (a == "R" && b == "L")
             || (a == "U" && b == "D") || (a == "D" && b == "U")
     }
+
+    /// Returns a human-readable issue string if `pattern` is something
+    /// the recogniser can never produce — otherwise nil. Two failure
+    /// modes today: a character outside the `L U R D` alphabet, and
+    /// consecutive duplicate directions (the recogniser coalesces same-
+    /// direction segments, so `DRR` would always read as `DR` and the
+    /// rule could never fire). Called from `StrokeConfig.parse` to drop
+    /// the bad rule loudly instead of letting it load and silently
+    /// no-op at runtime.
+    public static func patternIssue(_ pattern: String) -> String? {
+        let chars = Array(pattern)
+        guard !chars.isEmpty else { return "empty pattern" }
+        let valid: Set<Character> = ["L", "U", "R", "D"]
+        for (i, c) in chars.enumerated() {
+            if !valid.contains(c) {
+                return "invalid character '\(c)' — alphabet is L U R D"
+            }
+            if i > 0 && chars[i] == chars[i - 1] {
+                return "consecutive duplicate direction '\(c)\(c)' — "
+                     + "the recogniser coalesces same-direction segments, "
+                     + "so this pattern can never be drawn"
+            }
+        }
+        return nil
+    }
 }

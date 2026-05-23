@@ -63,9 +63,6 @@ cancel-reversals = 2
 # Clamped 100..5000 when set.
 cancel-window-ms = 500
 
-# Sampling cadence. Clamped 30..240.
-sample-hz = 120
-
 # Bundle IDs where stroke is completely disabled — useful for apps
 # that already have native gestures (Xcode, video editors, …).
 # Supports `*` / `?` glob.

@@ -32,14 +32,6 @@ final class ConfigTests: XCTestCase {
             "[recognition]\nmin-stroke-px = 999").minStrokePx, 200) // high clamp
     }
 
-    func testSampleHzClampLowHighDefault() {
-        XCTAssertEqual(StrokeConfig.parse("").sampleHz, 120)
-        XCTAssertEqual(StrokeConfig.parse(
-            "[recognition]\nsample-hz = 5").sampleHz, 30)         // low clamp
-        XCTAssertEqual(StrokeConfig.parse(
-            "[recognition]\nsample-hz = 9999").sampleHz, 240)     // high clamp
-    }
-
     func testMaxStrokeMs() {
         XCTAssertEqual(StrokeConfig.parse("").maxStrokeMs, 0)
         XCTAssertEqual(StrokeConfig.parse(
@@ -211,6 +203,26 @@ final class ConfigTests: XCTestCase {
         XCTAssertEqual(cfg.rules.count, 1)
         XCTAssertEqual(cfg.rules[0].name, "DR")
         XCTAssertEqual(cfg.rules[0].apps, ["*"])
+    }
+
+    func testRuleWithConsecutiveDuplicatesDrops() {
+        // The recogniser coalesces same-direction segments, so a rule
+        // pattern like `DRR` can never fire. Parser drops it loudly
+        // rather than letting it load and silently no-op.
+        let toml = """
+        [[rules]]
+        pattern = "DRR"
+        action-type = "key"
+        action-keys = "cmd+w"
+
+        [[rules]]
+        pattern = "DR"
+        action-type = "key"
+        action-keys = "cmd+w"
+        """
+        let cfg = StrokeConfig.parse(toml)
+        XCTAssertEqual(cfg.rules.count, 1)
+        XCTAssertEqual(cfg.rules[0].pattern, "DR")
     }
 
     func testRuleMissingPatternOrActionDrops() {

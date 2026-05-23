@@ -23,7 +23,6 @@ public struct StrokeConfig: Sendable {
     /// for a scribble to cancel — so only a *fast* back-and-forth counts,
     /// not a slow deliberate one. `0` = any speed (count alone cancels).
     public var cancelWindowMs: Int
-    public var sampleHz: Int
     public var excludeApps: [String]
     public var rules: [Rule]
     /// Gesture-trail overlay. Colors stay strings here so Core needn't
@@ -55,7 +54,6 @@ public struct StrokeConfig: Sendable {
         maxStrokeMs: 0,
         cancelReversals: 2,
         cancelWindowMs: 500,
-        sampleHz: 120,
         excludeApps: [],
         rules: [],
         overlayEnabled: true,
@@ -105,8 +103,6 @@ public struct StrokeConfig: Sendable {
                                 default: 2, lo: 1, hi: 20)
         let cancelWin = clampMs(reco, key: "cancel-window-ms",
                                 default: 500, lo: 100, hi: 5000)
-        let hz = clampInt(reco, key: "sample-hz",
-                          default: 120, lo: 30, hi: 240)
         let excludes = reco.strings("exclude-apps")
 
         let ov = doc.tables["overlay"] ?? [:]
@@ -130,9 +126,8 @@ public struct StrokeConfig: Sendable {
                     + (row.string("name").isEmpty
                        ? "" : " \(row.string("name"))")
                 let pattern = row.string("pattern")
-                guard !pattern.isEmpty else {
-                    Log.line("config: dropped \(label) — missing or empty "
-                             + "`pattern`")
+                if let issue = Recognition.patternIssue(pattern) {
+                    Log.line("config: dropped \(label) — \(issue)")
                     return nil
                 }
                 guard let action = parseAction(row) else {
@@ -155,7 +150,6 @@ public struct StrokeConfig: Sendable {
             maxStrokeMs: maxMs,
             cancelReversals: cancelRev,
             cancelWindowMs: cancelWin,
-            sampleHz: hz,
             excludeApps: excludes,
             rules: rules,
             overlayEnabled: overlayEnabled,

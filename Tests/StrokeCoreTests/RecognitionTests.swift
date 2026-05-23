@@ -138,6 +138,37 @@ final class RecognitionTests: XCTestCase {
         XCTAssertEqual(Recognition.reversals("L"), 0)
     }
 
+    // MARK: - patternIssue (config validation)
+
+    func testPatternIssueAcceptsWellFormed() {
+        XCTAssertNil(Recognition.patternIssue("D"))
+        XCTAssertNil(Recognition.patternIssue("DL"))
+        XCTAssertNil(Recognition.patternIssue("DRU"))
+        XCTAssertNil(Recognition.patternIssue("LURD"))
+    }
+
+    func testPatternIssueRejectsEmpty() {
+        XCTAssertNotNil(Recognition.patternIssue(""))
+    }
+
+    func testPatternIssueRejectsConsecutiveDuplicates() {
+        // Same-direction repeats can never appear in the recogniser's
+        // output (coalescing), so the rule would never fire.
+        XCTAssertNotNil(Recognition.patternIssue("LL"))
+        XCTAssertNotNil(Recognition.patternIssue("DRR"))
+        XCTAssertNotNil(Recognition.patternIssue("DLLU"))
+        // The message names the offending pair so --validate output is
+        // actionable.
+        XCTAssertTrue(
+            Recognition.patternIssue("DRR")?.contains("RR") == true)
+    }
+
+    func testPatternIssueRejectsUnknownCharacters() {
+        XCTAssertNotNil(Recognition.patternIssue("X"))
+        XCTAssertNotNil(Recognition.patternIssue("DLZ"))
+        XCTAssertNotNil(Recognition.patternIssue("dr"))  // lowercase not accepted
+    }
+
     func testReversalsRespectsAllFourAxes() {
         // Both axes pin their own reversal pairs.
         XCTAssertEqual(Recognition.reversals("UD"), 1)
