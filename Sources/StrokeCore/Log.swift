@@ -31,10 +31,19 @@ public enum Log {
         emit(s, prefix: "DEBUG ")
     }
 
+    // Serialises writes so concurrent log calls don't interleave bytes
+    // mid-line or race on the file handle. The handler closures aren't
+    // strictly main-bound (ConfigWatcher debounces on a DispatchSource,
+    // shell terminationHandlers fire on an arbitrary queue) — without
+    // this lock two callers can `closeFile` each other's handle.
+    nonisolated(unsafe) private static let lock = NSLock()
+
     private static func emit(_ s: String, prefix: String) {
         let ts = ISO8601DateFormatter().string(from: Date())
         let msg = "\(ts) \(prefix)\(s)\n"
         let data = Data(msg.utf8)
+        lock.lock()
+        defer { lock.unlock() }
         if let fh = FileHandle(forWritingAtPath: path) {
             fh.seekToEndOfFile()
             fh.write(data)

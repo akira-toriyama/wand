@@ -12,6 +12,7 @@
 // the reload runs on the same thread as the stroke handler.
 
 import Foundation
+import StrokeCore
 
 final class ConfigWatcher: @unchecked Sendable {
     private let path: String
@@ -19,6 +20,11 @@ final class ConfigWatcher: @unchecked Sendable {
     private var source: DispatchSourceFileSystemObject?
     private var fd: Int32 = -1
     private var debounce: DispatchWorkItem?
+    /// Cap the file-appearance poll so a daemon that never sees a
+    /// config file doesn't tick every 2s for the whole process
+    /// lifetime. After this many tries (≈60 s) we stop watching —
+    /// a `stroke --reload` after creating the file picks back up.
+    private var armAttemptsRemaining = 30
 
     init(path: String, onChange: @escaping () -> Void) {
         self.path = path
@@ -31,12 +37,21 @@ final class ConfigWatcher: @unchecked Sendable {
         fd = open(path, O_EVTONLY)
         guard fd >= 0 else {
             // No file yet (running on defaults). Poll until it appears,
-            // then arm — cheap, only while absent.
+            // up to `armAttemptsRemaining` times — cheap while absent
+            // but bounded so the daemon doesn't tick forever.
+            armAttemptsRemaining -= 1
+            guard armAttemptsRemaining > 0 else {
+                Log.line("config: no file at \(path) after polling — "
+                         + "watcher stopped. Create the file and run "
+                         + "`stroke --reload` to pick it up.")
+                return
+            }
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
                 self?.arm()
             }
             return
         }
+        armAttemptsRemaining = 30   // reset for re-arm after atomic replace
         let s = DispatchSource.makeFileSystemObjectSource(
             fileDescriptor: fd,
             eventMask: [.write, .extend, .delete, .rename],

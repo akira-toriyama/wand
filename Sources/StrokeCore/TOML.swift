@@ -54,7 +54,11 @@ public func parseTOMLSubset(_ text: String) -> TOMLDocument {
 
     for raw in text.split(separator: "\n",
                           omittingEmptySubsequences: false) {
-        let trimmed = raw.trimmingCharacters(in: .whitespaces)
+        // `.whitespacesAndNewlines` (not just `.whitespaces`) so a
+        // CRLF file's trailing `\r` is stripped — otherwise a value
+        // like `action-keys = "cmd+w"` parses as `cmd+w\r` and
+        // `KeyCombo.parse` silently fails to look up the keycode.
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty || trimmed.hasPrefix("#") { continue }
         // [[array-of-tables]]
         if trimmed.hasPrefix("[["), trimmed.hasSuffix("]]") {

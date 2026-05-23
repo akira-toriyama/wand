@@ -159,6 +159,13 @@ public enum Dispatch {
             Log.line("dispatch.ax: window has no \(attribute)")
             return
         }
+        // Type-guard the cast so a non-AXUIElement here can't crash
+        // the daemon — log and bail instead.
+        guard CFGetTypeID(btn) == AXUIElementGetTypeID() else {
+            Log.line("dispatch.ax: \(attribute) is not an AXUIElement "
+                     + "(typeID=\(CFGetTypeID(btn))) — ignored")
+            return
+        }
         let err = AXUIElementPerformAction(
             btn as! AXUIElement, kAXPressAction as CFString)
         if err != .success {
@@ -182,6 +189,16 @@ public enum Dispatch {
 
     // MARK: - .shell
 
+    /// Run a shell command for a `.shell` action.
+    ///
+    /// SECURITY: the command string itself comes from the user's own
+    /// `config.toml` and is treated as trusted (the user wrote it).
+    /// The four `STROKE_TARGET_*` env vars however carry **untrusted**
+    /// data — `STROKE_TARGET_TITLE` is a web page title, window title,
+    /// or document name and can contain arbitrary characters including
+    /// `$( )` and backticks. Authors writing `.shell` actions MUST
+    /// quote any env-var expansion that reaches a shell command line.
+    /// Example: `echo "$STROKE_TARGET_TITLE"`, not `echo $STROKE_TARGET_TITLE`.
     private static func runShell(_ cmd: String, target: Target) {
         Log.line("dispatch.shell: \(cmd) (target \(target.bundleID))")
         let p = Process()

@@ -94,7 +94,16 @@ public enum AXTarget {
                                   point: CGPoint, via: String) -> Target {
         AXUIElementSetMessagingTimeout(window, axTimeout)
         var pid: pid_t = 0
-        AXUIElementGetPid(window, &pid)
+        // Surface a pid-lookup failure rather than registering a target
+        // with pid=0 (which `NSRunningApplication(processIdentifier:)`
+        // can't resolve, so the bundleID would silently come back as ""
+        // and the rule's `apps` filter would never match).
+        let pidErr = AXUIElementGetPid(window, &pid)
+        if pidErr != .success || pid == 0 {
+            Log.line("AX: getPid failed (err=\(pidErr.rawValue)) at "
+                     + "\(point) — bundleID will be empty; rules with an "
+                     + "`apps` filter won't match this gesture")
+        }
         let title = string(window, kAXTitleAttribute) ?? ""
         let frame = readFrame(window)
         let bundleID = NSRunningApplication(processIdentifier: pid)?
@@ -171,7 +180,27 @@ public enum AXTarget {
     /// same multi-window app is worse than silently no-op'ing.
     public static func liveElement(for target: Target) -> AXUIElement? {
         let key = SideKey(pid: target.pid, windowID: target.windowID)
-        return liveElements.first(where: { $0.0 == key })?.1
+        guard let element = liveElements.first(where: { $0.0 == key })?.1
+        else { return nil }
+        // Liveness probe: the LRU has no upper bound on age, so a pid
+        // may have died and been recycled. If we returned a stale
+        // element a pid-recycled process inherits, `Dispatch.runAX`
+        // would press the close button on whatever inherited the pid.
+        // A cheap kAXRole round-trip distinguishes "valid window" from
+        // "AX element backing object is gone" via .invalidUIElement /
+        // .cannotComplete.
+        var val: CFTypeRef?
+        let err = AXUIElementCopyAttributeValue(
+            element, kAXRoleAttribute as CFString, &val)
+        if err != .success {
+            Log.line("AX: live element for pid=\(target.pid) "
+                     + "wid=\(target.windowID) is stale (err=\(err.rawValue)) — "
+                     + "evicting; the target was probably closed or its "
+                     + "process exited")
+            liveElements.removeAll { $0.0 == key }
+            return nil
+        }
+        return element
     }
 
     // MARK: - AX permission prompt
@@ -256,6 +285,13 @@ public enum AXTarget {
             let err = AXUIElementCopyAttributeValue(
                 current, kAXParentAttribute as CFString, &parentVal)
             guard err == .success, let parent = parentVal else { return nil }
+            // Defensive conditional cast: a malformed AX hierarchy
+            // could return something that isn't an AXUIElement (rare
+            // — sandboxed apps with broken AX bridging), and crashing
+            // the daemon on it is worse than dropping the gesture.
+            guard CFGetTypeID(parent) == AXUIElementGetTypeID() else {
+                return nil
+            }
             current = parent as! AXUIElement
         }
         return nil
@@ -277,10 +313,13 @@ public enum AXTarget {
             window, kAXSizeAttribute as CFString, &sizeVal)
         var pos = CGPoint.zero
         var size = CGSize.zero
-        if let v = posVal {
+        // Type-guarded so a stub AX implementation that returns a
+        // non-AXValue here (some sandboxed apps do) can't crash the
+        // daemon — we just return a zero frame and continue.
+        if let v = posVal, CFGetTypeID(v) == AXValueGetTypeID() {
             AXValueGetValue(v as! AXValue, .cgPoint, &pos)
         }
-        if let v = sizeVal {
+        if let v = sizeVal, CFGetTypeID(v) == AXValueGetTypeID() {
             AXValueGetValue(v as! AXValue, .cgSize, &size)
         }
         return CGRect(origin: pos, size: size)
