@@ -47,6 +47,12 @@ will act on is unambiguous even when keyboard focus sits elsewhere.
 Colors, width, on/off, and per-piece toggles (badge / blur / size /
 animation) live in the `[overlay]` section of `config.toml`.
 
+The assist cards can also animate out — drop, slide, explode, vibrate,
+or burst with fireworks / confetti particles. Pick one effect for the
+moment a card becomes unreachable mid-gesture (`unmatch`) and another
+for the moment a rule actually fires (`match`), in `[effect]`. Default
+is silent.
+
 Actions target the window **under the cursor**, not whichever window
 holds keyboard focus: `ax` actions operate on it directly, `key`
 actions raise it first and send the keystroke, and `shell` actions
@@ -135,6 +141,27 @@ back-and-forth without tripping on real gestures. `0` = off.
 `cancel-window-ms` (default `500`) gates it on *speed* — the reversals
 must land within that window, so a fast scribble cancels but a slow
 deliberate back-and-forth doesn't; `0` = any speed.
+
+`[effect]` adds optional exit animations to the assist cards. Each
+card normally pops out the moment it's no longer reachable from the
+shape you've drawn; with an effect set it eases out instead. Two
+hooks:
+
+```toml
+[effect]
+unmatch = "drop"        # cards that became unreachable mid-gesture
+match   = "fireworks"   # the firing card, on button-up
+```
+
+Available kinds: `none` (default), `drop`, `rise`, `slide-left`,
+`slide-right`, `explode`, `vibrate`, `fade`, `fireworks`, `confetti`,
+and `random` (picks a different one each time a card disappears).
+Particle effects (`fireworks` / `confetti`) read most naturally on
+`match`.
+
+Set `intensity = "subtle" | "normal" | "bold" | "wild"` in the same
+block to dial the overall size — bigger throws, denser particles. The
+default is `normal`.
 
 ## CLI
 

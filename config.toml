@@ -115,6 +115,45 @@ anim-enabled = true
 
 
 # -----------------------------------------------------------------
+# Effects — animate assist cards as they leave the screen
+# -----------------------------------------------------------------
+# The overlay shows one assist card per reachable rule. Two moments
+# can make a card disappear:
+#   - mid-gesture, when you turn in a direction that no longer
+#     reaches that card → driven by `unmatch`
+#   - at button-up, when a rule actually fires → driven by `match`
+#
+# Default for both is "none" (cards just vanish). Pick a kind for
+# either or both:
+#
+#   none           — instant disappear (default)
+#   drop           — falls down off-screen
+#   rise           — floats up off-screen
+#   slide-left     — slides out to the left
+#   slide-right    — slides out to the right
+#   explode        — scales up briefly then fades
+#   vibrate        — shakes in place, then fades
+#   fade           — pure opacity fade
+#   fireworks      — bursts upward from the card with a particle pop
+#   confetti       — rains particles down past the card
+#   random         — pick a random one each time a card disappears
+#
+# Particle effects (fireworks / confetti) are the most attention-
+# grabbing, so they're most natural on `match` — the moment a rule
+# actually fires.
+[effect]
+unmatch = "none"
+match = "none"
+
+# Overall size of the effect — bigger throws / denser particles.
+#   subtle  ≈ 0.6× (calm)
+#   normal  ≈ 1.0× (default, the calibrated baseline)
+#   bold    ≈ 1.6× (more attention-grabbing)
+#   wild    ≈ 2.5× (over-the-top)
+intensity = "normal"
+
+
+# -----------------------------------------------------------------
 # Rules — first match wins, applied to the cursor-anchored target
 # -----------------------------------------------------------------
 # Each `[[rules]]` block defines one gesture → action mapping.

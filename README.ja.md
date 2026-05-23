@@ -46,6 +46,12 @@ L = 左    U = 上    R = 右    D = 下
 色・太さ・on/off と各パーツのトグル(badge / blur / size / anim)は
 `config.toml` の `[overlay]` で設定。
 
+ヒントカードには退場アニメーションも付けられる — drop / slide /
+explode / vibrate / fireworks / confetti(花火・紙吹雪)。
+ジェスチャー途中にカードが到達不能になった瞬間(`unmatch`)と、
+ボタンを離してルールが発動した瞬間(`match`)それぞれに別の効果を
+`[effect]` で割り当てられる。既定はどちらも無し(静かに消える)。
+
 アクションは **カーソル直下のウィンドウ** を対象にする(キーボード
 フォーカスを持つウィンドウではない): `ax` はそのウィンドウを直接
 操作、`key` は raise してからキーを送る、`shell` はそのウィンドウの
@@ -129,6 +135,25 @@ action-keys = "cmd+w"
 `cancel-window-ms`(既定 `500`)は **速度** の条件 — 上記の反転がこの時間
 窓内に収まったときだけキャンセルするので、素早い往復は効くがゆっくりした
 往復は効かない。`0` = 速度不問。
+
+`[effect]` でヒントカードの退場アニメを設定。各カードは普段だと、現在
+の形から到達できなくなった瞬間にパッと消えるだけだが、効果を設定すると
+ふわっと退場する。フックは 2 つ:
+
+```toml
+[effect]
+unmatch = "drop"        # ジェスチャー途中で到達不能になったカード
+match   = "fireworks"   # ボタン離しで発動したカード
+```
+
+種類: `none`(既定)、`drop`、`rise`、`slide-left`、`slide-right`、
+`explode`、`vibrate`、`fade`、`fireworks`、`confetti`、
+`random`(カードが消えるたびに毎回別の効果を選ぶ)。
+パーティクル系(`fireworks` / `confetti`)は `match` に置くと一番映える。
+
+同じブロックで `intensity = "subtle" | "normal" | "bold" | "wild"` を
+指定すると効果の大きさを調整できる(投げ距離・パーティクル量に作用)。
+既定は `normal`。
 
 ## CLI
 
