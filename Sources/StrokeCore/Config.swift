@@ -47,6 +47,26 @@ public struct StrokeConfig: Sendable {
     public var overlayBadgeSize: Int
     /// Scale-in pop on the origin badge.
     public var overlayAnimEnabled: Bool
+    /// Exit animation when an assist card becomes unreachable mid-
+    /// gesture (the user picked a different direction). Names are
+    /// the config strings: `none`, `drop`, `rise`, `slide-left`,
+    /// `slide-right`, `explode`, `vibrate`, `fade`, `fireworks`,
+    /// `confetti`, `random` (pick one of the others each time).
+    /// Unknown values clamp to `none`.
+    public var effectUnmatch: String
+    /// Exit animation when the firing card actually fires at button-
+    /// up. Same vocabulary as `effectUnmatch`. Particle effects
+    /// (`fireworks`, `confetti`) read more naturally on match.
+    public var effectMatch: String
+    /// Overall size of the chosen effects. Named so the TOML parser
+    /// stays int-only:
+    ///   `subtle` 0.6×  — minimal motion, small particles
+    ///   `normal` 1.0×  — the calibrated default
+    ///   `bold`   1.6×  — bigger throws, denser particles
+    ///   `wild`   2.5×  — over-the-top
+    /// Unknown values clamp to `normal`. Applied uniformly to both
+    /// `unmatch` and `match`.
+    public var effectIntensity: String
 
     public static let `default` = StrokeConfig(
         trigger: Trigger(button: .right, modifiers: []),
@@ -63,7 +83,10 @@ public struct StrokeConfig: Sendable {
         overlayBadgeEnabled: true,
         overlayBlurEnabled: true,
         overlayBadgeSize: 56,
-        overlayAnimEnabled: true
+        overlayAnimEnabled: true,
+        effectUnmatch: "none",
+        effectMatch: "none",
+        effectIntensity: "normal"
     )
 
     /// The single source-of-truth path. Shared by `load()` and the
@@ -125,6 +148,39 @@ public struct StrokeConfig: Sendable {
                                         default: 56, lo: 32, hi: 96)
         let overlayAnimEnabled = ov.bool("anim-enabled", true)
 
+        let ef = doc.tables["effect"] ?? [:]
+        // Unknown names silently fall back to "none" — same typo-
+        // tolerant policy as the rest of `[recognition]`.
+        let effectKinds: Set<String> = [
+            "none", "drop", "rise", "slide-left", "slide-right",
+            "explode", "vibrate", "fade", "fireworks", "confetti",
+            "random",
+        ]
+        func resolveEffect(_ key: String) -> String {
+            let v = ef.string(key).lowercased()
+            if v.isEmpty { return "none" }
+            if effectKinds.contains(v) { return v }
+            Log.line("config: [effect].\(key) = \"\(v)\" not recognised "
+                     + "— falling back to \"none\" "
+                     + "(valid: \(effectKinds.sorted().joined(separator: ", ")))")
+            return "none"
+        }
+        let effectUnmatch = resolveEffect("unmatch")
+        let effectMatch = resolveEffect("match")
+        let intensityKinds: Set<String> = ["subtle", "normal", "bold", "wild"]
+        let intensityRaw = ef.string("intensity").lowercased()
+        let effectIntensity: String
+        if intensityRaw.isEmpty {
+            effectIntensity = "normal"
+        } else if intensityKinds.contains(intensityRaw) {
+            effectIntensity = intensityRaw
+        } else {
+            Log.line("config: [effect].intensity = \"\(intensityRaw)\" not "
+                     + "recognised — falling back to \"normal\" "
+                     + "(valid: \(intensityKinds.sorted().joined(separator: ", ")))")
+            effectIntensity = "normal"
+        }
+
         // Log every dropped rule with its position + reason so
         // `--validate` and the daemon log both surface them — silent
         // `compactMap`-of-nil was the worst typo footgun.
@@ -167,7 +223,10 @@ public struct StrokeConfig: Sendable {
             overlayBadgeEnabled: overlayBadgeEnabled,
             overlayBlurEnabled: overlayBlurEnabled,
             overlayBadgeSize: overlayBadgeSize,
-            overlayAnimEnabled: overlayAnimEnabled
+            overlayAnimEnabled: overlayAnimEnabled,
+            effectUnmatch: effectUnmatch,
+            effectMatch: effectMatch,
+            effectIntensity: effectIntensity
         )
     }
 

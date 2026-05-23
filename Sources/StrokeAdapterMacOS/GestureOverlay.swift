@@ -105,6 +105,8 @@ public final class GestureOverlay {
         view.badgeSize = CGFloat(cfg.overlayBadgeSize)
         view.animEnabled = cfg.overlayAnimEnabled
         view.setBlurEnabled(cfg.overlayBlurEnabled)
+        view.setEffects(unmatch: cfg.effectUnmatch, match: cfg.effectMatch,
+                        intensity: cfg.effectIntensity)
         if cfg.overlayEnabled {
             if !window.isVisible { window.orderFrontRegardless() }
         } else if window.isVisible {
@@ -185,6 +187,27 @@ private final class TrailView: NSView {
     var badgeEnabled: Bool = true
     var badgeSize: CGFloat = 56
     var animEnabled: Bool = true
+    /// Exit-animation kinds from `[effect]`. See `Effect` enum.
+    /// Set via `setEffects(unmatch:match:intensity:)` so the
+    /// string→enum mapping stays in one place (called from init +
+    /// hot-reload).
+    fileprivate var effectUnmatch: Effect = .none
+    fileprivate var effectMatch: Effect = .none
+    /// Overall size multiplier — scales translation distance, scale
+    /// deltas, vibration amplitude, and particle birth-rate /
+    /// velocity. 1.0 is `normal`; the named levels map below.
+    fileprivate var effectIntensity: CGFloat = 1.0
+
+    func setEffects(unmatch: String, match: String, intensity: String) {
+        effectUnmatch = Effect(rawValue: unmatch) ?? .none
+        effectMatch = Effect(rawValue: match) ?? .none
+        switch intensity.lowercased() {
+        case "subtle": effectIntensity = 0.6
+        case "bold":   effectIntensity = 1.6
+        case "wild":   effectIntensity = 2.5
+        default:       effectIntensity = 1.0
+        }
+    }
 
     fileprivate var points: [CGPoint] = []  // already in view-local coords
     fileprivate var valid = true            // current match state of the trail
@@ -198,12 +221,71 @@ private final class TrailView: NSView {
     /// Drives the scale-in animation. Reset to nil on stroke end.
     private var badgeAppearedAt: TimeInterval?
 
+    /// Card identity for diffing across layout passes. `direction(c)`
+    /// keys directional cards by their first arrow; `fires` keys the
+    /// firing card. When a kind present in the previous layout is
+    /// absent from the new one, that card "became unmatched" mid-
+    /// gesture and triggers `effectUnmatch`.
+    fileprivate enum CardKind: Hashable {
+        case direction(Character)
+        case fires
+    }
+
+    /// Animation kinds for exit effects. Raw values match config
+    /// strings so a `[effect]` lookup stays a one-liner. `.random`
+    /// is a sentinel — `resolveRandom` swaps it for a real kind each
+    /// time a card is queued, so a stroke that drops several cards
+    /// sees variety instead of all the same shuffle.
+    fileprivate enum Effect: String {
+        case none
+        case drop
+        case rise
+        case slideLeft = "slide-left"
+        case slideRight = "slide-right"
+        case explode
+        case vibrate
+        case fade
+        case fireworks
+        case confetti
+        case random
+
+        /// Pool that `.random` chooses from — every concrete effect
+        /// except `.none` and the sentinel itself.
+        fileprivate static let randomPool: [Effect] = [
+            .drop, .rise, .slideLeft, .slideRight,
+            .explode, .vibrate, .fade, .fireworks, .confetti,
+        ]
+
+        /// Duration in seconds. Animations longer than this finish
+        /// fully transparent and are pruned from `exitingCards`.
+        /// `.random` resolves before this is read, so it inherits
+        /// the chosen kind's duration; the case here is just to keep
+        /// the switch exhaustive.
+        var duration: TimeInterval {
+            switch self {
+            case .none, .random:         return 0
+            case .vibrate:               return 0.45
+            case .fireworks, .confetti:  return 0.9
+            default:                     return 0.35
+            }
+        }
+    }
+
+    /// Swap `.random` for a concrete pick at queue time — per-card,
+    /// so successive unmatch cards in one stroke each get their own
+    /// dice roll. Other kinds pass through unchanged.
+    fileprivate func resolveRandom(_ effect: Effect) -> Effect {
+        guard effect == .random else { return effect }
+        return Effect.randomPool.randomElement() ?? .none
+    }
+
     /// Pre-computed positions of the currently-visible HUD elements.
     /// Single source of truth shared by the blur-mask updater (only
     /// these regions get vibrant blur) and `HUDContentView` (which
     /// draws the tint / border / text / icon on top of the blur).
     /// Rebuilt every `append` / `reset`.
     fileprivate struct CardLayout {
+        let kind: CardKind
         let rect: CGRect
         let text: NSAttributedString
         let fill: NSColor?   // nil → frosted only; set → tint over frost
@@ -214,8 +296,22 @@ private final class TrailView: NSView {
         let border: NSColor
         let scale: CGFloat
     }
+    /// One card that's animating out — kept around past `layoutHUD`
+    /// so its exit effect plays to completion regardless of subsequent
+    /// state changes. Pruned by `tickExitAnimations` when the elapsed
+    /// time exceeds the effect's duration.
+    fileprivate struct ExitingCard {
+        let layout: CardLayout
+        let effect: Effect
+        let startedAt: TimeInterval
+    }
     fileprivate var cardLayouts: [CardLayout] = []
     fileprivate var badgeLayout: BadgeLayout?
+    /// Last layoutHUD's cards, keyed by `CardKind`. Used to detect
+    /// disappearing cards across passes and emit unmatch effects.
+    private var prevCardsByKind: [CardKind: CardLayout] = [:]
+    /// In-flight exit animations. Drained by `tickExitAnimations`.
+    fileprivate var exitingCards: [ExitingCard] = []
 
     /// Behind-window vibrant blur, masked to the union of all current
     /// card + badge rounded rects so blur only appears where the HUD
@@ -291,6 +387,20 @@ private final class TrailView: NSView {
     func reset() {
         guard !points.isEmpty || hint != nil || originIcon != nil
         else { return }
+        // If a `fires` card was on-screen the moment the user released,
+        // a rule actually triggered — animate that card out with the
+        // match effect. Clearing `prevCardsByKind` first prevents the
+        // layoutHUD diff below from double-queueing it (and from
+        // queueing unmatch effects for the directional cards that are
+        // simply going away with the rest of the HUD).
+        if effectMatch != .none, let fires = prevCardsByKind[.fires] {
+            let now = CACurrentMediaTime()
+            let e = resolveRandom(effectMatch)
+            exitingCards.append(ExitingCard(
+                layout: fires, effect: e, startedAt: now))
+            scheduleParticleEffect(fires, effect: e)
+        }
+        prevCardsByKind.removeAll()
         points.removeAll(keepingCapacity: true)
         hint = nil
         originIcon = nil
@@ -300,6 +410,7 @@ private final class TrailView: NSView {
         layoutHUD()
         needsDisplay = true
         hudContent.needsDisplay = true
+        kickExitAnimationTick()
     }
 
     /// Add or remove the blur subview in place when `[overlay]
@@ -390,6 +501,7 @@ private final class TrailView: NSView {
                 default:  o = CGPoint(x: cursor.x + gap, y: cursor.y + gap)
                 }
                 cardLayouts.append(CardLayout(
+                    kind: .direction(arrow),
                     rect: clampedCardRect(at: o, size: size),
                     text: s, fill: nil))
             }
@@ -428,6 +540,7 @@ private final class TrailView: NSView {
                     }
                 }
                 cardLayouts.append(CardLayout(
+                    kind: .fires,
                     rect: firesRect, text: s,
                     fill: accent.withAlphaComponent(firesAlpha)))
             }
@@ -437,6 +550,7 @@ private final class TrailView: NSView {
             if !blurEnabled {
                 for i in cardLayouts.indices where cardLayouts[i].fill == nil {
                     cardLayouts[i] = CardLayout(
+                        kind: cardLayouts[i].kind,
                         rect: cardLayouts[i].rect,
                         text: cardLayouts[i].text,
                         fill: NSColor.black.withAlphaComponent(0.8))
@@ -494,6 +608,128 @@ private final class TrailView: NSView {
         if blurEnabled, let mask = blurView.layer?.mask as? CAShapeLayer {
             mask.path = maskPath
         }
+
+        // Diff against previous layout to drive `unmatch` effects.
+        // Any kind that was present last time but isn't now → its
+        // card became unreachable mid-gesture → animate it out.
+        let newByKind = Dictionary(uniqueKeysWithValues:
+            cardLayouts.map { ($0.kind, $0) })
+        if effectUnmatch != .none {
+            let now = CACurrentMediaTime()
+            for (kind, oldLayout) in prevCardsByKind where newByKind[kind] == nil {
+                let e = resolveRandom(effectUnmatch)
+                exitingCards.append(ExitingCard(
+                    layout: oldLayout, effect: e, startedAt: now))
+                scheduleParticleEffect(oldLayout, effect: e)
+            }
+        }
+        prevCardsByKind = newByKind
+        kickExitAnimationTick()
+    }
+
+    /// Emit a CAEmitterLayer for particle effects. No-op for the non-
+    /// particle effects — those are drawn each frame in
+    /// `HUDContentView`. The emitter auto-cleans after the effect's
+    /// duration via a `DispatchQueue.main.asyncAfter`.
+    private func scheduleParticleEffect(_ layout: CardLayout,
+                                         effect: Effect) {
+        guard effect == .fireworks || effect == .confetti else { return }
+        let layer = makeEmitter(for: effect, at: layout.rect)
+        hudContent.wantsLayer = true
+        hudContent.layer?.addSublayer(layer)
+        DispatchQueue.main.asyncAfter(deadline: .now() + effect.duration) {
+            [weak layer] in layer?.removeFromSuperlayer()
+        }
+    }
+
+    /// Drive redraws while exit animations are running. Cheap: only
+    /// schedules a follow-up when `exitingCards` is non-empty.
+    private func kickExitAnimationTick() {
+        guard !exitingCards.isEmpty else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0 / 60) {
+            [weak self] in self?.tickExitAnimations()
+        }
+    }
+
+    private func tickExitAnimations() {
+        let now = CACurrentMediaTime()
+        exitingCards.removeAll { (now - $0.startedAt) >= $0.effect.duration }
+        hudContent.needsDisplay = true
+        kickExitAnimationTick()
+    }
+
+    /// Build a CAEmitterLayer configured for either `.fireworks`
+    /// (burst upward from the card's bottom) or `.confetti` (raining
+    /// down from the card's top). Both auto-fade via cell lifetime.
+    private func makeEmitter(for effect: Effect, at rect: CGRect) -> CAEmitterLayer {
+        let emitter = CAEmitterLayer()
+        emitter.emitterSize = CGSize(width: rect.width, height: 1)
+        emitter.emitterShape = .line
+        // Particles wear small alpha-modulated dots — we generate the
+        // image inline so there's no asset to ship and the colour
+        // comes from the cell's `color` channel.
+        let dot = Self.dotImage(diameter: 6)
+        let palette: [NSColor] = [
+            .systemBlue, .systemGreen, .systemYellow,
+            .systemOrange, .systemPink, .systemPurple,
+        ]
+        // Intensity scales count and reach but not lifetime — keeps
+        // the burst timing consistent so particles always disappear
+        // around the same moment the card has fully faded.
+        let k = Float(effectIntensity)
+        let cells: [CAEmitterCell] = palette.map { c in
+            let cell = CAEmitterCell()
+            cell.contents = dot
+            cell.color = c.cgColor
+            cell.birthRate = (effect == .fireworks ? 80 : 30) * k
+            cell.lifetime = effect == .fireworks ? 0.7 : 1.0
+            cell.lifetimeRange = 0.2
+            cell.velocity = CGFloat((effect == .fireworks ? 180 : 90)) * effectIntensity
+            cell.velocityRange = 60 * effectIntensity
+            cell.emissionRange = effect == .fireworks ? .pi * 0.5 : 0.4
+            cell.scale = 1.0
+            cell.scaleRange = 0.4
+            cell.scaleSpeed = -0.4
+            cell.alphaSpeed = -1.2
+            cell.spin = 1.0
+            cell.spinRange = 4.0
+            // Gravity: fireworks fall back down, confetti rains down.
+            cell.yAcceleration = CGFloat(effect == .fireworks ? -160 : 90) * effectIntensity
+            return cell
+        }
+        emitter.emitterCells = cells
+        if effect == .fireworks {
+            // Bottom of card, particles fly UP. Cocoa Y-up: the
+            // emitter sits at minY and direction is +π/2.
+            emitter.emitterPosition = CGPoint(
+                x: rect.midX, y: rect.minY + 4)
+            for cell in emitter.emitterCells ?? [] {
+                cell.emissionLongitude = .pi / 2     // up
+            }
+        } else { // confetti
+            emitter.emitterPosition = CGPoint(
+                x: rect.midX, y: rect.maxY - 4)
+            for cell in emitter.emitterCells ?? [] {
+                cell.emissionLongitude = -.pi / 2    // down
+            }
+        }
+        // Brief burst: birthRate goes to 0 after a short window so
+        // particles stop spawning before the layer is removed.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+            [weak emitter] in emitter?.birthRate = 0
+        }
+        return emitter
+    }
+
+    private static func dotImage(diameter d: CGFloat) -> CGImage {
+        let cs = CGColorSpaceCreateDeviceRGB()
+        let ctx = CGContext(
+            data: nil, width: Int(d), height: Int(d),
+            bitsPerComponent: 8, bytesPerRow: 0, space: cs,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        ctx.setFillColor(CGColor(srgbRed: 1, green: 1, blue: 1, alpha: 1))
+        ctx.fillEllipse(in: CGRect(x: 0, y: 0, width: d, height: d))
+        return ctx.makeImage()!
     }
 
     private func clampedCardRect(at origin: CGPoint, size: CGSize) -> CGRect {
@@ -565,17 +801,20 @@ private final class HUDContentView: NSView {
         guard let o = owner else { return }
 
         for c in o.cardLayouts {
-            let bg = NSBezierPath(roundedRect: c.rect,
-                                  xRadius: 10, yRadius: 10)
-            if let fill = c.fill {
-                fill.setFill()
-                bg.fill()
-            }
-            NSColor.white.withAlphaComponent(0.18).setStroke()
-            bg.lineWidth = 1
-            bg.stroke()
-            c.text.draw(with: c.rect.insetBy(dx: o.cardPadX, dy: o.cardPadY),
-                        options: TrailView.textOpts)
+            drawCard(c, in: o, alpha: 1, dx: 0, dy: 0, scale: 1)
+        }
+
+        // Exiting cards drawn on top so their final fade frame can't be
+        // covered by a live card the next layout pass happens to put in
+        // the same spot.
+        let now = CACurrentMediaTime()
+        for ex in o.exitingCards {
+            let p = CGFloat(min(1.0, max(0.0,
+                (now - ex.startedAt) / ex.effect.duration)))
+            let s = exitTransform(for: ex.effect, progress: p,
+                                   intensity: o.effectIntensity)
+            drawCard(ex.layout, in: o,
+                     alpha: s.alpha, dx: s.dx, dy: s.dy, scale: s.scale)
         }
 
         if let b = o.badgeLayout {
@@ -606,6 +845,80 @@ private final class HUDContentView: NSView {
                         fraction: 1.0,
                         respectFlipped: true, hints: nil)
             NSGraphicsContext.restoreGraphicsState()
+        }
+    }
+
+    /// Draw one card (fill + border + text). `alpha` multiplies into
+    /// the CGContext so the entire card fades uniformly; `dx`/`dy`/`scale`
+    /// place the rect through the exit animation. The non-exiting path
+    /// passes alpha=1 / dx=dy=0 / scale=1 — identity — so layout looks
+    /// identical to before the refactor.
+    private func drawCard(_ c: TrailView.CardLayout,
+                          in o: TrailView,
+                          alpha: CGFloat,
+                          dx: CGFloat, dy: CGFloat, scale: CGFloat) {
+        let bg = NSBezierPath(roundedRect: c.rect,
+                              xRadius: 10, yRadius: 10)
+        NSGraphicsContext.saveGraphicsState()
+        if alpha < 1 {
+            NSGraphicsContext.current?.cgContext.setAlpha(alpha)
+        }
+        if dx != 0 || dy != 0 || scale != 1 {
+            let cx = c.rect.midX, cy = c.rect.midY
+            let tx = NSAffineTransform()
+            tx.translateX(by: cx + dx, yBy: cy + dy)
+            tx.scaleX(by: scale, yBy: scale)
+            tx.translateX(by: -cx, yBy: -cy)
+            tx.concat()
+        }
+        if let fill = c.fill {
+            fill.setFill()
+            bg.fill()
+        }
+        NSColor.white.withAlphaComponent(0.18).setStroke()
+        bg.lineWidth = 1
+        bg.stroke()
+        c.text.draw(with: c.rect.insetBy(dx: o.cardPadX, dy: o.cardPadY),
+                    options: TrailView.textOpts)
+        NSGraphicsContext.restoreGraphicsState()
+    }
+
+    /// Per-effect transform + alpha for an exiting card at `progress`
+    /// (0..1 across the effect's duration). Cards rest with dx/dy=0,
+    /// scale=1, alpha=1; the function eases them away on the chosen
+    /// axis. Particle effects (`fireworks`, `confetti`) fade the card
+    /// fast so the CAEmitterLayer carries the show.
+    private func exitTransform(for effect: TrailView.Effect,
+                                progress p: CGFloat,
+                                intensity k: CGFloat)
+        -> (dx: CGFloat, dy: CGFloat, scale: CGFloat, alpha: CGFloat) {
+        switch effect {
+        case .none, .random:
+            // .random is resolved at queue time; reaching it here
+            // would mean a card slipped through unresolved — render
+            // as an identity transform rather than crash.
+            return (0, 0, 1, 1)
+        case .drop:
+            // Accelerating fall: y goes UP in Cocoa, so subtract.
+            return (0, -240 * k * p * p, 1, 1 - p)
+        case .rise:
+            return (0, 120 * k * p, 1, 1 - p)
+        case .slideLeft:
+            return (-260 * k * p, 0, 1, 1 - p)
+        case .slideRight:
+            return (260 * k * p, 0, 1, 1 - p)
+        case .explode:
+            return (0, 0, 1 + 0.6 * k * p, 1 - p)
+        case .vibrate:
+            // Damped sine: 4 cycles, amplitude decays linearly.
+            let dx = 10 * k * sin(p * .pi * 8) * (1 - p)
+            return (dx, 0, 1, 1 - p)
+        case .fade:
+            return (0, 0, 1, 1 - p)
+        case .fireworks, .confetti:
+            // Fade card faster than the particles' duration so the
+            // emitter visibly takes over.
+            return (0, 0, 1, max(0, 1 - 2 * p))
         }
     }
 }
