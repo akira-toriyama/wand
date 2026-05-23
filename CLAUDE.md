@@ -314,3 +314,20 @@ decisions. Subsections ordered broad → narrow.
   *(reviewed 2026-05-22)* — `_AXUIElementGetWindow` symbol used
   to resolve serverID from an AXUIElement. Same usage as facet's
   `AXFocus.swift`.
+
+### GitHub
+
+- [GitHub Docs (日本語)](https://docs.github.com/ja)
+  *(reviewed 2026-05-23)* — primary reference for the bits this
+  repo actually touches: `gh` CLI, Actions workflow syntax,
+  release drafts, branch protection, fine-grained PAT scoping
+  (the recurring foot-gun behind `HOMEBREW_TAP_TOKEN`).
+
+### Prior art
+
+- [MGLAHK (pyonkichi)](https://ss1.xrea.com/pyonkichi.g1.xrea.com/mglahk.html)
+  *(reviewed 2026-05-23)* — Japanese-language mouse-gesture
+  utility; useful as prior art for direction-string rule shape,
+  trigger button + modifier conventions, and the user-facing
+  vocabulary native users expect ("ジェスチャー" / "アクション" /
+  方向の表記). Reference for design feel, not for code.
