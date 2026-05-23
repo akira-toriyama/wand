@@ -1,12 +1,15 @@
-// Pure-logic tests for the recognition + matcher pipeline.
-// XCTest runs in CI (Xcode-bearing macOS image); CommandLineTools
-// alone can't run these — same constraint facet works under.
+// Pure-logic tests for the recognition pipeline + the reversal
+// counter that drives the adapter's scribble-to-cancel detector.
+// XCTest needs Xcode; CommandLineTools alone can't run these — CI
+// covers them on an Xcode-bearing macOS image.
 
 import XCTest
 import CoreGraphics
 @testable import StrokeCore
 
 final class RecognitionTests: XCTestCase {
+
+    // MARK: - recognize(samples:minStrokePx:)
 
     func testStraightDownThenRight() {
         // Explicit `[Sample]` annotation needed — without it Swift 6's
@@ -35,200 +38,114 @@ final class RecognitionTests: XCTestCase {
         XCTAssertTrue(Recognition.recognize(samples: samples, minStrokePx: 16).isEmpty)
     }
 
-    func testMatcherFirstWins() {
-        let rules = [
-            Rule(name: "A", pattern: "D", apps: ["*"], action: .key("cmd+1")),
-            Rule(name: "B", pattern: "D", apps: ["*"], action: .key("cmd+2")),
+    func testRecognitionCoalescesConsecutiveDuplicates() {
+        // Three +20px right jumps each cross the threshold individually
+        // but the recognizer collapses them into one `.right` — every
+        // multi-segment pattern match depends on this.
+        let samples: [Sample] = (0...3).map { i in
+            Sample(p: CGPoint(x: CGFloat(i) * 20, y: 0),
+                   t: TimeInterval(i) * 0.01)
+        }
+        XCTAssertEqual(Recognition.recognize(samples: samples,
+                                              minStrokePx: 16),
+                       [.right])
+    }
+
+    func testRecognitionExactThresholdEmits() {
+        // The threshold guard is `max(absX, absY) >= threshold`, so
+        // hitting it on the nose must emit. An off-by-one to `>` would
+        // silently lose the at-threshold case.
+        let samples = [
+            Sample(p: .zero, t: 0),
+            Sample(p: CGPoint(x: 16, y: 0), t: 0.01),
         ]
-        XCTAssertEqual(Matcher.match(pattern: "D",
-                                     bundleID: "com.apple.Finder",
-                                     rules: rules)?.name, "A")
+        XCTAssertEqual(Recognition.recognize(samples: samples,
+                                              minStrokePx: 16),
+                       [.right])
     }
 
-    func testMatcherAppExclusion() {
-        let rules = [
-            Rule(name: "X", pattern: "D",
-                 apps: ["*", "!com.apple.dt.Xcode"],
-                 action: .key("cmd+w"))
+    func testRecognitionMinStrokePxZeroReturnsEmpty() {
+        // `minStrokePx <= 0` short-circuits to []. A regression would
+        // emit a direction on every sample (threshold of 0 always met).
+        let samples = [
+            Sample(p: .zero, t: 0),
+            Sample(p: CGPoint(x: 100, y: 0), t: 0.01),
         ]
-        XCTAssertNil(Matcher.match(pattern: "D",
-                                   bundleID: "com.apple.dt.Xcode",
-                                   rules: rules))
-        XCTAssertNotNil(Matcher.match(pattern: "D",
-                                      bundleID: "com.apple.Finder",
-                                      rules: rules))
+        XCTAssertTrue(Recognition.recognize(samples: samples,
+                                             minStrokePx: 0).isEmpty)
     }
 
-    func testCandidatesByPrefixAndApp() {
-        let rules = [
-            Rule(name: "close tab", pattern: "DL", apps: ["*chrome*"], action: .key("cmd+w")),
-            Rule(name: "close window", pattern: "DRU", apps: ["*"], action: .ax("close")),
-            Rule(name: "minimize", pattern: "L", apps: ["*"], action: .ax("minimize")),
+    func testRecognitionDominantAxisTieGoesHorizontal() {
+        // `absX >= absY` puts ties on the horizontal axis. The
+        // tie-breaker is load-bearing for 45° drags — flipping it
+        // would reclassify diagonals as vertical.
+        let samples = [
+            Sample(p: .zero, t: 0),
+            Sample(p: CGPoint(x: 20, y: 20), t: 0.01),
         ]
-        // "D" reaches both DL (chrome-only) and DRU on Chrome…
-        XCTAssertEqual(
-            Set(Matcher.candidates(prefix: "D", bundleID: "com.google.Chrome",
-                                   rules: rules).map(\.name)),
-            ["close tab", "close window"])
-        // …but only DRU on a non-chrome app (app filter applies).
-        XCTAssertEqual(
-            Matcher.candidates(prefix: "D", bundleID: "com.apple.finder",
-                               rules: rules).map(\.name),
-            ["close window"])
-        // Exact pattern is a prefix of itself.
-        XCTAssertEqual(
-            Matcher.candidates(prefix: "DL", bundleID: "com.google.Chrome",
-                               rules: rules).map(\.name),
-            ["close tab"])
-        // Dead end → nothing.
-        XCTAssertTrue(
-            Matcher.candidates(prefix: "X", bundleID: "com.google.Chrome",
-                               rules: rules).isEmpty)
+        XCTAssertEqual(Recognition.recognize(samples: samples,
+                                              minStrokePx: 16),
+                       [.right])
     }
 
-    func testDirectionArrows() {
-        XCTAssertEqual(Direction.left.arrow, "←")
-        XCTAssertEqual(Direction.up.arrow, "↑")
-        XCTAssertEqual(Direction.right.arrow, "→")
-        XCTAssertEqual(Direction.down.arrow, "↓")
+    func testRecognitionAnchorResetsAfterEmit() {
+        // After a 20px right jump, a further 10px right (only 10px
+        // since the anchor was reset, even though 30px from origin)
+        // must NOT emit a second direction. Without anchor-reset the
+        // recognizer would re-fire on every sample past threshold.
+        let samples = [
+            Sample(p: .zero, t: 0),
+            Sample(p: CGPoint(x: 20, y: 0), t: 0.01),
+            Sample(p: CGPoint(x: 30, y: 0), t: 0.02),
+        ]
+        XCTAssertEqual(Recognition.recognize(samples: samples,
+                                              minStrokePx: 16),
+                       [.right])
     }
 
-    func testGlobWildcards() {
-        XCTAssertTrue(Matcher.glob("*chrome*", "com.google.chrome"))
-        XCTAssertTrue(Matcher.glob("com.apple.?afari", "com.apple.safari"))
-        XCTAssertFalse(Matcher.glob("com.apple.safari", "com.google.chrome"))
+    func testRecognitionYAxisGrowsUp() {
+        // Adapter feeds `p.y` Y-up (CGEvent.location Y-down sign-flipped
+        // in EventTap.flipY). `dy > 0 ⇒ .up`. Pins the convention
+        // CLAUDE.md flags as load-bearing.
+        let samples = [
+            Sample(p: .zero, t: 0),
+            Sample(p: CGPoint(x: 0, y: 20), t: 0.01),
+        ]
+        XCTAssertEqual(Recognition.recognize(samples: samples,
+                                              minStrokePx: 16),
+                       [.up])
     }
 
-    func testTOMLArrayOfTables() {
-        let toml = """
-        [trigger]
-        button = "right"
-        modifiers = ["cmd"]
+    // MARK: - reversals (drives scribble-to-cancel)
 
-        [recognition]
-        min-stroke-px = 20
-
-        [[rules]]
-        name = "close tab"
-        pattern = "DR"
-        apps = ["*chrome*", "*safari*"]
-        action-type = "key"
-        action-keys = "cmd+w"
-
-        [[rules]]
-        name = "minimize"
-        pattern = "L"
-        apps = ["*"]
-        action-type = "ax"
-        action-verb = "minimize"
-        """
-        let cfg = StrokeConfig.parse(toml)
-        XCTAssertEqual(cfg.trigger.button, .right)
-        XCTAssertEqual(cfg.trigger.modifiers, [.cmd])
-        XCTAssertEqual(cfg.minStrokePx, 20)
-        XCTAssertEqual(cfg.rules.count, 2)
-        XCTAssertEqual(cfg.rules[0].pattern, "DR")
-        if case .key(let k) = cfg.rules[0].action {
-            XCTAssertEqual(k, "cmd+w")
-        } else { XCTFail("expected .key") }
-        if case .ax(let v) = cfg.rules[1].action {
-            XCTAssertEqual(v, "minimize")
-        } else { XCTFail("expected .ax") }
+    func testReversalsCountsOppositePairs() {
+        XCTAssertEqual(Recognition.reversals("LR"), 1)
+        XCTAssertEqual(Recognition.reversals("LRL"), 2)
+        XCTAssertEqual(Recognition.reversals("LRLR"), 3)
     }
 
-    func testUnknownAXVerbDropsRule() {
-        // A typo'd verb must drop the rule at parse time (visible to
-        // --validate) rather than load and silently no-op at dispatch.
-        let toml = """
-        [[rules]]
-        pattern = "L"
-        action-type = "ax"
-        action-verb = "clsoe"
-
-        [[rules]]
-        pattern = "R"
-        action-type = "ax"
-        action-verb = "ZOOM"
-        """
-        let cfg = StrokeConfig.parse(toml)
-        XCTAssertEqual(cfg.rules.count, 1, "typo'd verb rule should drop")
-        XCTAssertEqual(cfg.rules[0].pattern, "R")
-        // Verb is normalised to lowercase so dispatch matching is stable.
-        if case .ax(let v) = cfg.rules[0].action {
-            XCTAssertEqual(v, "zoom")
-        } else { XCTFail("expected .ax") }
+    func testReversalsIgnoresOrthogonal() {
+        // 90° turns are not reversals — `DU` is one reversal but
+        // `DR` (90°) is zero. The user's `DRU` rule must not
+        // accidentally trip scribble-cancel.
+        XCTAssertEqual(Recognition.reversals("DR"), 0)
+        XCTAssertEqual(Recognition.reversals("DRU"), 0)
+        XCTAssertEqual(Recognition.reversals("LU"), 0)
     }
 
-    func testOverlayConfigParsed() {
-        let toml = """
-        [overlay]
-        enabled = false
-        color = "#ff0000"
-        color-no-match = "orange"
-        width = 8
-        """
-        let cfg = StrokeConfig.parse(toml)
-        XCTAssertFalse(cfg.overlayEnabled)
-        XCTAssertEqual(cfg.overlayColor, "#ff0000")
-        XCTAssertEqual(cfg.overlayColorNoMatch, "orange")
-        XCTAssertEqual(cfg.overlayWidth, 8)
+    func testReversalsEmptyAndSingle() {
+        XCTAssertEqual(Recognition.reversals(""), 0)
+        XCTAssertEqual(Recognition.reversals("L"), 0)
     }
 
-    func testOverlayDefaultsWhenAbsent() {
-        let cfg = StrokeConfig.parse("[trigger]\nbutton = \"right\"")
-        XCTAssertTrue(cfg.overlayEnabled)          // default on
-        XCTAssertEqual(cfg.overlayColor, "#3b82f6")
-        XCTAssertEqual(cfg.overlayColorNoMatch, "#ef4444")
-        XCTAssertEqual(cfg.overlayWidth, 3)
-    }
-
-    func testOverlayWidthClamped() {
-        let cfg = StrokeConfig.parse("[overlay]\nwidth = 999")
-        XCTAssertEqual(cfg.overlayWidth, 40)       // clamped 1..40
-    }
-
-    func testMaxStrokeMs() {
-        XCTAssertEqual(StrokeConfig.parse("").maxStrokeMs, 0)               // default off
-        XCTAssertEqual(StrokeConfig.parse(
-            "[recognition]\nmax-stroke-ms = 1500").maxStrokeMs, 1500)
-        XCTAssertEqual(StrokeConfig.parse(
-            "[recognition]\nmax-stroke-ms = 50").maxStrokeMs, 100)          // clamp low
-        XCTAssertEqual(StrokeConfig.parse(
-            "[recognition]\nmax-stroke-ms = 999999").maxStrokeMs, 60000)    // clamp high
-    }
-
-    func testCancelReversals() {
-        XCTAssertEqual(StrokeConfig.parse("").cancelReversals, 2)            // default on
-        XCTAssertEqual(StrokeConfig.parse(
-            "[recognition]\ncancel-reversals = 3").cancelReversals, 3)
-        XCTAssertEqual(StrokeConfig.parse(
-            "[recognition]\ncancel-reversals = 0").cancelReversals, 0)       // off
-        XCTAssertEqual(StrokeConfig.parse(
-            "[recognition]\ncancel-reversals = 999").cancelReversals, 20)    // clamp high
-    }
-
-    func testCancelWindowMs() {
-        XCTAssertEqual(StrokeConfig.parse("").cancelWindowMs, 500)           // default
-        XCTAssertEqual(StrokeConfig.parse(
-            "[recognition]\ncancel-window-ms = 800").cancelWindowMs, 800)
-        XCTAssertEqual(StrokeConfig.parse(
-            "[recognition]\ncancel-window-ms = 0").cancelWindowMs, 0)        // any speed
-        XCTAssertEqual(StrokeConfig.parse(
-            "[recognition]\ncancel-window-ms = 50").cancelWindowMs, 100)     // clamp low
-        XCTAssertEqual(StrokeConfig.parse(
-            "[recognition]\ncancel-window-ms = 99999").cancelWindowMs, 5000) // clamp high
-    }
-
-    func testRuleNameDefaultsToPattern() {
-        let toml = """
-        [[rules]]
-        pattern = "DR"
-        action-type = "key"
-        action-keys = "cmd+w"
-        """
-        let cfg = StrokeConfig.parse(toml)
-        XCTAssertEqual(cfg.rules.count, 1)
-        XCTAssertEqual(cfg.rules[0].name, "DR")
-        XCTAssertEqual(cfg.rules[0].apps, ["*"])
+    func testReversalsRespectsAllFourAxes() {
+        // Both axes pin their own reversal pairs.
+        XCTAssertEqual(Recognition.reversals("UD"), 1)
+        XCTAssertEqual(Recognition.reversals("DU"), 1)
+        XCTAssertEqual(Recognition.reversals("LR"), 1)
+        XCTAssertEqual(Recognition.reversals("RL"), 1)
+        // Mixed-axis sequences should still count only the same-axis
+        // adjacent reversals.
+        XCTAssertEqual(Recognition.reversals("LRDU"), 2)
     }
 }

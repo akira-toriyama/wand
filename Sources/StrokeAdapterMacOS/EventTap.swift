@@ -166,19 +166,8 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
         }
     }
 
-    /// Count of 180° reversals in a coalesced pattern (`L↔R`, `U↔D`).
-    private static func reversals(_ pattern: String) -> Int {
-        let c = Array(pattern)
-        guard c.count > 1 else { return 0 }
-        var n = 0
-        for i in 1..<c.count where isOpposite(c[i - 1], c[i]) { n += 1 }
-        return n
-    }
-
-    private static func isOpposite(_ a: Character, _ b: Character) -> Bool {
-        (a == "L" && b == "R") || (a == "R" && b == "L")
-            || (a == "U" && b == "D") || (a == "D" && b == "U")
-    }
+    // Reversal counting moved to `Recognition.reversals` (Core) so the
+    // pure logic is unit-testable without an AX/CG stack.
 
     // MARK: - MouseSource
 
@@ -358,7 +347,7 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
                                              minStrokePx: minStrokePx).patternString
         noteTurn(dirCount: pattern.count)
         if cancelReversals > 0 && !cancelled {
-            let rev = Self.reversals(pattern)   // monotonic as samples grow
+            let rev = Recognition.reversals(pattern)   // monotonic as samples grow
             if rev > reversalTimes.count {
                 let now = CACurrentMediaTime()
                 while reversalTimes.count < rev { reversalTimes.append(now) }

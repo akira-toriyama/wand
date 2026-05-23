@@ -44,4 +44,24 @@ public enum Recognition {
         }
         return out
     }
+
+    /// Number of 180° direction reversals (`L↔R`, `U↔D`) in a coalesced
+    /// pattern string. Pure: counts pairs of adjacent characters in
+    /// `LURD` whose axes match and signs oppose. Drives the
+    /// scribble-to-cancel detector in the adapter; lives in Core so it
+    /// can be unit-tested without an AX stack.
+    public static func reversals(_ pattern: String) -> Int {
+        let c = Array(pattern)
+        guard c.count > 1 else { return 0 }
+        var n = 0
+        for i in 1..<c.count where isOpposite(c[i - 1], c[i]) { n += 1 }
+        return n
+    }
+
+    /// Whether two `LURD` characters denote opposite directions.
+    /// Public to support the same testability story as `reversals`.
+    public static func isOpposite(_ a: Character, _ b: Character) -> Bool {
+        (a == "L" && b == "R") || (a == "R" && b == "L")
+            || (a == "U" && b == "D") || (a == "D" && b == "U")
+    }
 }
