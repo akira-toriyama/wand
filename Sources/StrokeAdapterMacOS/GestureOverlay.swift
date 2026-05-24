@@ -108,6 +108,7 @@ public final class GestureOverlay {
         view.effectUnmatch = cfg.effectUnmatch
         view.effectMatch = cfg.effectMatch
         view.effectIntensity = cfg.effectIntensity.multiplier
+        view.minStrokePx = CGFloat(cfg.minStrokePx)
         if cfg.overlayEnabled {
             if !window.isVisible { window.orderFrontRegardless() }
         } else if window.isVisible {
@@ -197,12 +198,31 @@ private final class TrailView: NSView {
     /// translation distance, scale deltas, vibration amplitude, and
     /// particle birth-rate / velocity.
     var effectIntensity: CGFloat = 1.0
+    /// Per-segment displacement threshold used to commit a direction
+    /// — the same value `Recognition.recognize` uses, so the visual
+    /// polyline elbows match where rules actually break a segment.
+    var minStrokePx: CGFloat = 16
 
-    fileprivate var points: [CGPoint] = []  // already in view-local coords
+    /// Polyline state. `origin` = button-down point (badge anchor);
+    /// `cursor` = latest sample (line head + HUD anchor); `corners` =
+    /// every committed turn point in between. The trail draws as
+    /// `origin → corners → cursor` — straight segments, Figma-style,
+    /// rather than freehand through every sample.
+    fileprivate var origin: CGPoint?
+    fileprivate var cursor: CGPoint?
+    fileprivate var corners: [CGPoint] = []
+    /// Live recognition state — mirrors `Recognition.recognize`:
+    /// `anchor` is the point from which the next segment is being
+    /// measured; `lastDir` is the most recently committed direction.
+    /// When the next sample exceeds `minStrokePx` from `anchor` AND
+    /// the dominant axis differs from `lastDir`, the current `anchor`
+    /// is promoted to a corner.
+    private var anchor: CGPoint?
+    private var lastDir: Direction?
     fileprivate var valid = true            // current match state of the trail
     fileprivate var hint: GestureHint?      // shape + reachable rules
     /// Icon of the target app the gesture is acting on, drawn as a
-    /// small badge at `points.first`. Tells the user "you're operating
+    /// small badge at `origin`. Tells the user "you're operating
     /// on Chrome (the cursor-anchored window), even though VSCode has
     /// keyboard focus" — the whole reason cursor-anchored exists.
     var originIcon: NSImage?
@@ -331,15 +351,39 @@ private final class TrailView: NSView {
             .first(where: { $0.frame.origin == .zero })?.frame.height
             ?? NSScreen.main?.frame.height ?? cg.y
         let cocoa = CGPoint(x: cg.x, y: primaryH - cg.y)
-        points.append(CGPoint(x: cocoa.x - originOffset.x,
-                              y: cocoa.y - originOffset.y))
+        let p = CGPoint(x: cocoa.x - originOffset.x,
+                        y: cocoa.y - originOffset.y)
+        if origin == nil { origin = p; anchor = p }
+        cursor = p
+        // Live direction tracking — same algorithm as
+        // `Recognition.recognize` so the polyline elbows land
+        // exactly where the recogniser would split a segment.
+        if let a = anchor {
+            let dx = p.x - a.x, dy = p.y - a.y
+            let absX = abs(dx), absY = abs(dy)
+            if max(absX, absY) >= minStrokePx {
+                let dir: Direction =
+                    absX >= absY ? (dx >= 0 ? .right : .left)
+                                 : (dy >= 0 ? .up    : .down)
+                if let last = lastDir, last != dir {
+                    // Project the corner onto the previous segment's
+                    // axis so the polyline is strictly orthogonal —
+                    // raw `anchor` carries hand-jitter perpendicular
+                    // to the intended direction.
+                    let segStart = corners.last ?? origin ?? a
+                    corners.append(Self.snap(a, to: last, from: segStart))
+                }
+                lastDir = dir
+                anchor = p
+            }
+        }
         layoutHUD()
         needsDisplay = true
         hudContent.needsDisplay = true
     }
 
     func reset() {
-        guard !points.isEmpty || hint != nil || originIcon != nil
+        guard origin != nil || hint != nil || originIcon != nil
         else { return }
         // If a `fires` card was on-screen the moment the user released,
         // a rule actually triggered — animate that card out with the
@@ -355,7 +399,11 @@ private final class TrailView: NSView {
             scheduleParticleEffect(fires, effect: e)
         }
         prevCardsByKind.removeAll()
-        points.removeAll(keepingCapacity: true)
+        origin = nil
+        cursor = nil
+        corners.removeAll(keepingCapacity: true)
+        anchor = nil
+        lastDir = nil
         hint = nil
         originIcon = nil
         badgeAppearedAt = nil
@@ -396,18 +444,58 @@ private final class TrailView: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        guard points.count >= 2 else { return }
+        guard let origin, let cursor,
+              origin != cursor || !corners.isEmpty
+        else { return }
         let color = valid ? matchColor : noMatchColor
-        // Trail with a soft same-color glow — drawn here (parent view)
-        // so it sits beneath the blurView + HUD overlay subviews. A
-        // small portion overlapping HUD regions is hidden by blur,
-        // which is fine: the visual focus is the badge → cards arc.
+
+        // Live segment end: snap the raw cursor onto `lastDir`'s axis
+        // relative to the previous corner (or origin). Keeps the
+        // polyline orthogonal even while the user's hand drifts off
+        // the cardinal axis mid-segment.
+        let segStart = corners.last ?? origin
+        let head: CGPoint
+        if let dir = lastDir {
+            head = Self.snap(cursor, to: dir, from: segStart)
+        } else {
+            head = cursor
+        }
+
+        // Polyline: origin → committed corners → live (snapped) head,
+        // with each interior corner softened by a quadratic-style
+        // bezier of radius `cornerRadius`. The radius is capped to
+        // half of each adjacent segment so back-to-back tight corners
+        // never overshoot. Sits beneath the blurView + HUD overlay.
         let path = NSBezierPath()
         path.lineWidth = strokeWidth
         path.lineCapStyle = .round
         path.lineJoinStyle = .round
-        path.move(to: points[0])
-        for p in points.dropFirst() { path.line(to: p) }
+        let polyline = [origin] + corners + [head]
+        path.move(to: polyline[0])
+        if polyline.count == 2 {
+            path.line(to: polyline[1])
+        } else {
+            let desiredR = strokeWidth * 4
+            for i in 1..<polyline.count - 1 {
+                let A = polyline[i - 1]
+                let B = polyline[i]
+                let C = polyline[i + 1]
+                let inLen = hypot(B.x - A.x, B.y - A.y)
+                let outLen = hypot(C.x - B.x, C.y - B.y)
+                let r = min(desiredR, inLen / 2, outLen / 2)
+                let inU = CGPoint(x: (B.x - A.x) / max(inLen, 1),
+                                  y: (B.y - A.y) / max(inLen, 1))
+                let outU = CGPoint(x: (C.x - B.x) / max(outLen, 1),
+                                   y: (C.y - B.y) / max(outLen, 1))
+                let P = CGPoint(x: B.x - inU.x * r, y: B.y - inU.y * r)
+                let Q = CGPoint(x: B.x + outU.x * r, y: B.y + outU.y * r)
+                path.line(to: P)
+                // Cubic with both control points at B = quadratic
+                // approximation through the corner.
+                path.curve(to: Q, controlPoint1: B, controlPoint2: B)
+            }
+            path.line(to: polyline.last!)
+        }
         NSGraphicsContext.saveGraphicsState()
         let glow = NSShadow()
         glow.shadowColor = color.withAlphaComponent(0.5)
@@ -415,7 +503,55 @@ private final class TrailView: NSView {
         glow.set()
         color.withAlphaComponent(0.9).setStroke()
         path.stroke()
+        // Arrowhead at the live cursor end. Skipped until a direction
+        // has been committed (no axis to point along yet).
+        if let dir = lastDir {
+            drawArrowhead(at: head, direction: dir, color: color)
+        }
         NSGraphicsContext.restoreGraphicsState()
+    }
+
+    /// Snap `p` onto the axis defined by `dir` and the point `from` —
+    /// horizontal directions preserve `from.y`, vertical preserve
+    /// `from.x`. Used in two places: committing a corner that sits on
+    /// the previous segment's axis, and projecting the live cursor
+    /// onto the current segment's axis.
+    private static func snap(_ p: CGPoint, to dir: Direction,
+                              from: CGPoint) -> CGPoint {
+        switch dir {
+        case .left, .right: return CGPoint(x: p.x, y: from.y)
+        case .up, .down:    return CGPoint(x: from.x, y: p.y)
+        }
+    }
+
+    /// Filled triangle pointing along `direction`, with its tip at
+    /// `tip`. Sized off `strokeWidth` so it scales with the trail.
+    private func drawArrowhead(at tip: CGPoint, direction: Direction,
+                                color: NSColor) {
+        let len = strokeWidth * 4
+        let half = strokeWidth * 2.5
+        let path = NSBezierPath()
+        let p1: CGPoint, p2: CGPoint
+        switch direction {
+        case .right:
+            p1 = CGPoint(x: tip.x - len, y: tip.y - half)
+            p2 = CGPoint(x: tip.x - len, y: tip.y + half)
+        case .left:
+            p1 = CGPoint(x: tip.x + len, y: tip.y - half)
+            p2 = CGPoint(x: tip.x + len, y: tip.y + half)
+        case .up:
+            p1 = CGPoint(x: tip.x - half, y: tip.y - len)
+            p2 = CGPoint(x: tip.x + half, y: tip.y - len)
+        case .down:
+            p1 = CGPoint(x: tip.x - half, y: tip.y + len)
+            p2 = CGPoint(x: tip.x + half, y: tip.y + len)
+        }
+        path.move(to: tip)
+        path.line(to: p1)
+        path.line(to: p2)
+        path.close()
+        color.withAlphaComponent(0.95).setFill()
+        path.fill()
     }
 
     // MARK: - HUD layout
@@ -432,7 +568,7 @@ private final class TrailView: NSView {
 
         let accent = valid ? matchColor : noMatchColor
 
-        if let hint, let cursor = points.last {
+        if let hint, let cursor = cursor {
             var byDir: [Character: [GestureHint.Row]] = [:]
             var fires: [GestureHint.Row] = []
             for row in hint.rows {
@@ -513,7 +649,7 @@ private final class TrailView: NSView {
         }
 
         if badgeEnabled,
-           hint != nil, let icon = originIcon, let origin = points.first {
+           hint != nil, let icon = originIcon, let origin = origin {
             let s = badgeSize
             var rect = CGRect(x: origin.x - s / 2, y: origin.y - s / 2,
                               width: s, height: s)
