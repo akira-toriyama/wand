@@ -10,13 +10,15 @@
 import AppKit
 import CoreGraphics
 
-enum ScreenCoords {
+public enum ScreenCoords {
 
     /// CG global (Y-down) → Cocoa global (Y-up). Used by every adapter
     /// that takes a `CGEvent.location` and needs to talk to AppKit
-    /// (overlay window, NSMenu popup). Lives in one place so the
-    /// CLAUDE.md-flagged Y-axis trap has a single definition.
-    static func cocoaPoint(fromCG cg: CGPoint) -> CGPoint {
+    /// (overlay window, NSMenu popup). Also re-used by the App layer
+    /// when threading native-trigger CG coords into LauncherMenu (now
+    /// Cocoa-only). Lives in one place so the CLAUDE.md-flagged
+    /// Y-axis trap has a single definition.
+    public static func cocoaPoint(fromCG cg: CGPoint) -> CGPoint {
         let primaryH = NSScreen.screens
             .first(where: { $0.frame.origin == .zero })?.frame.height
             ?? NSScreen.main?.frame.height ?? cg.y

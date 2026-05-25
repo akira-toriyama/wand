@@ -147,6 +147,22 @@ Everything below depends on this contract:
   (`STROKE_TARGET_BUNDLE_ID`, `STROKE_TARGET_PID`,
   `STROKE_TARGET_TITLE`, `STROKE_TARGET_FRAME`) — the user's
   command can decide what to do with that information.
+- **`stroke --show-menu` is the documented spine exception.**
+  External event-driven daemons (the planned `eventfx`, which
+  observes things like text-selection notifications and has no
+  button-down moment to anchor against) post `show-menu` over the
+  existing DNC channel with `userInfo = [items, x, y, selection]`.
+  The Controller resolves the target via
+  `NSWorkspace.frontmostApplication` instead of `AXTarget.
+  resolveAt(point:)` — text-selection-anchored, not cursor-
+  anchored. Spine guarantees above apply to gesture and middle-
+  click launcher (the native trigger families); `--show-menu` is
+  documented as the carve-out. `$SELECTION` is the only extra env
+  var added (via `Dispatch.execute(extraEnv:)`); the
+  `STROKE_TARGET_*` set is still populated, just from the
+  frontmost app instead of a cursor-anchored window. See
+  [Sources/WandApp/Controller.swift](Sources/WandApp/Controller.swift)'s
+  `handleShowMenu`.
 
 ### Configuration
 

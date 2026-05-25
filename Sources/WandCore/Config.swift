@@ -102,6 +102,17 @@ public struct WandConfig: Sendable {
         return parse(text)
     }
 
+    /// Parse a TOML document containing only `[[item]]` entries — the
+    /// schema `stroke --show-menu --items <PATH>` expects. Same
+    /// row-level validation as `[launcher]` items in the main config
+    /// (drop on missing name / invalid action, with a loud log line),
+    /// so a client that screws up the file gets a diagnostic.
+    public static func parseItems(_ text: String) -> [LauncherItem] {
+        let doc = parseTOMLSubset(text)
+        return (doc.arrays["item"] ?? []).enumerated()
+            .compactMap { idx, row in parseItem(row, idx: idx) }
+    }
+
     static func parse(_ text: String) -> WandConfig {
         let doc = parseTOMLSubset(text)
 
@@ -168,32 +179,7 @@ public struct WandConfig: Sendable {
         // [[item]] — launcher menu rows. Same drop-on-typo policy as
         // [[rules]]: bad rows surface in the log with their position.
         let items: [LauncherItem] = (doc.arrays["item"] ?? []).enumerated()
-            .compactMap { idx, row in
-                let label = "[[item]][\(idx)]"
-                    + (row.string("name").isEmpty
-                       ? "" : " \(row.string("name"))")
-                guard let action = parseAction(row) else {
-                    Log.line("config: dropped \(label) — invalid or missing "
-                             + "action (need action-type + matching "
-                             + "action-keys / action-verb / action-cmd)")
-                    return nil
-                }
-                let name = row.string("name")
-                guard !name.isEmpty else {
-                    Log.line("config: dropped \(label) — `name` is required "
-                             + "(it's the menu label)")
-                    return nil
-                }
-                let apps = row.strings("apps")
-                let group = row.strings("group")
-                let sep = row.bool("separator-before", false)
-                return LauncherItem(
-                    name: name,
-                    group: group,
-                    separatorBefore: sep,
-                    apps: apps.isEmpty ? ["*"] : apps,
-                    action: action)
-            }
+            .compactMap { idx, row in parseItem(row, idx: idx) }
         let launcher = LauncherSpec(
             enabled: launcherEnabled,
             trigger: Trigger(button: launcherButton, modifiers: launcherMods),
@@ -305,6 +291,33 @@ public struct WandConfig: Sendable {
                      + "(allowed 0 or \(lo)..\(hi))")
         }
         return clamped
+    }
+
+    /// Row-level parse for a single `[[item]]`. Shared by the
+    /// `[launcher]` items inside the main config and by
+    /// `parseItems(_:)` for the `--show-menu --items <PATH>` path.
+    private static func parseItem(_ row: [String: TOMLValue], idx: Int)
+        -> LauncherItem? {
+        let label = "[[item]][\(idx)]"
+            + (row.string("name").isEmpty ? "" : " \(row.string("name"))")
+        guard let action = parseAction(row) else {
+            Log.line("config: dropped \(label) — invalid or missing "
+                     + "action (need action-type + matching "
+                     + "action-keys / action-verb / action-cmd / action-url)")
+            return nil
+        }
+        let name = row.string("name")
+        guard !name.isEmpty else {
+            Log.line("config: dropped \(label) — `name` is required "
+                     + "(it's the menu label)")
+            return nil
+        }
+        let apps = row.strings("apps")
+        let group = row.strings("group")
+        let sep = row.bool("separator-before", false)
+        return LauncherItem(
+            name: name, group: group, separatorBefore: sep,
+            apps: apps.isEmpty ? ["*"] : apps, action: action)
     }
 
     private static func parseAction(_ row: [String: TOMLValue]) -> Action? {

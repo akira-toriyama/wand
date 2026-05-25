@@ -38,9 +38,18 @@ enum WandApp {
           stroke --status              print rule count, trigger, last
                                        gestures, counters, last reload
           stroke --quit                terminate the running daemon
+          stroke --show-menu           ask the daemon to pop the launcher
+            --items <PATH>             menu at a screen point with the
+            --at <X> <Y>               given [[item]] file. Cocoa coords
+            [--selection <TEXT>]       (Y-up). For event-driven triggers
+                                       (eventfx text-selection etc).
+                                       $SELECTION is exported to shell
+                                       actions if --selection given.
 
         STANDALONE COMMANDS — no daemon required (--record refuses if one runs)
           stroke --validate            parse config.toml; exit 0 if valid
+            [--items <PATH>]           also validate a standalone items
+                                       file (for --show-menu)
           stroke --doctor              health check: Accessibility, config,
                                        daemon, event tap, tuning + rules
           stroke --test PATTERN [APP]  dry-run: which rule would fire for
@@ -95,13 +104,30 @@ enum WandApp {
         let recognised: Set<String> = [
             "--help", "--debug", "--validate", "--record",
             "--reload", "--quit", "--status", "--doctor",
-            "--resign",
+            "--resign", "--show-menu",
+            "--items", "--at", "--selection",
         ]
-        for a in argv where !recognised.contains(a) {
-            let msg = "stroke: unknown flag \"\(a)\" — see "
-                + "`stroke --help`\n"
-            FileHandle.standardError.write(Data(msg.utf8))
-            exit(2)
+        // Value-bearing flags' operand counts — scan skips that many
+        // tokens after seeing the flag. Without this, `stroke
+        // --show-menu --items /tmp/foo.toml` would reject the path
+        // as an "unknown flag".
+        let valueArities: [String: Int] = [
+            "--items": 1, "--selection": 1, "--at": 2,
+        ]
+        var ai = 0
+        while ai < argv.count {
+            let a = argv[ai]
+            if let arity = valueArities[a] {
+                ai += 1 + arity
+                continue
+            }
+            if !recognised.contains(a) {
+                let msg = "stroke: unknown flag \"\(a)\" — see "
+                    + "`stroke --help`\n"
+                FileHandle.standardError.write(Data(msg.utf8))
+                exit(2)
+            }
+            ai += 1
         }
 
         // Standalone modes — no running daemon required.
@@ -117,6 +143,23 @@ enum WandApp {
                 + "trigger=\(cfg.trigger.button.rawValue), "
                 + "minStrokePx=\(cfg.minStrokePx)\(launcherLine)\n"
             ).utf8))
+            // `--validate --items PATH` also validates a standalone
+            // items file (intended for --show-menu) — parse + report
+            // count, exit 2 on read failure.
+            if let path = valueAfter("--items", in: argv) {
+                guard let text = try? String(contentsOfFile: path, encoding: .utf8)
+                else {
+                    FileHandle.standardError.write(Data((
+                        "stroke: --items: could not read \(path)\n"
+                    ).utf8))
+                    exit(2)
+                }
+                let items = WandConfig.parseItems(text)
+                FileHandle.standardError.write(Data((
+                    "stroke: items file \(path) — "
+                    + "\(items.count) item(s)\n"
+                ).utf8))
+            }
             exit(0)
         }
         if argv.contains("--record") { runRecord() }
@@ -126,6 +169,7 @@ enum WandApp {
         if argv.contains("--status") { runStatus() }
         if argv.contains("--reload") { runClient(cmd: "reload") }
         if argv.contains("--quit")   { runClient(cmd: "quit") }
+        if argv.contains("--show-menu") { runShowMenu(argv: argv) }
 
         // ----- Server mode -----
         runServer()
@@ -575,6 +619,87 @@ enum WandApp {
                 "stroke: couldn't launch \(executable): \(error)\n".utf8))
             return -1
         }
+    }
+
+    /// `--items <PATH>` / `--selection <TEXT>` etc — return the
+    /// token immediately after `flag`, or nil if `flag` isn't present
+    /// or has no follower. Shared by `--show-menu` and `--validate`.
+    private static func valueAfter(_ flag: String, in argv: [String]) -> String? {
+        guard let i = argv.firstIndex(of: flag), i + 1 < argv.count
+        else { return nil }
+        return argv[i + 1]
+    }
+
+    /// `stroke --show-menu --items <PATH> --at <X> <Y> [--selection <TEXT>]`
+    /// — external trigger entry to the launcher menu. Validates args
+    /// locally (exit 2 on bad input), checks daemon liveness (exit 3),
+    /// then posts a DNC notification with the parameters in userInfo
+    /// and exits 0. The daemon does the rest async — resolves the
+    /// frontmost app as the target (spine exception, see CLAUDE.md),
+    /// builds the menu, pops it up.
+    private static func runShowMenu(argv: [String]) -> Never {
+        guard let itemsPath = valueAfter("--items", in: argv) else {
+            FileHandle.standardError.write(Data((
+                "stroke: --show-menu: --items <PATH> is required\n"
+            ).utf8))
+            exit(2)
+        }
+        // Resolve to absolute so the daemon — which may be running
+        // from a different working dir — can find the file.
+        let absItems = (itemsPath as NSString).expandingTildeInPath
+        let absPath = absItems.hasPrefix("/")
+            ? absItems
+            : FileManager.default.currentDirectoryPath + "/" + absItems
+        guard let text = try? String(contentsOfFile: absPath, encoding: .utf8) else {
+            FileHandle.standardError.write(Data((
+                "stroke: --show-menu: could not read items file "
+                + "\(absPath)\n"
+            ).utf8))
+            exit(2)
+        }
+        // Local validation so a malformed file is rejected at the
+        // client (exit 2) instead of silently dropping at the daemon.
+        let items = WandConfig.parseItems(text)
+        guard !items.isEmpty else {
+            FileHandle.standardError.write(Data((
+                "stroke: --show-menu: items file \(absPath) yielded "
+                + "0 items (no `[[item]]` rows, or all dropped — see "
+                + "/tmp/stroke.log for per-row diagnostics)\n"
+            ).utf8))
+            exit(2)
+        }
+        // --at X Y — parse two consecutive numeric tokens.
+        guard let i = argv.firstIndex(of: "--at"),
+              i + 2 < argv.count,
+              let x = Double(argv[i + 1]),
+              let y = Double(argv[i + 2]) else {
+            FileHandle.standardError.write(Data((
+                "stroke: --show-menu: --at <X> <Y> is required "
+                + "(Cocoa screen coords, Y-up)\n"
+            ).utf8))
+            exit(2)
+        }
+        let selection = valueAfter("--selection", in: argv) ?? ""
+
+        guard isServerRunning() else {
+            FileHandle.standardError.write(Data((
+                "stroke: --show-menu: no daemon running — start it "
+                + "with `stroke` (or `stroke --debug`) first\n"
+            ).utf8))
+            exit(3)
+        }
+        DistributedNotificationCenter.default().postNotificationName(
+            .init(controlNotificationName),
+            object: "show-menu",
+            userInfo: [
+                "items": absPath,
+                "x": x,
+                "y": y,
+                "selection": selection,
+            ],
+            deliverImmediately: true
+        )
+        exit(0)
     }
 
     /// Post `cmd` to the running daemon via DistributedNotificationCenter,

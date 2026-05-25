@@ -9,11 +9,17 @@ import WandCore
 
 public enum Dispatch {
 
-    public static func execute(_ action: Action, on target: Target) {
+    /// `extraEnv` lets an external trigger inject env vars on top of
+    /// the standard `STROKE_TARGET_*` set — `--show-menu --selection
+    /// "..."` reaches shell actions as `$SELECTION` via this. Empty
+    /// default keeps native-trigger callsites (gesture, launcher)
+    /// unchanged.
+    public static func execute(_ action: Action, on target: Target,
+                                extraEnv: [String: String] = [:]) {
         switch action {
         case .key(let combo):       runKey(combo, target: target)
         case .ax(let verb):         runAX(verb, target: target)
-        case .shell(let cmd):       runShell(cmd, target: target)
+        case .shell(let cmd):       runShell(cmd, target: target, extraEnv: extraEnv)
         case .url(let url):         runURL(url, target: target)
         }
     }
@@ -196,7 +202,8 @@ public enum Dispatch {
     /// `$( )` and backticks. Authors writing `.shell` actions MUST
     /// quote any env-var expansion that reaches a shell command line.
     /// Example: `echo "$STROKE_TARGET_TITLE"`, not `echo $STROKE_TARGET_TITLE`.
-    private static func runShell(_ cmd: String, target: Target) {
+    private static func runShell(_ cmd: String, target: Target,
+                                  extraEnv: [String: String] = [:]) {
         Log.line("dispatch.shell: \(cmd) (target \(target.bundleID))")
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/bin/sh")
@@ -208,6 +215,10 @@ public enum Dispatch {
         env["STROKE_TARGET_FRAME"] =
             "\(Int(target.frame.minX)),\(Int(target.frame.minY))," +
             "\(Int(target.frame.width)),\(Int(target.frame.height))"
+        // Caller-supplied env — currently `$SELECTION` from --show-menu.
+        // Same untrusted-input caveat as STROKE_TARGET_TITLE: quote any
+        // expansion that hits a shell command line.
+        for (k, v) in extraEnv { env[k] = v }
         p.environment = env
         // Surface non-zero exits — a silent failing shell command was
         // the most under-diagnosed `.shell` failure mode previously

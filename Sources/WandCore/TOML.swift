@@ -2,7 +2,10 @@
 // dependency. Strict subset of toml.io v1.0:
 //
 //   ✓ `[section]` and `[[array-of-tables]]` headers
-//   ✓ int / "string" / bool / `[ "a", "b" ]` literal arrays
+//   ✓ int / "string" / 'literal string' / bool / `[ "a", "b" ]`
+//     literal arrays. Single-quoted strings preserve their body
+//     verbatim (no escapes processed) — handy for shell action
+//     bodies that embed double quotes around URLs / env vars.
 //   ✓ `#` line + inline comments (outside quoted strings)
 //   ✗ inline tables `{ a = 1 }` — `[[rules]]` uses dotted-key style
 //     (action-type / action-keys / action-verb / action-cmd) instead
@@ -75,10 +78,13 @@ public func parseTOMLSubset(_ text: String) -> TOMLDocument {
             .trimmingCharacters(in: .whitespaces)
         var val = String(trimmed[trimmed.index(after: eq)...])
             .trimmingCharacters(in: .whitespaces)
-        // Strip inline `# …` comment outside any quoted body.
-        if val.hasPrefix("\"") {
+        // Strip inline `# …` comment outside any quoted body. Same
+        // logic for `"..."` and `'...'` — find the matching close,
+        // truncate at any `#` that follows.
+        if val.hasPrefix("\"") || val.hasPrefix("'") {
+            let quote = val.first!
             let afterOpen = val.index(after: val.startIndex)
-            if let closeIdx = val[afterOpen...].firstIndex(of: "\"") {
+            if let closeIdx = val[afterOpen...].firstIndex(of: quote) {
                 let afterClose = val.index(after: closeIdx)
                 if afterClose < val.endIndex,
                    let h = val[afterClose...].firstIndex(of: "#") {
@@ -103,14 +109,21 @@ public func parseTOMLSubset(_ text: String) -> TOMLDocument {
         let parsed: TOMLValue
         if val.hasPrefix("\""), val.hasSuffix("\""), val.count >= 2 {
             parsed = .string(String(val.dropFirst().dropLast()))
+        } else if val.hasPrefix("'"), val.hasSuffix("'"), val.count >= 2 {
+            // TOML literal string — body is verbatim, no escapes.
+            parsed = .string(String(val.dropFirst().dropLast()))
         } else if val.hasPrefix("["), val.hasSuffix("]") {
             let inner = String(val.dropFirst().dropLast())
             let items = inner.split(separator: ",").compactMap {
                 (chunk: Substring) -> String? in
                 let s = chunk.trimmingCharacters(in: .whitespaces)
-                guard s.hasPrefix("\""), s.hasSuffix("\""), s.count >= 2
-                else { return nil }
-                return String(s.dropFirst().dropLast())
+                if s.hasPrefix("\""), s.hasSuffix("\""), s.count >= 2 {
+                    return String(s.dropFirst().dropLast())
+                }
+                if s.hasPrefix("'"), s.hasSuffix("'"), s.count >= 2 {
+                    return String(s.dropFirst().dropLast())
+                }
+                return nil
             }
             parsed = .stringArray(items)
         } else if val == "true"  { parsed = .bool(true) }

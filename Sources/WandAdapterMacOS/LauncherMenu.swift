@@ -10,15 +10,19 @@ import WandCore
 @MainActor
 public enum LauncherMenu {
 
-    /// Show a menu for `target` at `cgPoint` (CG global coords,
-    /// Y-down). `items` is the **already-filtered** list — the
-    /// caller (Controller) ran `Matcher.itemsFor` so the menu builder
-    /// doesn't repeat the work. `onSelect` fires synchronously when
-    /// the user clicks an item; a dismiss-without-selection fires
-    /// nothing.
+    /// Show a menu for `target` at `cocoaPoint` (Cocoa screen coords,
+    /// Y-up — what `NSMenu.popUp` and `NSEvent.mouseLocation` use).
+    /// Native-trigger callers convert CG → Cocoa via
+    /// `ScreenCoords.cocoaPoint(fromCG:)` before calling; external
+    /// triggers (`--show-menu`) already supply Cocoa coords from CLI.
+    ///
+    /// `items` is the **already-filtered** list — the caller
+    /// (Controller) ran `Matcher.itemsFor` so the menu builder doesn't
+    /// repeat the work. `onSelect` fires synchronously when the user
+    /// clicks; dismiss-without-selection fires nothing.
     public static func present(filteredItems items: [LauncherItem],
                                 target: Target,
-                                cgPoint: CGPoint,
+                                cocoaPoint: NSPoint,
                                 onSelect: @escaping (LauncherItem, Target) -> Void) {
         guard !items.isEmpty else {
             Log.line("launcher-menu: no items for \(target.bundleID) — "
@@ -30,9 +34,7 @@ public enum LauncherMenu {
         // even though NSMenuItem.target is unowned.
         let actionTarget = MenuActionTarget(onSelect: onSelect, target: target)
         let menu = buildMenu(items, target: target, actionTarget: actionTarget)
-        menu.popUp(positioning: nil,
-                   at: ScreenCoords.cocoaPoint(fromCG: cgPoint),
-                   in: nil)
+        menu.popUp(positioning: nil, at: cocoaPoint, in: nil)
         _ = actionTarget  // keep alive past popUp
     }
 

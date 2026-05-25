@@ -45,6 +45,10 @@ public final class Controller: @unchecked Sendable {
     /// where no items qualify is a no-op, not a "shown" event.
     private var counterLauncherShown = 0
     private var counterLauncherDispatched = 0
+    /// Same semantics as `Launcher*` but for the external `--show-menu`
+    /// entry point (event-driven daemons posting via IPC).
+    private var counterShowMenuShown = 0
+    private var counterShowMenuDispatched = 0
     /// Last reload timestamp + cause, surfaced via `--status`.
     private var lastReload: (when: Date, cause: String) =
         (Date(), "initial-load")
@@ -161,12 +165,73 @@ public final class Controller: @unchecked Sendable {
         LauncherMenu.present(
             filteredItems: visibleItems,
             target: event.target,
-            cgPoint: event.point
+            cocoaPoint: ScreenCoords.cocoaPoint(fromCG: event.point)
         ) { [weak self] item, target in
             self?.counterLauncherDispatched += 1
             Log.line("controller: → launcher item \"\(item.name)\"")
             self?.writeStatus()
             Dispatch.execute(item.action, on: target)
+        }
+    }
+
+    /// External-trigger entry point. Wired in by `--show-menu` —
+    /// `eventfx` (or any other event-driven daemon) posts a DNC
+    /// notification carrying an items-TOML path, a Cocoa screen
+    /// point, and an optional selection text. We resolve the target
+    /// via `NSWorkspace.frontmostApplication` (the **cursor-anchored
+    /// spine is intentionally bypassed here** — external triggers
+    /// don't have a button-down moment), build a `LauncherMenu` from
+    /// the parsed items, and pop it up. `$SELECTION` is exported to
+    /// any shell action chosen from the resulting menu.
+    @MainActor
+    func handleShowMenu(itemsPath: String,
+                        cocoaPoint: NSPoint,
+                        selection: String?) {
+        let cfg = config
+        guard let text = try? String(contentsOfFile: itemsPath, encoding: .utf8) else {
+            Log.line("controller: --show-menu: items file unreadable "
+                     + "at \(itemsPath) — request dropped")
+            return
+        }
+        let items = WandConfig.parseItems(text)
+        guard !items.isEmpty else {
+            Log.line("controller: --show-menu: items file at \(itemsPath) "
+                     + "yielded 0 items — request dropped")
+            return
+        }
+        guard let app = NSWorkspace.shared.frontmostApplication,
+              let bid = app.bundleIdentifier else {
+            Log.line("controller: --show-menu: no frontmost app — "
+                     + "request dropped")
+            return
+        }
+        let target = Target(pid: app.processIdentifier,
+                            bundleID: bid, title: "",
+                            frame: .zero, windowID: 0)
+        let visible = Matcher.itemsFor(target: target, items: items,
+                                        excludes: cfg.excludeApps)
+        Log.line("controller: --show-menu (external trigger) on "
+                 + "\(bid) at \(cocoaPoint) — "
+                 + "\(visible.count)/\(items.count) item(s) visible"
+                 + (selection == nil ? ""
+                    : ", $SELECTION=\(selection!.count) char(s)"))
+        record("show-menu on \(bid) (\(visible.count) item(s))")
+        guard !visible.isEmpty else { writeStatus(); return }
+        counterShowMenuShown += 1
+        writeStatus()
+        // Capture selection in the closure so Dispatch can export it
+        // as an env var — keeps the LauncherMenu signature trigger-
+        // agnostic (no `selection` field on items or menu state).
+        let env: [String: String] = selection.map { ["SELECTION": $0] } ?? [:]
+        LauncherMenu.present(
+            filteredItems: visible,
+            target: target,
+            cocoaPoint: cocoaPoint
+        ) { [weak self] item, target in
+            self?.counterShowMenuDispatched += 1
+            Log.line("controller: → show-menu item \"\(item.name)\"")
+            self?.writeStatus()
+            Dispatch.execute(item.action, on: target, extraEnv: env)
         }
     }
 
@@ -257,6 +322,13 @@ public final class Controller: @unchecked Sendable {
               + "shown=\(counterLauncherShown), "
               + "dispatched=\(counterLauncherDispatched))"
             : "\nlauncher=off"
+        // `show-menu` line surfaces only after the external trigger
+        // has fired at least once — keeps `--status` quiet for users
+        // who haven't wired an external daemon (eventfx).
+        let showMenuLine = counterShowMenuShown > 0
+            ? "\nshow-menu: shown=\(counterShowMenuShown), "
+              + "dispatched=\(counterShowMenuDispatched)"
+            : ""
         let s = """
         pid=\(ProcessInfo.processInfo.processIdentifier)
         rules=\(config.rules.count)
@@ -265,7 +337,7 @@ public final class Controller: @unchecked Sendable {
         max-segment-ms=\(config.maxSegmentMs)
         cancel-reversals=\(config.cancelReversals)
         cancel-window-ms=\(config.cancelWindowMs)
-        overlay=\(config.overlayEnabled ? "on" : "off")\(launcherLine)
+        overlay=\(config.overlayEnabled ? "on" : "off")\(launcherLine)\(showMenuLine)
         counters: recognised=\(counterRecognised) \
         dispatched=\(counterDispatched) \
         no-rule=\(counterNoRule) excluded=\(counterExcluded)
@@ -285,6 +357,16 @@ public final class Controller: @unchecked Sendable {
             object: nil, queue: .main
         ) { [weak self] note in
             let cmd = (note.object as? String) ?? ""
+            // Extract Sendable values from userInfo BEFORE crossing
+            // into the MainActor closure — Swift 6 strict concurrency
+            // flags capturing the (non-Sendable) [AnyHashable: Any]
+            // dict across isolation, but Strings/Doubles individually
+            // are fine.
+            let ui = note.userInfo
+            let items = ui?["items"] as? String
+            let x = ui?["x"] as? Double
+            let y = ui?["y"] as? Double
+            let selection = ui?["selection"] as? String
             // queue:.main delivers on the main thread but Swift 6
             // doesn't infer @MainActor on the closure — `NSApp` is
             // main-isolated, so wrap explicitly. Same workaround
@@ -294,6 +376,16 @@ public final class Controller: @unchecked Sendable {
                 switch cmd {
                 case "quit":   NSApp.terminate(nil)
                 case "reload": self?.reload(cause: "ipc")
+                case "show-menu":
+                    guard let items, let x, let y else {
+                        Log.line("ipc: show-menu missing required keys "
+                                 + "(items, x, y) — dropped")
+                        return
+                    }
+                    self?.handleShowMenu(
+                        itemsPath: items,
+                        cocoaPoint: NSPoint(x: x, y: y),
+                        selection: (selection?.isEmpty ?? true) ? nil : selection)
                 default:
                     Log.line("ipc: unknown command \"\(cmd)\" — ignored")
                 }
