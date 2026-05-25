@@ -372,6 +372,7 @@ enum WandApp {
         case .key(let k):   return "key \(k)"
         case .ax(let v):    return "ax \(v)"
         case .shell(let c): return "shell \(c)"
+        case .url(let u):   return "url \(u)"
         }
     }
 

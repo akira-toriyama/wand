@@ -341,16 +341,7 @@ private final class TrailView: NSView {
         }
         self.valid = valid
         self.hint = hint
-        // CG global (origin top-left, Y-down) → Cocoa global (origin
-        // bottom-left of the primary display, Y-up). Flipping about the
-        // primary screen's height is correct for ALL displays: both
-        // coord systems are anchored to the primary, so a point above
-        // it (CG y < 0) maps to Cocoa y > primaryH and a point below
-        // maps to y < 0 — exactly where a secondary display sits.
-        let primaryH = NSScreen.screens
-            .first(where: { $0.frame.origin == .zero })?.frame.height
-            ?? NSScreen.main?.frame.height ?? cg.y
-        let cocoa = CGPoint(x: cg.x, y: primaryH - cg.y)
+        let cocoa = ScreenCoords.cocoaPoint(fromCG: cg)
         let p = CGPoint(x: cocoa.x - originOffset.x,
                         y: cocoa.y - originOffset.y)
         if origin == nil { origin = p; anchor = p }

@@ -235,6 +235,9 @@ modifiers = []                 # e.g. ["ctrl"] to require ctrl + middle
 #   action-type = "ax"     + action-verb = "close" | "minimize" |
 #                                            "zoom" | "raise"
 #   action-type = "shell"  + action-cmd  = "open -a Terminal …"
+#   action-type = "url"    + action-url  = "https://github.com"
+#                                          # also handles slack://,
+#                                          # vscode://, file://, …
 #
 # `name` is also shown in the overlay while you're drawing a shape
 # that matches this rule, so you can see what it'll do before

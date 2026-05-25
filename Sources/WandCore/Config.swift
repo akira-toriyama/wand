@@ -322,6 +322,9 @@ public struct WandConfig: Sendable {
         case "shell":
             if case .string(let c) = row["action-cmd"] ?? .string(""),
                !c.isEmpty { return .shell(c) }
+        case "url":
+            if case .string(let u) = row["action-url"] ?? .string(""),
+               !u.isEmpty { return .url(u) }
         default: break
         }
         return nil

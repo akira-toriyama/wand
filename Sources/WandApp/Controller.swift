@@ -40,7 +40,10 @@ public final class Controller: @unchecked Sendable {
     private var counterDispatched = 0
     private var counterNoRule = 0
     private var counterExcluded = 0
-    private var counterLauncherFired = 0
+    /// `shown` only increments when the menu actually appears (items
+    /// remain after filtering). A middle-click on the Dock / desktop
+    /// where no items qualify is a no-op, not a "shown" event.
+    private var counterLauncherShown = 0
     private var counterLauncherDispatched = 0
     /// Last reload timestamp + cause, surfaced via `--status`.
     private var lastReload: (when: Date, cause: String) =
@@ -139,7 +142,11 @@ public final class Controller: @unchecked Sendable {
     @MainActor
     private func handleLauncher(_ event: LauncherEvent) {
         let cfg = config
-        counterLauncherFired += 1
+        // Filter once: pass the result to `present` so the menu
+        // builder doesn't repeat the work. `counterLauncherShown`
+        // increments only when the menu actually has items to show
+        // — a click on the Dock / desktop is a "trigger" but not a
+        // "shown" event, so the counter stays honest.
         let visibleItems = Matcher.itemsFor(
             target: event.target, items: cfg.launcher.items,
             excludes: cfg.excludeApps)
@@ -148,10 +155,11 @@ public final class Controller: @unchecked Sendable {
                  + "visible")
         record("launcher on \(event.target.bundleID) "
                + "(\(visibleItems.count) item(s))")
+        guard !visibleItems.isEmpty else { writeStatus(); return }
+        counterLauncherShown += 1
         writeStatus()
         LauncherMenu.present(
-            items: cfg.launcher.items,
-            excludes: cfg.excludeApps,
+            filteredItems: visibleItems,
             target: event.target,
             cgPoint: event.point
         ) { [weak self] item, target in
@@ -246,7 +254,7 @@ public final class Controller: @unchecked Sendable {
         let launcherLine = config.launcher.enabled
             ? "\nlauncher=on (button=\(config.launcher.trigger.button.rawValue), "
               + "items=\(config.launcher.items.count), "
-              + "fired=\(counterLauncherFired), "
+              + "shown=\(counterLauncherShown), "
               + "dispatched=\(counterLauncherDispatched))"
             : "\nlauncher=off"
         let s = """

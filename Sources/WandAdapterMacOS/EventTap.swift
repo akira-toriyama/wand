@@ -251,7 +251,7 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
         // and the per-button distinction is in a field.
         if trigger.button != .right {
             let bn = event.getIntegerValueField(.mouseEventButtonNumber)
-            if bn != Self.buttonNumber(for: trigger.button) {
+            if bn != trigger.button.cgButtonNumber {
                 return Unmanaged.passUnretained(event)
             }
         }
@@ -273,13 +273,8 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
         // modifiers held → not our gesture; pass through unchanged so
         // the user keeps normal mouse semantics (e.g. cmd+right-click
         // still raises the regular context menu).
-        let observed = event.flags.intersection(Self.allModifierFlags)
-        let required = trigger.modifiers.reduce(into: CGEventFlags()) { acc, m in
-            if let f = Self.flagMap[m] { acc.formUnion(f) }
-        }
-        guard observed == required else {
-            return Unmanaged.passUnretained(event)
-        }
+        guard event.matches(expectedFlags: CGModifier.flags(trigger.modifiers))
+        else { return Unmanaged.passUnretained(event) }
 
         // `event.location` is CG global coords (origin top-left,
         // Y grows DOWN). AX target resolution and click replay both
@@ -453,10 +448,9 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
     /// passes them through.
     private func replayClick(at point: CGPoint) {
         let src = CGEventSource(stateID: .hidSystemState)
-        let down = Self.mouseEventType(for: trigger.button, isDown: true)
-        let up = Self.mouseEventType(for: trigger.button, isDown: false)
+        let (down, up) = trigger.button.downUpTypes
         let btn = Self.cgMouseButton(for: trigger.button)
-        let btnNum = Self.buttonNumber(for: trigger.button)
+        let btnNum = trigger.button.cgButtonNumber
 
         for type in [down, up] {
             guard let e = CGEvent(mouseEventSource: src,
@@ -471,37 +465,29 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
     }
 
 
+    /// Down + up + drag + mouseMoved mask for the configured button.
+    /// We layer the drag and move bits on top of `Trigger.Button.
+    /// downUpMask` because some virtual-HID layers (Karabiner-Elements,
+    /// Logitech Options, some KVMs) deliver button-held motion as
+    /// `.mouseMoved` instead of the per-button `.*Dragged` type —
+    /// `handleDrag` no-ops outside a stroke, so the firehose of
+    /// background `.mouseMoved` is just a cheap bool check.
     private static func eventMask(for button: Trigger.Button) -> CGEventMask {
-        // Some virtual-HID layers (Karabiner-Elements, Logitech Options,
-        // some KVMs) deliver mouse-button-held motion as `.mouseMoved`
-        // instead of the per-button `.*Dragged` type. Capture both —
-        // the `handleDrag` path no-ops when we're not in a stroke, so
-        // the firehose of background mouseMoved events is just a cheap
-        // bool check.
         let moveMask: CGEventMask = 1 << CGEventType.mouseMoved.rawValue
+        let dragMask: CGEventMask
         switch button {
         case .right:
-            return moveMask
-                 | (1 << CGEventType.rightMouseDown.rawValue)
-                 | (1 << CGEventType.rightMouseUp.rawValue)
-                 | (1 << CGEventType.rightMouseDragged.rawValue)
+            dragMask = 1 << CGEventType.rightMouseDragged.rawValue
         case .middle, .side1, .side2:
-            return moveMask
-                 | (1 << CGEventType.otherMouseDown.rawValue)
-                 | (1 << CGEventType.otherMouseUp.rawValue)
-                 | (1 << CGEventType.otherMouseDragged.rawValue)
+            dragMask = 1 << CGEventType.otherMouseDragged.rawValue
         }
+        return button.downUpMask | dragMask | moveMask
     }
 
-    private static func buttonNumber(for button: Trigger.Button) -> Int64 {
-        switch button {
-        case .right:  return 1
-        case .middle: return 2
-        case .side1:  return 3
-        case .side2:  return 4
-        }
-    }
-
+    /// `CGMouseButton` enum used by `CGEvent(mouseEventSource:…)` —
+    /// distinct from `mouseEventButtonNumber` (an Int64 field). Kept
+    /// here because synthesis is gesture-specific; the launcher tap
+    /// never posts events.
     private static func cgMouseButton(for button: Trigger.Button) -> CGMouseButton {
         switch button {
         case .right:  return .right
@@ -510,28 +496,4 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
         case .side2:  return CGMouseButton(rawValue: 4) ?? .center
         }
     }
-
-    private static func mouseEventType(for button: Trigger.Button,
-                                        isDown: Bool) -> CGEventType {
-        switch (button, isDown) {
-        case (.right, true):  return .rightMouseDown
-        case (.right, false): return .rightMouseUp
-        case (_,      true):  return .otherMouseDown
-        case (_,      false): return .otherMouseUp
-        }
-    }
-
-
-    private static let allModifierFlags: CGEventFlags = [
-        .maskCommand, .maskAlternate, .maskControl,
-        .maskShift, .maskSecondaryFn
-    ]
-
-    private static let flagMap: [Modifier: CGEventFlags] = [
-        .cmd:   .maskCommand,
-        .opt:   .maskAlternate,
-        .ctrl:  .maskControl,
-        .shift: .maskShift,
-        .fn:    .maskSecondaryFn,
-    ]
 }

@@ -135,7 +135,8 @@ action-keys = "cmd+w"
 `LL` ではない)、`DRR` / `LL` のように方向を繰り返すパターンは描けず、
 `stroke --validate` が起動時に loudly drop する。スクロール軸方向は
 未対応。アクション種別は `key`(キーストローク)、`ax`(`close` /
-`minimize` / `zoom` / `raise`)、`shell`(任意コマンド)。
+`minimize` / `zoom` / `raise`)、`shell`(任意コマンド)、`url`(`https://`、`slack://`、`file://`
+ほかインストール済みアプリの URL スキーム — `NSWorkspace.shared.open` 経由)。
 
 `apps` は glob のリスト。正のエントリ(`*chrome*` / `com.apple.Safari`
 / `*` 全許可) + `!` プレフィクスの除外。**正のいずれかにマッチ**(または

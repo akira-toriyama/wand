@@ -95,6 +95,24 @@ ws-tabs.
   main-thread-only) hooks that feed it; they're deliberately separate
   from the protocol's `@Sendable` stroke `handler` so they can capture
   the non-Sendable overlay.
+- **Shared adapter helpers** live in three single-purpose files; the
+  invariants behind each are easy to regress if duplicated, so reach
+  for these instead of re-implementing:
+  - [Sources/WandAdapterMacOS/CGTrigger.swift](Sources/WandAdapterMacOS/CGTrigger.swift) —
+    `Trigger.Button` → CGEvent mask / type / button number, and
+    `CGModifier.flags` for the strict-equality modifier check both
+    taps use.
+  - [Sources/WandAdapterMacOS/ScreenCoords.swift](Sources/WandAdapterMacOS/ScreenCoords.swift) —
+    CG (Y-down) ↔ Cocoa (Y-up) conversion. Flipping about the
+    primary screen height is correct for ALL displays; **don't
+    derive the flip per-call from `NSScreen.main.frame.height`** —
+    that breaks on multi-display setups where the cursor sits
+    outside the primary.
+  - [Sources/WandAdapterMacOS/AppIconCache.swift](Sources/WandAdapterMacOS/AppIconCache.swift) —
+    `(bundleID) → (localizedName, resized NSImage)` keyed cache.
+    `NSRunningApplication.runningApplications(withBundleIdentifier:)`
+    is 5–20 ms per call on a busy machine; cache invalidates via
+    `NSWorkspace.didTerminateApplicationNotification`.
 
 ### The cursor-anchored spine — DO NOT regress this
 
@@ -157,9 +175,22 @@ Everything below depends on this contract:
   support because `[[rules]]` needs it. Inline tables (`{a=1,
   b=2}`) are **not** supported and rules use dotted-key style
   (`action-type` + `action-keys` / `action-verb` /
-  `action-cmd`) instead. Don't add an inline-table parser
-  without a real need; the dotted-key form keeps the parser
+  `action-cmd` / `action-url`) instead. Don't add an inline-table
+  parser without a real need; the dotted-key form keeps the parser
   ~100 lines.
+- **Action vocabulary**: `key` (keystroke after `raise`), `ax`
+  (verb in `Action.axVerbs` — no focus switch), `shell` (env vars
+  carry the target), `url` (`NSWorkspace.shared.open` — handles
+  `https://`, `file://`, and any custom scheme an installed app
+  advertises). Adding a new variant means: a case on `Action` in
+  [Sources/WandCore/Models.swift](Sources/WandCore/Models.swift),
+  a parse branch in
+  [Sources/WandCore/Config.swift](Sources/WandCore/Config.swift)
+  `parseAction`, a dispatch branch in
+  [Sources/WandAdapterMacOS/Dispatch.swift](Sources/WandAdapterMacOS/Dispatch.swift),
+  and a string in `Main.swift` `actionDescription` (status/log
+  formatter). The compiler's exhaustive-switch error flags any
+  forgotten site.
 
 ### Recognition algorithm
 

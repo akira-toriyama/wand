@@ -1,7 +1,7 @@
-// Build an NSMenu from `[LauncherItem]` filtered for a target, and
-// pop it up at a screen point. Uses native NSMenu so submenus,
-// keyboard navigation (↑↓→← Enter Escape), hover-to-open, and click-
-// outside dismiss all come for free.
+// Build an NSMenu from `[LauncherItem]` and pop it up at a screen
+// point. Uses native NSMenu so submenus, keyboard navigation (↑↓→←
+// Enter Escape), hover-to-open, and click-outside dismiss all come
+// for free.
 
 import AppKit
 import Foundation
@@ -10,44 +10,30 @@ import WandCore
 @MainActor
 public enum LauncherMenu {
 
-    /// Show a menu for `target` at `cgPoint` (CG global coords, Y-down).
-    /// `onSelect` fires with the chosen item synchronously when the
-    /// user clicks it; a dismiss without selection fires nothing.
-    public static func present(items: [LauncherItem],
-                                excludes: [String],
+    /// Show a menu for `target` at `cgPoint` (CG global coords,
+    /// Y-down). `items` is the **already-filtered** list — the
+    /// caller (Controller) ran `Matcher.itemsFor` so the menu builder
+    /// doesn't repeat the work. `onSelect` fires synchronously when
+    /// the user clicks an item; a dismiss-without-selection fires
+    /// nothing.
+    public static func present(filteredItems items: [LauncherItem],
                                 target: Target,
                                 cgPoint: CGPoint,
                                 onSelect: @escaping (LauncherItem, Target) -> Void) {
-        let filtered = Matcher.itemsFor(target: target,
-                                         items: items,
-                                         excludes: excludes)
-        guard !filtered.isEmpty else {
+        guard !items.isEmpty else {
             Log.line("launcher-menu: no items for \(target.bundleID) — "
                      + "menu suppressed")
             return
         }
-
+        // popUp blocks until dismissed, so this local strong reference
+        // keeps `actionTarget` alive for the menu's whole lifetime
+        // even though NSMenuItem.target is unowned.
         let actionTarget = MenuActionTarget(onSelect: onSelect, target: target)
-        let menu = buildMenu(filtered, target: target, actionTarget: actionTarget)
-        // `popUp` blocks until dismissed, so this local strong
-        // reference keeps `actionTarget` alive for the menu's whole
-        // lifetime even though NSMenuItem.target is unowned.
-        withExtendedLifetime(actionTarget) {
-
-        // CG (Y-down) → Cocoa screen coords (Y-up about the primary
-        // display). Same flip the gesture overlay does — anchored to
-        // the primary screen so points on secondary displays still
-        // land where the user clicked.
-        let primaryH = NSScreen.screens
-            .first(where: { $0.frame.origin == .zero })?.frame.height
-            ?? NSScreen.main?.frame.height ?? cgPoint.y
-        let cocoa = NSPoint(x: cgPoint.x, y: primaryH - cgPoint.y)
-
-        // popUp blocks until dismissed (or a click selects an item +
-        // the @objc action fires). We're on the main thread already
-        // (event-tap callback) so this is safe.
-            menu.popUp(positioning: nil, at: cocoa, in: nil)
-        }
+        let menu = buildMenu(items, target: target, actionTarget: actionTarget)
+        menu.popUp(positioning: nil,
+                   at: ScreenCoords.cocoaPoint(fromCG: cgPoint),
+                   in: nil)
+        _ = actionTarget  // keep alive past popUp
     }
 
     /// Walk items in document order, building the tree from `group`.
@@ -58,12 +44,9 @@ public enum LauncherMenu {
                                    target: Target,
                                    actionTarget: MenuActionTarget) -> NSMenu {
         let root = NSMenu()
-        // Header: app icon + name as a disabled marker, so the user
-        // sees at a glance which window the menu is acting on. The
-        // launcher acts on the **cursor-anchored** target, which is
-        // often NOT the focused app — without this marker, picking
-        // "閉じる" on a Chrome menu that popped up over a VSCode
-        // window could look ambiguous.
+        // App-icon header so the user sees which window the menu is
+        // acting on — the cursor-anchored target is often NOT the
+        // focused app, and an unmarked "閉じる" would be ambiguous.
         if let header = makeAppHeader(for: target) {
             root.addItem(header)
             root.addItem(.separator())
@@ -88,23 +71,15 @@ public enum LauncherMenu {
     }
 
     /// Disabled NSMenuItem showing the target app's icon + name.
-    /// Returns nil if the app isn't a `NSRunningApplication` we can
-    /// resolve (rare for the cursor-anchored target; we'd fall back
-    /// to no header rather than display a generic icon).
+    /// Returns nil only if the bundle id resolves to no localized
+    /// name AND no icon (rare for the cursor-anchored target).
     private static func makeAppHeader(for target: Target) -> NSMenuItem? {
-        let app = NSRunningApplication.runningApplications(
-            withBundleIdentifier: target.bundleID).first
-        let name = app?.localizedName ?? target.bundleID
+        let (name, icon) = AppIconCache.shared.lookup(
+            bundleID: target.bundleID, iconSize: 18)
+        if name.isEmpty && icon == nil { return nil }
         let header = NSMenuItem(title: name, action: nil, keyEquivalent: "")
         header.isEnabled = false
-        if let icon = app?.icon {
-            // NSMenuItem renders the image at roughly the menu row
-            // height; pinning the size keeps high-DPI icons from
-            // ballooning the row.
-            let resized = icon.copy() as? NSImage ?? icon
-            resized.size = NSSize(width: 18, height: 18)
-            header.image = resized
-        }
+        header.image = icon
         return header
     }
 

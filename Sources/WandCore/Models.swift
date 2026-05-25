@@ -80,6 +80,7 @@ public enum Action: Sendable, Equatable {
     case key(String)        // e.g. `cmd+w`; the target is raised first
     case ax(String)         // `verb` ∈ axVerbs (no focus switch)
     case shell(String)      // env: STROKE_TARGET_BUNDLE_ID / PID / TITLE / FRAME
+    case url(String)        // open via NSWorkspace — handles https / file / custom schemes
 
     /// Source of truth shared by config validation (a typo drops the
     /// rule at load) and the dispatcher's switch — drift between the

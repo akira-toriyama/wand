@@ -140,7 +140,9 @@ A rule whose pattern repeats a direction (`DRR`, `LL`, …) is
 unreachable; `stroke --validate` drops it loudly. Scroll-axis
 directions are not recognised yet. Action types are `key` (a
 keystroke), `ax` (`close` / `minimize` / `zoom` / `raise`), and
-`shell` (any command).
+`shell` (any command), `url` (`https://`, `slack://`, `file://`,
+any custom scheme an installed app advertises — via
+`NSWorkspace.shared.open`).
 
 `apps` is a glob list with positive entries (`*chrome*`,
 `com.apple.Safari`, `*` for any) and `!`-prefixed exclusions. The

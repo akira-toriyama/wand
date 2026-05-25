@@ -14,7 +14,22 @@ public enum Dispatch {
         case .key(let combo):       runKey(combo, target: target)
         case .ax(let verb):         runAX(verb, target: target)
         case .shell(let cmd):       runShell(cmd, target: target)
+        case .url(let url):         runURL(url, target: target)
         }
+    }
+
+    /// Open a URL via `NSWorkspace.shared.open` — handles `https://`,
+    /// `file://`, and any custom scheme an installed app advertises
+    /// (e.g. `slack://`, `vscode://`). The cursor-anchored target
+    /// shapes the log line but doesn't affect routing; the opening
+    /// app is decided by macOS based on the URL scheme.
+    private static func runURL(_ raw: String, target: Target) {
+        guard let url = URL(string: raw) else {
+            Log.line("dispatch.url: could not parse \"\(raw)\"")
+            return
+        }
+        Log.line("dispatch.url: \(raw) (from \(target.bundleID))")
+        NSWorkspace.shared.open(url)
     }
 
 
