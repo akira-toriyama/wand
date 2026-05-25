@@ -5,7 +5,7 @@
 
 import XCTest
 import CoreGraphics
-@testable import StrokeCore
+@testable import WandCore
 
 final class RecognitionTests: XCTestCase {
 

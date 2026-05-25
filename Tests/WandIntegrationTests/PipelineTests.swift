@@ -1,4 +1,4 @@
-// End-to-end pipeline test: SyntheticMouseSource (StrokeAdapterTest)
+// End-to-end pipeline test: SyntheticMouseSource (WandAdapterTest)
 // → Recognition → Matcher, the same path the Controller runs minus
 // the macOS-only Dispatch. Exercises the test adapter against Core
 // exactly as docs/architecture.md advertises it, without a real
@@ -9,8 +9,8 @@
 
 import XCTest
 import CoreGraphics
-@testable import StrokeCore
-import StrokeAdapterTest
+@testable import WandCore
+import WandAdapterTest
 
 // File-scope helpers (not methods) so the @Sendable stroke handler
 // can call them without capturing the non-Sendable XCTestCase `self`.
@@ -32,7 +32,7 @@ private func downThenRight() -> [Sample] {
 /// Mirror of Controller.handle minus the macOS Dispatch: recognise
 /// the stroke, then match against the rules for the event's
 /// cursor-anchored target.
-private func matchStroke(_ event: StrokeEvent, _ rules: [Rule]) -> Rule? {
+private func matchStroke(_ event: WandEvent, _ rules: [Rule]) -> Rule? {
     let dirs = Recognition.recognize(samples: event.samples, minStrokePx: 16)
     guard !dirs.isEmpty else { return nil }
     return Matcher.match(pattern: dirs.patternString,

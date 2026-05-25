@@ -1,7 +1,7 @@
 // Matcher / glob / candidates / resolve / exclude.
 
 import XCTest
-@testable import StrokeCore
+@testable import WandCore
 
 final class MatcherTests: XCTestCase {
 

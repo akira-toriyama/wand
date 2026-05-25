@@ -5,7 +5,7 @@
 import AppKit
 import ApplicationServices
 import Foundation
-import StrokeCore
+import WandCore
 
 public enum Dispatch {
 

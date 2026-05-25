@@ -10,23 +10,23 @@ that tab — not whatever happened to have focus on display 1.
 The split into **Core / Adapter / App** is the central design idea
 (same shape as [facet](https://github.com/akira-toriyama/facet)): the
 pure-logic core knows nothing about CGEventTap, AX, or AppKit, so it
-can be driven equally by a real CGEventTap (`StrokeAdapterMacOS`) or
-by a fixture (`StrokeAdapterTest`) in unit tests.
+can be driven equally by a real CGEventTap (`WandAdapterMacOS`) or
+by a fixture (`WandAdapterTest`) in unit tests.
 
 ## Layers
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  StrokeApp     @main, CLI argv, Controller wiring,      │
+│  WandApp       @main, CLI argv, Controller wiring,      │
 │                IPC observer for --reload / --quit       │  app
 └──────────────────────┬──────────────────────────────────┘
                        │
               ┌────────┴────────┐
-              │   StrokeCore    │  pure logic:
+              │   WandCore      │  pure logic:
               │                 │   - Direction / Sample / Target
               │                 │   - Recognition (dominant-axis)
               │                 │   - Matcher (rule globs + excludes)
-              │                 │   - TOML parser, StrokeConfig
+              │                 │   - TOML parser, WandConfig
               │                 │   - MouseSource protocol (the seam)
               │                 │  AppKit / AX / CGEvent 非依存
               └────────┬────────┘
@@ -34,7 +34,7 @@ by a fixture (`StrokeAdapterTest`) in unit tests.
        ┌───────────────┴────────────────────────┐
        │                                        │
 ┌──────┴───────────────┐         ┌──────────────┴──────┐
-│  StrokeAdapterMacOS  │         │  StrokeAdapterTest  │  adapter
+│  WandAdapterMacOS    │         │  WandAdapterTest    │  adapter
 │   CGEventTap +       │         │   SyntheticMouseSource │
 │   AX target resolve  │         │   (no real mouse;   │
 │   + Dispatch         │         │    feeds canned     │
@@ -43,8 +43,8 @@ by a fixture (`StrokeAdapterTest`) in unit tests.
 └──────────────────────┘         └─────────────────────┘
 ```
 
-`StrokeCore` defines `MouseSource` — the protocol that emits one
-`StrokeEvent` (target + samples) per completed stroke. The Controller
+`WandCore` defines `MouseSource` — the protocol that emits one
+`WandEvent` (target + samples) per completed stroke. The Controller
 only ever sees `MouseSource`. Real vs synthetic is picked at app
 startup. Adding a new mouse-input strategy means a new `MouseSource`
 conformer in an Adapter module — never a `#if` in Core.
@@ -60,7 +60,7 @@ Every decision below flows from that contract:
   resolution point — `AXUIElementCopyElementAtPosition` then walk
   parents to `kAXWindowRole`.)
 - **`Target` is a value type** in
-  [`Sources/StrokeCore/Models.swift`](../Sources/StrokeCore/Models.swift)
+  [`Sources/WandCore/Models.swift`](../Sources/WandCore/Models.swift)
   — `pid`, `bundleID`, `title`, `frame`, `windowID`. The live
   `AXUIElement` stays in an adapter-side table keyed by
   `(pid, windowID)`; `Dispatch` looks it up at action time. Core
@@ -78,7 +78,7 @@ Every decision below flows from that contract:
 
 ## Recognition
 
-[`Recognition.swift`](../Sources/StrokeCore/Recognition.swift)
+[`Recognition.swift`](../Sources/WandCore/Recognition.swift)
 implements *dominant-axis quantisation*: walk samples accumulating
 displacement from the last anchor; when `max(|dx|, |dy|)` exceeds
 `minStrokePx`, emit a `Direction` whose axis is the dominant one and

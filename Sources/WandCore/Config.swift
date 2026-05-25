@@ -5,7 +5,7 @@
 
 import Foundation
 
-public struct StrokeConfig: Sendable {
+public struct WandConfig: Sendable {
     public var trigger: Trigger
     public var minStrokePx: Int
     /// Maximum time (ms) from button-down to button-up for a stroke to
@@ -59,7 +59,7 @@ public struct StrokeConfig: Sendable {
     /// `unmatch` and `match`. Unknown config values clamp to `.normal`.
     public var effectIntensity: Intensity
 
-    public static let `default` = StrokeConfig(
+    public static let `default` = WandConfig(
         trigger: Trigger(button: .right, modifiers: []),
         minStrokePx: 16,
         maxSegmentMs: 0,
@@ -87,7 +87,7 @@ public struct StrokeConfig: Sendable {
 
     /// Read ~/.config/stroke/config.toml. Missing file → defaults,
     /// no error (same agent-friendly behaviour as facet).
-    public static func load() -> StrokeConfig {
+    public static func load() -> WandConfig {
         guard let text = try? String(contentsOfFile: path, encoding: .utf8)
         else {
             Log.line("config: no file at \(path) — using built-in defaults")
@@ -96,7 +96,7 @@ public struct StrokeConfig: Sendable {
         return parse(text)
     }
 
-    static func parse(_ text: String) -> StrokeConfig {
+    static func parse(_ text: String) -> WandConfig {
         let doc = parseTOMLSubset(text)
 
         let trig = doc.tables["trigger"] ?? [:]
@@ -176,7 +176,7 @@ public struct StrokeConfig: Sendable {
                             action: action)
             }
 
-        return StrokeConfig(
+        return WandConfig(
             trigger: Trigger(button: button, modifiers: mods),
             minStrokePx: minPx,
             maxSegmentMs: maxMs,

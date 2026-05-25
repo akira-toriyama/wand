@@ -3,18 +3,18 @@
 // post DNC to the running server), standalone (`--validate` /
 // `--doctor` / `--test` / `--record` / `--help`).
 //
-// `@main enum StrokeApp` — NOT top-level `main.swift`. The enum
-// form lets a future XCTest `@testable import StrokeApp` work
+// `@main enum WandApp` — NOT top-level `main.swift`. The enum
+// form lets a future XCTest `@testable import WandApp` work
 // without launching the daemon (same trap as facet/ws-tabs —
 // don't reintroduce main.swift).
 
 import AppKit
 import Foundation
-import StrokeCore
-import StrokeAdapterMacOS
+import WandCore
+import WandAdapterMacOS
 
 @main
-enum StrokeApp {
+enum WandApp {
 
     static func printHelp() -> Never {
         let help = """
@@ -107,7 +107,7 @@ enum StrokeApp {
         // Standalone modes — no running daemon required.
         if argv.contains("--doctor") { runDoctor() }
         if argv.contains("--validate") {
-            let cfg = StrokeConfig.load()
+            let cfg = WandConfig.load()
             FileHandle.standardError.write(Data((
                 "stroke: loaded \(cfg.rules.count) rule(s), "
                 + "trigger=\(cfg.trigger.button.rawValue), "
@@ -130,7 +130,7 @@ enum StrokeApp {
 
     @MainActor
     private static func runServer() -> Never {
-        let cfg = StrokeConfig.load()
+        let cfg = WandConfig.load()
 
         let app = NSApplication.shared
         app.setActivationPolicy(.accessory)            // LSUIElement: no Dock icon
@@ -228,7 +228,7 @@ enum StrokeApp {
 
         // Live-reload on config edits (no `--reload` needed). Held for
         // the process lifetime via `app.run()`.
-        let watcher = ConfigWatcher(path: StrokeConfig.path) {
+        let watcher = ConfigWatcher(path: WandConfig.path) {
             Log.line("config: file changed — reloading")
             controller.reload(cause: "file-change")
         }
@@ -255,13 +255,13 @@ enum StrokeApp {
                       : "NOT granted — open Stroke.app and grant it in "
                         + "System Settings → Privacy & Security → Accessibility"))
 
-        let fileExists = FileManager.default.fileExists(atPath: StrokeConfig.path)
-        let cfg = StrokeConfig.load()
+        let fileExists = FileManager.default.fileExists(atPath: WandConfig.path)
+        let cfg = WandConfig.load()
         print(line(fileExists, "Config:",
                    fileExists
-                     ? "\(StrokeConfig.path) — \(cfg.rules.count) rule(s), "
+                     ? "\(WandConfig.path) — \(cfg.rules.count) rule(s), "
                        + "trigger=\(cfg.trigger.button.rawValue)"
-                     : "no file at \(StrokeConfig.path) — using built-in "
+                     : "no file at \(WandConfig.path) — using built-in "
                        + "defaults (curl the template)"))
 
         let running = isServerRunning()
@@ -311,7 +311,7 @@ enum StrokeApp {
                 "usage: stroke --test PATTERN [bundle-id]\n".utf8))
             exit(2)
         }
-        let cfg = StrokeConfig.load()
+        let cfg = WandConfig.load()
         if let bid = bundleID {
             if Matcher.isExcluded(bundleID: bid, by: cfg.excludeApps) {
                 print("\(pattern) on \(bid) → app excluded, nothing fires")
@@ -615,7 +615,7 @@ enum StrokeApp {
             exit(3)
         }
 
-        let cfg = StrokeConfig.load()
+        let cfg = WandConfig.load()
         let app = NSApplication.shared
         app.setActivationPolicy(.accessory)
         AXTarget.ensureTrusted()

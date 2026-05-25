@@ -12,7 +12,7 @@ import AppKit
 import ApplicationServices
 import CoreGraphics
 import Darwin
-import StrokeCore
+import WandCore
 
 // Private API: `_AXUIElementGetWindow` translates an `AXUIElement`
 // to its `CGWindowID`. Resolved via `dlsym` so we don't link the
