@@ -49,6 +49,9 @@ enum StrokeApp {
                                        get a paste-ready [[rules]] snippet
                                        on stdout. Refuses if the daemon is
                                        running (would fight over the tap).
+          stroke --resign              re-sign Stroke.app with the persistent
+                                       "stroke Local Signing" identity + restart
+                                       (run once after `brew install` / upgrade)
           stroke --help                this help
 
         EXIT CODES
@@ -92,6 +95,7 @@ enum StrokeApp {
         let recognised: Set<String> = [
             "--help", "--debug", "--validate", "--record",
             "--reload", "--quit", "--status", "--doctor",
+            "--resign",
         ]
         for a in argv where !recognised.contains(a) {
             let msg = "stroke: unknown flag \"\(a)\" — see "
@@ -112,6 +116,7 @@ enum StrokeApp {
             exit(0)
         }
         if argv.contains("--record") { runRecord() }
+        if argv.contains("--resign") { runResign() }
 
         // Client commands — require a running daemon.
         if argv.contains("--status") { runStatus() }
@@ -382,6 +387,148 @@ enum StrokeApp {
         exit(0)
     }
 
+
+    /// `stroke --resign` re-signs the installed Stroke.app with the
+    /// persistent `stroke Local Signing` self-signed identity and
+    /// restarts the daemon. Necessary after every `brew install` /
+    /// `brew upgrade stroke`, because Homebrew's build sandbox
+    /// blocks the in-formula `setup-signing-cert.sh` from touching
+    /// the user's login keychain — install falls back to ad-hoc
+    /// signing and TCC re-prompts for Accessibility on every
+    /// upgrade. Same pattern as chord 0.3.3's `--resign`.
+    ///
+    /// Exit codes:
+    ///   0 — re-signed (restart attempted, best-effort)
+    ///   1 — codesign failed
+    ///   2 — no Stroke.app found in any expected location
+    ///   3 — signing identity missing (run setup-signing-cert.sh first)
+    private static func runResign() -> Never {
+        guard let appPath = findStrokeApp() else {
+            FileHandle.standardError.write(Data((
+                "stroke: no Stroke.app found at "
+                + "/opt/homebrew/Cellar/stroke/*/, /Applications, "
+                + "or ~/Applications.\n"
+                + "        install via "
+                + "`brew install akira-toriyama/tap/stroke` or "
+                + "package locally first.\n"
+            ).utf8))
+            exit(2)
+        }
+        print("stroke: detected Stroke.app at \(appPath)")
+
+        let identity = "stroke Local Signing"
+        guard hasSigningIdentity(identity) else {
+            let setupHint = setupCertHint()
+            FileHandle.standardError.write(Data((
+                "stroke: no '\(identity)' identity in your login keychain.\n"
+                + "        run once:\n"
+                + "          \(setupHint)\n"
+                + "          stroke --resign\n"
+            ).utf8))
+            exit(3)
+        }
+
+        print("stroke: signing with identity '\(identity)'")
+        let codesignExit = runProcess(
+            "/usr/bin/codesign",
+            args: ["--force", "--sign", identity, appPath])
+        guard codesignExit == 0 else {
+            FileHandle.standardError.write(Data((
+                "stroke: codesign failed (exit \(codesignExit))\n"
+            ).utf8))
+            exit(1)
+        }
+
+        print("stroke: restarting daemon")
+        let brewExit = runProcess(
+            "/opt/homebrew/bin/brew",
+            args: ["services", "restart", "stroke"],
+            captureOutput: true)
+        if brewExit == 0 {
+            print("stroke: restarted via `brew services restart stroke`")
+            exit(0)
+        }
+        for label in ["homebrew.mxcl.stroke", "com.stroke.stroke"] {
+            let kick = runProcess(
+                "/bin/launchctl",
+                args: ["kickstart", "-k", "gui/\(getuid())/\(label)"],
+                captureOutput: true)
+            if kick == 0 {
+                print("stroke: restarted via `launchctl kickstart \(label)`")
+                exit(0)
+            }
+        }
+        FileHandle.standardError.write(Data((
+            "stroke: re-signed, but couldn't restart the daemon — "
+            + "start it manually.\n"
+        ).utf8))
+        exit(0)
+    }
+
+    /// Pick the first existing Stroke.app from the canonical install
+    /// locations. The brew Cellar (which carries the live binary) is
+    /// preferred over manual /Applications copies.
+    private static func findStrokeApp() -> String? {
+        let cellar = "/opt/homebrew/Cellar/stroke"
+        if let versions = try? FileManager.default.contentsOfDirectory(atPath: cellar) {
+            for v in versions.sorted(by: >) {
+                let p = "\(cellar)/\(v)/Stroke.app"
+                if FileManager.default.fileExists(atPath: p) { return p }
+            }
+        }
+        for candidate in [
+            "/Applications/Stroke.app",
+            "\(NSHomeDirectory())/Applications/Stroke.app",
+        ] {
+            if FileManager.default.fileExists(atPath: candidate) {
+                return candidate
+            }
+        }
+        return nil
+    }
+
+    /// Untrusted self-signed certs don't appear in `find-identity`
+    /// (that filter lists trusted identities only). Use
+    /// `find-certificate` which surfaces untrusted entries too.
+    private static func hasSigningIdentity(_ name: String) -> Bool {
+        runProcess(
+            "/usr/bin/security",
+            args: ["find-certificate", "-c", name,
+                   "\(NSHomeDirectory())/Library/Keychains/login.keychain-db"],
+            captureOutput: true
+        ) == 0
+    }
+
+    /// Best-effort guess at where `setup-signing-cert.sh` lives on
+    /// the user's machine. brew installs ship it under
+    /// `share/stroke/`, dev installs have it at the repo root.
+    private static func setupCertHint() -> String {
+        let brewShared = "/opt/homebrew/share/stroke/setup-signing-cert.sh"
+        if FileManager.default.fileExists(atPath: brewShared) {
+            return brewShared
+        }
+        return "./setup-signing-cert.sh"
+    }
+
+    @discardableResult
+    private static func runProcess(_ executable: String,
+                                   args: [String],
+                                   captureOutput: Bool = false) -> Int32 {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: executable)
+        p.arguments = args
+        if captureOutput {
+            p.standardOutput = FileHandle.nullDevice
+            p.standardError  = FileHandle.nullDevice
+        }
+        do {
+            try p.run()
+            p.waitUntilExit()
+            return p.terminationStatus
+        } catch {
+            return -1
+        }
+    }
 
     /// Post `cmd` to the running daemon via DistributedNotificationCenter,
     /// then exit. Refuses (exit 3) if no daemon is running so the
