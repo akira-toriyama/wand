@@ -12,7 +12,7 @@
 // the reload runs on the same thread as the stroke handler.
 
 import Foundation
-import StrokeCore
+import WandCore
 
 final class ConfigWatcher: @unchecked Sendable {
     private let path: String

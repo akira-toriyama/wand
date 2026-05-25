@@ -60,7 +60,7 @@ public enum Recognition {
     /// modes today: a character outside the `L U R D` alphabet, and
     /// consecutive duplicate directions (the recogniser coalesces same-
     /// direction segments, so `DRR` would always read as `DR` and the
-    /// rule could never fire). Called from `StrokeConfig.parse` to drop
+    /// rule could never fire). Called from `WandConfig.parse` to drop
     /// the bad rule loudly instead of letting it load and silently
     /// no-op at runtime.
     public static func patternIssue(_ pattern: String) -> String? {

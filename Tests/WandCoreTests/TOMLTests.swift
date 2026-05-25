@@ -1,12 +1,12 @@
 // Hand-rolled TOML subset parser primitives — comments, types, and
-// array-of-tables boundary behaviour. StrokeConfig.parse layers on
+// array-of-tables boundary behaviour. WandConfig.parse layers on
 // top of these and has its own tests (ConfigTests.swift).
 //
 // Reads the `TOMLValue` enum directly because the per-table dict
 // accessors are private to Config.swift.
 
 import XCTest
-@testable import StrokeCore
+@testable import WandCore
 
 final class TOMLTests: XCTestCase {
 

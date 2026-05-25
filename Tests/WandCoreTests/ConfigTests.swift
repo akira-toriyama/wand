@@ -1,9 +1,9 @@
-// StrokeConfig.parse — clamps, defaults, rule shape, overlay parsing.
+// WandConfig.parse — clamps, defaults, rule shape, overlay parsing.
 // TOML parser primitives live in TOMLTests; this file targets the
 // `parse(_:)` orchestrator and its per-key clamp/drop semantics.
 
 import XCTest
-@testable import StrokeCore
+@testable import WandCore
 
 final class ConfigTests: XCTestCase {
 
@@ -13,7 +13,7 @@ final class ConfigTests: XCTestCase {
         // Unknown button → .right (safe default). Mixed-validity
         // modifier list → only the known ones (compactMap typo
         // tolerance).
-        let cfg = StrokeConfig.parse("""
+        let cfg = WandConfig.parse("""
         [trigger]
         button = "wat"
         modifiers = ["xyz", "cmd"]
@@ -25,20 +25,20 @@ final class ConfigTests: XCTestCase {
     // MARK: - [recognition] clamps
 
     func testMinStrokePxClampLowHighDefault() {
-        XCTAssertEqual(StrokeConfig.parse("").minStrokePx, 16)
-        XCTAssertEqual(StrokeConfig.parse(
+        XCTAssertEqual(WandConfig.parse("").minStrokePx, 16)
+        XCTAssertEqual(WandConfig.parse(
             "[recognition]\nmin-stroke-px = 2").minStrokePx, 4)   // low clamp
-        XCTAssertEqual(StrokeConfig.parse(
+        XCTAssertEqual(WandConfig.parse(
             "[recognition]\nmin-stroke-px = 999").minStrokePx, 200) // high clamp
     }
 
     func testMaxSegmentMs() {
-        XCTAssertEqual(StrokeConfig.parse("").maxSegmentMs, 0)
-        XCTAssertEqual(StrokeConfig.parse(
+        XCTAssertEqual(WandConfig.parse("").maxSegmentMs, 0)
+        XCTAssertEqual(WandConfig.parse(
             "[recognition]\nmax-segment-ms = 1500").maxSegmentMs, 1500)
-        XCTAssertEqual(StrokeConfig.parse(
+        XCTAssertEqual(WandConfig.parse(
             "[recognition]\nmax-segment-ms = 50").maxSegmentMs, 100)
-        XCTAssertEqual(StrokeConfig.parse(
+        XCTAssertEqual(WandConfig.parse(
             "[recognition]\nmax-segment-ms = 999999").maxSegmentMs, 60000)
     }
 
@@ -46,34 +46,34 @@ final class ConfigTests: XCTestCase {
         // `max-stroke-ms` was removed in v2.0. A stale config that
         // still uses it gets the default (0 = no timeout) and a
         // log line — it must NOT silently map to maxSegmentMs.
-        XCTAssertEqual(StrokeConfig.parse(
+        XCTAssertEqual(WandConfig.parse(
             "[recognition]\nmax-stroke-ms = 1500").maxSegmentMs, 0)
     }
 
     func testCancelReversals() {
-        XCTAssertEqual(StrokeConfig.parse("").cancelReversals, 2)
-        XCTAssertEqual(StrokeConfig.parse(
+        XCTAssertEqual(WandConfig.parse("").cancelReversals, 2)
+        XCTAssertEqual(WandConfig.parse(
             "[recognition]\ncancel-reversals = 3").cancelReversals, 3)
-        XCTAssertEqual(StrokeConfig.parse(
+        XCTAssertEqual(WandConfig.parse(
             "[recognition]\ncancel-reversals = 0").cancelReversals, 0)
-        XCTAssertEqual(StrokeConfig.parse(
+        XCTAssertEqual(WandConfig.parse(
             "[recognition]\ncancel-reversals = 999").cancelReversals, 20)
     }
 
     func testCancelWindowMs() {
-        XCTAssertEqual(StrokeConfig.parse("").cancelWindowMs, 500)
-        XCTAssertEqual(StrokeConfig.parse(
+        XCTAssertEqual(WandConfig.parse("").cancelWindowMs, 500)
+        XCTAssertEqual(WandConfig.parse(
             "[recognition]\ncancel-window-ms = 800").cancelWindowMs, 800)
-        XCTAssertEqual(StrokeConfig.parse(
+        XCTAssertEqual(WandConfig.parse(
             "[recognition]\ncancel-window-ms = 0").cancelWindowMs, 0)
-        XCTAssertEqual(StrokeConfig.parse(
+        XCTAssertEqual(WandConfig.parse(
             "[recognition]\ncancel-window-ms = 50").cancelWindowMs, 100)
-        XCTAssertEqual(StrokeConfig.parse(
+        XCTAssertEqual(WandConfig.parse(
             "[recognition]\ncancel-window-ms = 99999").cancelWindowMs, 5000)
     }
 
     func testExcludeAppsParsed() {
-        let cfg = StrokeConfig.parse("""
+        let cfg = WandConfig.parse("""
         [recognition]
         exclude-apps = ["com.apple.dt.Xcode", "com.example.foo"]
         """)
@@ -84,7 +84,7 @@ final class ConfigTests: XCTestCase {
     // MARK: - [overlay]
 
     func testOverlayConfigParsed() {
-        let cfg = StrokeConfig.parse("""
+        let cfg = WandConfig.parse("""
         [overlay]
         enabled = false
         color = "#ff0000"
@@ -98,7 +98,7 @@ final class ConfigTests: XCTestCase {
     }
 
     func testOverlayDefaultsWhenAbsent() {
-        let cfg = StrokeConfig.parse("[trigger]\nbutton = \"right\"")
+        let cfg = WandConfig.parse("[trigger]\nbutton = \"right\"")
         XCTAssertTrue(cfg.overlayEnabled)
         XCTAssertEqual(cfg.overlayColor, "#3b82f6")
         XCTAssertEqual(cfg.overlayColorNoMatch, "#ef4444")
@@ -106,16 +106,16 @@ final class ConfigTests: XCTestCase {
     }
 
     func testOverlayWidthClamped() {
-        XCTAssertEqual(StrokeConfig.parse(
+        XCTAssertEqual(WandConfig.parse(
             "[overlay]\nwidth = 999").overlayWidth, 40)
-        XCTAssertEqual(StrokeConfig.parse(
+        XCTAssertEqual(WandConfig.parse(
             "[overlay]\nwidth = 0").overlayWidth, 1)
     }
 
     func testOverlayBadgeKnobs() {
         // Defaults — every overlay knob is opt-out so a config that
         // doesn't mention them keeps the rich HUD.
-        let def = StrokeConfig.parse("")
+        let def = WandConfig.parse("")
         XCTAssertTrue(def.overlayBadgeEnabled)
         XCTAssertTrue(def.overlayBlurEnabled)
         XCTAssertTrue(def.overlayAnimEnabled)
@@ -123,7 +123,7 @@ final class ConfigTests: XCTestCase {
 
         // Explicit off + custom size — and the size clamps so a typo
         // can't pin the badge to nothing.
-        let custom = StrokeConfig.parse("""
+        let custom = WandConfig.parse("""
         [overlay]
         badge-enabled = false
         blur-enabled = false
@@ -135,7 +135,7 @@ final class ConfigTests: XCTestCase {
         XCTAssertFalse(custom.overlayAnimEnabled)
         XCTAssertEqual(custom.overlayBadgeSize, 96)
 
-        XCTAssertEqual(StrokeConfig.parse(
+        XCTAssertEqual(WandConfig.parse(
             "[overlay]\nbadge-size = 4").overlayBadgeSize, 32)
     }
 
@@ -164,7 +164,7 @@ final class ConfigTests: XCTestCase {
         action-type = "ax"
         action-verb = "minimize"
         """
-        let cfg = StrokeConfig.parse(toml)
+        let cfg = WandConfig.parse(toml)
         XCTAssertEqual(cfg.trigger.button, .right)
         XCTAssertEqual(cfg.trigger.modifiers, [.cmd])
         XCTAssertEqual(cfg.minStrokePx, 20)
@@ -192,7 +192,7 @@ final class ConfigTests: XCTestCase {
         action-type = "ax"
         action-verb = "ZOOM"
         """
-        let cfg = StrokeConfig.parse(toml)
+        let cfg = WandConfig.parse(toml)
         XCTAssertEqual(cfg.rules.count, 1, "typo'd verb rule should drop")
         XCTAssertEqual(cfg.rules[0].pattern, "R")
         if case .ax(let v) = cfg.rules[0].action {
@@ -207,7 +207,7 @@ final class ConfigTests: XCTestCase {
         action-type = "key"
         action-keys = "cmd+w"
         """
-        let cfg = StrokeConfig.parse(toml)
+        let cfg = WandConfig.parse(toml)
         XCTAssertEqual(cfg.rules.count, 1)
         XCTAssertEqual(cfg.rules[0].name, "DR")
         XCTAssertEqual(cfg.rules[0].apps, ["*"])
@@ -228,7 +228,7 @@ final class ConfigTests: XCTestCase {
         action-type = "key"
         action-keys = "cmd+w"
         """
-        let cfg = StrokeConfig.parse(toml)
+        let cfg = WandConfig.parse(toml)
         XCTAssertEqual(cfg.rules.count, 1)
         XCTAssertEqual(cfg.rules[0].pattern, "DR")
     }
@@ -257,7 +257,7 @@ final class ConfigTests: XCTestCase {
         action-type = "key"
         action-keys = "cmd+r"
         """
-        let cfg = StrokeConfig.parse(toml)
+        let cfg = WandConfig.parse(toml)
         XCTAssertEqual(cfg.rules.count, 1)
         XCTAssertEqual(cfg.rules[0].pattern, "U")
     }
@@ -269,7 +269,7 @@ final class ConfigTests: XCTestCase {
         action-type = "shell"
         action-cmd = "open -a Terminal"
         """
-        let cfg = StrokeConfig.parse(toml)
+        let cfg = WandConfig.parse(toml)
         XCTAssertEqual(cfg.rules.count, 1)
         if case .shell(let c) = cfg.rules[0].action {
             XCTAssertEqual(c, "open -a Terminal")

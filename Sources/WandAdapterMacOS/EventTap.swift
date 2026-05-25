@@ -10,7 +10,7 @@
 import AppKit
 import CoreGraphics
 import Foundation
-import StrokeCore
+import WandCore
 
 public struct TrailSample {
     public let point: CGPoint      // CG global coords, Y-down
@@ -45,7 +45,7 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
     // Tap state ---------------------------------------------------------
     private var tap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
-    private var handler: (@Sendable (StrokeEvent) -> Void)?
+    private var handler: (@Sendable (WandEvent) -> Void)?
 
     /// Overlay hooks; both run on the main-thread tap callback. Not
     /// `@Sendable` (unlike the protocol's `handler`) so the closures
@@ -132,7 +132,7 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
     // pure logic is unit-testable without an AX/CG stack.
 
 
-    public func start(_ handler: @escaping @Sendable (StrokeEvent) -> Void) {
+    public func start(_ handler: @escaping @Sendable (WandEvent) -> Void) {
         self.handler = handler
 
         let mask = Self.eventMask(for: trigger.button)
@@ -194,7 +194,7 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
     /// gesture cleanly: drop samples, clear the overlay, no replay
     /// (the user moved on purpose). The chance of saving config.toml
     /// mid-drag is small; correctness wins here.
-    public func updateConfig(_ cfg: StrokeConfig) {
+    public func updateConfig(_ cfg: WandConfig) {
         if capturing {
             Log.line("event-tap: [recognition] config swapped mid-stroke "
                      + "— cancelling the in-progress gesture to keep "
@@ -441,7 +441,7 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
     @discardableResult
     private func deliver(_ target: Target?, _ samples: [Sample]) -> Bool {
         guard let target, let handler else { return false }
-        handler(StrokeEvent(target: target, samples: samples))
+        handler(WandEvent(target: target, samples: samples))
         return true
     }
 

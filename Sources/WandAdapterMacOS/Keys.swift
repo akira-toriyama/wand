@@ -3,7 +3,7 @@
 // map — the rule writer is implicitly typing on that layout.
 
 import CoreGraphics
-import StrokeCore
+import WandCore
 
 enum KeyCombo {
 

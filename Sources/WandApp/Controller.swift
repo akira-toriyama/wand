@@ -7,8 +7,8 @@
 
 import AppKit
 import Foundation
-import StrokeCore
-import StrokeAdapterMacOS
+import WandCore
+import WandAdapterMacOS
 
 public final class Controller: @unchecked Sendable {
 
@@ -20,7 +20,7 @@ public final class Controller: @unchecked Sendable {
     /// `onSample` closure reads the same live snapshot — otherwise
     /// the assist tooltips would stay frozen at startup rules while
     /// dispatch already saw the new ones.
-    public private(set) var config: StrokeConfig
+    public private(set) var config: WandConfig
     /// Last few recognised gestures (newest last), for `stroke --status` —
     /// a ring buffer big enough to read out "user drew DR then D then DRU"
     /// while diagnosing remotely.
@@ -40,13 +40,13 @@ public final class Controller: @unchecked Sendable {
     /// `[trigger]` change or `overlay.enabled = false → true` only
     /// takes effect on restart; `--status` flags the divergence so
     /// users notice without needing to scan the log.
-    private let startupConfig: StrokeConfig
+    private let startupConfig: WandConfig
     /// Fires after `reload()` swaps the in-memory config, with the new
     /// snapshot. Used by the overlay wiring to hot-apply `[overlay]`
     /// changes (colours, badge toggles, blur, …) without a restart.
-    public var onConfigChanged: ((StrokeConfig) -> Void)?
+    public var onConfigChanged: ((WandConfig) -> Void)?
 
-    public init(source: MouseSource, config: StrokeConfig) {
+    public init(source: MouseSource, config: WandConfig) {
         self.source = source
         self.config = config
         self.startupConfig = config
@@ -66,7 +66,7 @@ public final class Controller: @unchecked Sendable {
     public func stop() { source.stop() }
 
 
-    private func handle(_ event: StrokeEvent) {
+    private func handle(_ event: WandEvent) {
         let cfg = config
         let target = event.target
         if Matcher.isExcluded(bundleID: target.bundleID, by: cfg.excludeApps) {
@@ -131,7 +131,7 @@ public final class Controller: @unchecked Sendable {
     /// Both are flagged here and surfaced in `--status` as
     /// `pending-restart`.
     public func reload(cause: String = "manual") {
-        let new = StrokeConfig.load()
+        let new = WandConfig.load()
         let oldRules = config.rules.count, newRules = new.rules.count
         if new.trigger != config.trigger {
             Log.line("controller: reload — [trigger] changed; full restart "

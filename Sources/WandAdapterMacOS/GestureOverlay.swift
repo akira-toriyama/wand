@@ -7,7 +7,7 @@
 
 import AppKit
 import CoreGraphics
-import StrokeCore
+import WandCore
 
 /// What the overlay shows next to the cursor: the shape drawn so far
 /// (as arrows) plus the rules still reachable from it. Each row's
@@ -39,7 +39,7 @@ public final class GestureOverlay {
     /// Spin up the window + view, then funnel every `[overlay]` field
     /// through `applyConfig` so the init and hot-reload paths share
     /// one setter — no chance of a knob landing in only one of them.
-    public init(_ cfg: StrokeConfig) {
+    public init(_ cfg: WandConfig) {
         let frame = Self.unionFrame()
         let v = TrailView(frame: CGRect(origin: .zero, size: frame.size),
                           blurEnabled: cfg.overlayBlurEnabled)
@@ -97,7 +97,7 @@ public final class GestureOverlay {
     /// attach to). The converse — visible at startup, hidden later —
     /// is handled here by ordering the window out, and re-shown on
     /// the next flip back.
-    public func applyConfig(_ cfg: StrokeConfig) {
+    public func applyConfig(_ cfg: WandConfig) {
         view.matchColor = Self.nsColor(cfg.overlayColor) ?? .systemBlue
         view.noMatchColor = Self.nsColor(cfg.overlayColorNoMatch) ?? .systemRed
         view.strokeWidth = CGFloat(cfg.overlayWidth)
@@ -190,7 +190,7 @@ private final class TrailView: NSView {
     var badgeSize: CGFloat = 56
     var animEnabled: Bool = true
     /// Exit-animation kinds from `[effect]`. Typed values come straight
-    /// from `StrokeConfig` — `GestureOverlay.applyConfig` assigns them
+    /// from `WandConfig` — `GestureOverlay.applyConfig` assigns them
     /// on init + hot-reload.
     var effectUnmatch: Effect = .none
     var effectMatch: Effect = .none

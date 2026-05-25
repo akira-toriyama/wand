@@ -27,8 +27,8 @@ swift test                   # tests — needs Xcode (XCTest); fails on CLT
 Same XCTest constraint as facet — CommandLineTools alone can't
 run tests; let CI cover them. `swift build` is the bar locally.
 
-`@main enum StrokeApp` lives in
-[Sources/StrokeApp/Main.swift](Sources/StrokeApp/Main.swift)
+`@main enum WandApp` lives in
+[Sources/WandApp/Main.swift](Sources/WandApp/Main.swift)
 (NOT top-level code in a `main.swift`) so XCTest's executable-target
 `@testable import` keeps working once test coverage of the CLI lands.
 **Don't reintroduce a `main.swift` file** — same trap as facet /
@@ -38,21 +38,21 @@ ws-tabs.
 
 ### Layer rules (the spine of the project)
 
-- **3 layers are non-negotiable**: `StrokeCore` is pure logic
+- **3 layers are non-negotiable**: `WandCore` is pure logic
   (CoreGraphics OK, NO AppKit / NO CGEvent / NO AX).
-  `StrokeAdapterMacOS` wraps the OS (CGEventTap, AX,
+  `WandAdapterMacOS` wraps the OS (CGEventTap, AX,
   CGEvent post, NSRunningApplication) and is the *only* place
-  those types appear. `StrokeAdapterTest` is the synthetic
+  those types appear. `WandAdapterTest` is the synthetic
   counterpart for end-to-end recognition tests.
   Crossing layers always means there's a missing protocol.
 - **`MouseSource` is the seam**:
-  [Sources/StrokeCore/MouseSource.swift](Sources/StrokeCore/MouseSource.swift)
+  [Sources/WandCore/MouseSource.swift](Sources/WandCore/MouseSource.swift)
   declares the protocol; the Controller only ever sees
   `MouseSource`. Real vs synthetic is picked at app startup.
   Adding a new mouse-input strategy means a new `MouseSource`
   conformer in an Adapter module — never a `#if` in Core.
-- **The gesture-trail overlay lives in `StrokeAdapterMacOS`**, not a
-  separate View module ([Sources/StrokeAdapterMacOS/GestureOverlay.swift](Sources/StrokeAdapterMacOS/GestureOverlay.swift)).
+- **The gesture-trail overlay lives in `WandAdapterMacOS`**, not a
+  separate View module ([Sources/WandAdapterMacOS/GestureOverlay.swift](Sources/WandAdapterMacOS/GestureOverlay.swift)).
   It's the project's only on-screen UI; it's pure AppKit/CG rendering
   fed by the event-tap sample stream, so it belongs in the macOS
   adapter rather than justifying a facet-style View layer. Core stays
@@ -78,7 +78,7 @@ Everything below depends on this contract:
   the window; `AXUIElementGetPid` then `NSRunningApplication`
   gives the bundle id.
 - **`Target` is a value type** in
-  [Sources/StrokeCore/Models.swift](Sources/StrokeCore/Models.swift).
+  [Sources/WandCore/Models.swift](Sources/WandCore/Models.swift).
   Don't put `AXUIElement` inside it — Core must stay free of
   Application Services types. If the dispatcher needs the live
   AX handle (for `.ax(...)` actions), the adapter keeps a
@@ -119,7 +119,7 @@ Everything below depends on this contract:
 ### TOML parser
 
 - **`parseTOMLSubset` is hand-rolled** in
-  [Sources/StrokeCore/TOML.swift](Sources/StrokeCore/TOML.swift)
+  [Sources/WandCore/TOML.swift](Sources/WandCore/TOML.swift)
   — extended from facet's port with `[[array-of-tables]]`
   support because `[[rules]]` needs it. Inline tables (`{a=1,
   b=2}`) are **not** supported and rules use dotted-key style
@@ -131,7 +131,7 @@ Everything below depends on this contract:
 ### Recognition algorithm
 
 - **Dominant-axis quantisation**:
-  [Sources/StrokeCore/Recognition.swift](Sources/StrokeCore/Recognition.swift)
+  [Sources/WandCore/Recognition.swift](Sources/WandCore/Recognition.swift)
   walks samples, emits a Direction when the larger of |dx|, |dy|
   exceeds `minStrokePx`, then resets the anchor. Consecutive
   duplicate directions are coalesced — continuing left is one
@@ -140,7 +140,7 @@ Everything below depends on this contract:
   test fixture (`testStraightDownThenRight`) pins the convention.
   Adapter samples come from `CGEvent.location` (CG global coords,
   Y-down) with a sign flip applied in
-  [Sources/StrokeAdapterMacOS/EventTap.swift](Sources/StrokeAdapterMacOS/EventTap.swift)'s
+  [Sources/WandAdapterMacOS/EventTap.swift](Sources/WandAdapterMacOS/EventTap.swift)'s
   `flipY`. **Do not "simplify" by switching to
   `NSEvent.mouseLocation`** — when the tap swallows drag events
   AppKit never processes them, so the cursor cache that backs
@@ -148,11 +148,11 @@ Everything below depends on this contract:
   every sample reports the same coords. We learned this in M2's
   first-run (samples=600, max|dx|=0).
 - **Tunable via `[recognition].min-stroke-px`** in config.toml,
-  clamped 4..200 by `StrokeConfig.parse`.
+  clamped 4..200 by `WandConfig.parse`.
 
 ### Logging
 
-- **`Log` lives in `StrokeCore`** so both the Adapter and App
+- **`Log` lives in `WandCore`** so both the Adapter and App
   modules can call it without crossing layer rules. Two
   functions: `Log.line` (always on) and `Log.debug` (gated by
   `debugMode`, set from `stroke --debug` at startup).
@@ -252,7 +252,7 @@ stray instances before relaunching.
   dry-runs `Matcher` against config (no event tap touched).
 - **`--reload` / `--quit` talk to the running daemon over
   Distributed Notification Center** (`com.stroke.app.control`,
-  see [Sources/StrokeApp/Control.swift](Sources/StrokeApp/Control.swift)
+  see [Sources/WandApp/Control.swift](Sources/WandApp/Control.swift)
   + `Controller.installCLIControl`) — same pattern as facet.
   Don't invent a different IPC. They exit `3` if no daemon is
   running; `--record` exits `3` if one *is* (tap conflict).
@@ -262,8 +262,8 @@ stray instances before relaunching.
   and `--status` just reads it. Don't reach for a request/response
   IPC — the file is enough.
 - **Config auto-reload**: `ConfigWatcher`
-  ([Sources/StrokeApp/ConfigWatcher.swift](Sources/StrokeApp/ConfigWatcher.swift))
-  watches `StrokeConfig.path` with a `DispatchSource` vnode source
+  ([Sources/WandApp/ConfigWatcher.swift](Sources/WandApp/ConfigWatcher.swift))
+  watches `WandConfig.path` with a `DispatchSource` vnode source
   and calls `controller.reload()` on edit (debounced; re-arms on the
   atomic-save rename/delete). `--reload` is now just the manual
   trigger for the same path.

@@ -5,7 +5,7 @@
 
 import Foundation
 
-public struct StrokeEvent: Sendable {
+public struct WandEvent: Sendable {
     public let target: Target
     public let samples: [Sample]
     public init(target: Target, samples: [Sample]) {
@@ -17,15 +17,15 @@ public struct StrokeEvent: Sendable {
 public protocol MouseSource: AnyObject, Sendable {
     /// `handler` runs on the implementation's chosen queue —
     /// MacOSMouseSource fires on the event-tap main-thread callback.
-    func start(_ handler: @escaping @Sendable (StrokeEvent) -> Void)
+    func start(_ handler: @escaping @Sendable (WandEvent) -> Void)
     func stop()
     /// Hot-apply `[recognition]` timing knobs without reinstalling the
     /// event tap. Implementations that can swap fields in place do so;
     /// the synthetic test source uses the default no-op since fixtures
     /// supply their own samples and don't read the live config.
-    func updateConfig(_ cfg: StrokeConfig)
+    func updateConfig(_ cfg: WandConfig)
 }
 
 public extension MouseSource {
-    func updateConfig(_ cfg: StrokeConfig) {}   // default: no-op
+    func updateConfig(_ cfg: WandConfig) {}   // default: no-op
 }

@@ -8,21 +8,21 @@
 
 import CoreGraphics
 import Foundation
-import StrokeCore
+import WandCore
 
 public final class SyntheticMouseSource: MouseSource, @unchecked Sendable {
 
-    private var queued: [StrokeEvent] = []
-    private var handler: (@Sendable (StrokeEvent) -> Void)?
+    private var queued: [WandEvent] = []
+    private var handler: (@Sendable (WandEvent) -> Void)?
 
     public init() {}
 
     /// Enqueue one stroke to be delivered on the next `flush()`.
     public func enqueue(target: Target, samples: [Sample]) {
-        queued.append(StrokeEvent(target: target, samples: samples))
+        queued.append(WandEvent(target: target, samples: samples))
     }
 
-    public func start(_ handler: @escaping @Sendable (StrokeEvent) -> Void) {
+    public func start(_ handler: @escaping @Sendable (WandEvent) -> Void) {
         self.handler = handler
     }
 
