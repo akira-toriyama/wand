@@ -4,15 +4,33 @@ Guidance for working in this repository.
 
 ## What this is
 
-`stroke` — global mouse-gesture daemon for macOS. Built around a
-single invariant: **gestures act on the window under the cursor,
-not the focused one.** On multi-display Macs the focused window is
-often on a different display from where you're pointing, so a
-gesture aimed at e.g. a Chrome tab on display 2 should fire against
-*that* tab — not whatever happened to have focus on display 1.
+`stroke` (the binary / brand) → `wand` (the repo + Swift modules) —
+macOS daemon for **cursor-anchored mouse automation**. Two trigger
+families coexist on one daemon:
+
+- **gesture** (right-button + drag, the original feature): draw a
+  shape with the cursor; the recogniser turns it into a `LURD`
+  string; rules fire actions.
+- **launcher** (middle-click, opt-in via `[launcher].enabled`):
+  pops a native `NSMenu` near the cursor; each `[[item]]` is one
+  row with the same action-type vocabulary.
+
+Both share the **single invariant**: actions dispatch to the window
+the cursor was over **at button-down time**, never to whichever has
+focus by the time the action runs. On multi-display Macs the focused
+window is often on a different display from where you're pointing,
+so a gesture / launcher click aimed at e.g. a Chrome tab on display
+2 fires against *that* tab — not whatever happened to have focus on
+display 1.
+
+The binary is still named `stroke` (user-visible rename to `wand` is
+planned for v3.0 to avoid forcing a TCC re-grant). Repo / Swift
+modules / types use `Wand*`; `~/.config/stroke/config.toml`, bundle
+id `com.stroke.stroke`, and Homebrew formula `stroke` are intact.
 
 Architecturally a sibling of
-[facet](https://github.com/akira-toriyama/facet): Swift 6,
+[facet](https://github.com/akira-toriyama/facet) and
+[focusfx](https://github.com/akira-toriyama/focusfx): Swift 6,
 macOS 13+, three-layer hexagonal split.
 
 ## Build / run
@@ -51,6 +69,21 @@ ws-tabs.
   `MouseSource`. Real vs synthetic is picked at app startup.
   Adding a new mouse-input strategy means a new `MouseSource`
   conformer in an Adapter module — never a `#if` in Core.
+- **The launcher trigger has its own seam**: `LauncherSource`
+  protocol in `WandCore`, `MacOSLauncherSource` in `WandAdapterMacOS`
+  ([Sources/WandAdapterMacOS/LauncherTap.swift](Sources/WandAdapterMacOS/LauncherTap.swift)).
+  It's a separate `CGEventTap` from `MacOSMouseSource` — two taps
+  coexist so the right-button-drag mask never has to also carry
+  middle-click. `Controller` holds it optionally (`nil` unless
+  `cfg.launcher.enabled` at startup), so the second tap isn't even
+  allocated when the user hasn't opted in.
+- **`LauncherMenu` lives in `WandAdapterMacOS` too**
+  ([Sources/WandAdapterMacOS/LauncherMenu.swift](Sources/WandAdapterMacOS/LauncherMenu.swift)) —
+  it builds a native `NSMenu` from `[LauncherItem]` filtered by the
+  cursor-anchored target. `group = [...]` paths drive nesting;
+  folders are created on first reference, then memoised so repeats
+  of the same path append into the same submenu. Don't promote
+  this to a separate module — same reasoning as `GestureOverlay`.
 - **The gesture-trail overlay lives in `WandAdapterMacOS`**, not a
   separate View module ([Sources/WandAdapterMacOS/GestureOverlay.swift](Sources/WandAdapterMacOS/GestureOverlay.swift)).
   It's the project's only on-screen UI; it's pure AppKit/CG rendering

@@ -154,6 +154,55 @@ intensity = "normal"
 
 
 # -----------------------------------------------------------------
+# Launcher — middle-click pops a contextual menu near the cursor
+# -----------------------------------------------------------------
+# Off by default. Set `enabled = true` to install the launcher tap
+# alongside the gesture tap; both coexist on the same daemon.
+#
+# The menu is a native macOS context menu (NSMenu) — submenus open
+# on hover, keyboard nav works (↑↓→← Enter Escape), click-outside
+# dismisses. Each `[[item]]` is one menu row with the same
+# action-type vocabulary as `[[rules]]`.
+#
+# The cursor-anchored target is captured at button-down, exactly
+# like the gesture path, so the chosen item dispatches against the
+# window you middle-clicked on — not whatever happens to have focus
+# by the time you choose.
+#
+# Two changes that need a daemon restart (the tap is baked into the
+# event mask at install): `enabled = false ↔ true` and `button`.
+# Surfaced in `stroke --status` as `pending-restart`.
+[launcher]
+enabled = false                # opt-in
+button = "middle"              # "middle" | "side1" | "side2" | "right"
+modifiers = []                 # e.g. ["ctrl"] to require ctrl + middle
+
+# Sample item — uncomment to try once `enabled = true`:
+#
+# [[item]]
+# name = "新規タブ"
+# apps = ["*chrome*", "*safari*"]
+# action-type = "key"
+# action-keys = "cmd+t"
+#
+# [[item]]
+# name = "再読み込み"
+# apps = ["*chrome*", "*safari*"]
+# separator-before = true             # divider line above this row
+# action-type = "key"
+# action-keys = "cmd+r"
+#
+# # Nested submenu — `group = ["..."]` is the path to the parent
+# # submenu. The folder is created on first reference; subsequent
+# # items with the same group land inside it.
+# [[item]]
+# name = "名前順"
+# group = ["並び替え"]
+# action-type = "shell"
+# action-cmd = "echo name"
+
+
+# -----------------------------------------------------------------
 # Rules — first match wins, applied to the cursor-anchored target
 # -----------------------------------------------------------------
 # Each `[[rules]]` block defines one gesture → action mapping.

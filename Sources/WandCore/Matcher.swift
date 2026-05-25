@@ -40,6 +40,18 @@ public enum Matcher {
         return excludes.contains { glob($0.lowercased(), bid) }
     }
 
+    /// Launcher counterpart of `match` — filters items by both the
+    /// global `excludeApps` and each item's own `apps` glob, keeping
+    /// document order so the menu builder can place items as written.
+    /// Returns empty if the target is excluded entirely.
+    public static func itemsFor(target: Target,
+                                items: [LauncherItem],
+                                excludes: [String]) -> [LauncherItem] {
+        if isExcluded(bundleID: target.bundleID, by: excludes) { return [] }
+        let bid = target.bundleID.lowercased()
+        return items.filter { appsAllow($0.apps, bundleID: bid) }
+    }
+
     /// Per-rule `apps` filter:
     ///   `"*"`                — matches every bundle id
     ///   `"com.apple.Safari"` — exact (case-insensitive)

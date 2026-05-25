@@ -13,6 +13,13 @@ import WandAdapterMacOS
 public final class Controller: @unchecked Sendable {
 
     private let source: MouseSource
+    /// Optional launcher tap — created at init only when
+    /// `cfg.launcher.enabled` was true at startup, so the second
+    /// CGEventTap isn't even allocated when the user hasn't opted in.
+    /// Like `[trigger]`, the launcher's button / modifiers are baked
+    /// into the tap at install; flipping them needs a daemon restart
+    /// (surfaced in --status as pending-restart).
+    private let launcher: LauncherSource?
     /// Mutated by `reload()` on the main thread. The stroke handler
     /// reads `self.config` per-event (not captured locals) so a
     /// reload takes effect on the very next stroke without
@@ -33,6 +40,8 @@ public final class Controller: @unchecked Sendable {
     private var counterDispatched = 0
     private var counterNoRule = 0
     private var counterExcluded = 0
+    private var counterLauncherFired = 0
+    private var counterLauncherDispatched = 0
     /// Last reload timestamp + cause, surfaced via `--status`.
     private var lastReload: (when: Date, cause: String) =
         (Date(), "initial-load")
@@ -46,8 +55,11 @@ public final class Controller: @unchecked Sendable {
     /// changes (colours, badge toggles, blur, …) without a restart.
     public var onConfigChanged: ((WandConfig) -> Void)?
 
-    public init(source: MouseSource, config: WandConfig) {
+    public init(source: MouseSource,
+                launcher: LauncherSource? = nil,
+                config: WandConfig) {
         self.source = source
+        self.launcher = launcher
         self.config = config
         self.startupConfig = config
     }
@@ -55,15 +67,28 @@ public final class Controller: @unchecked Sendable {
     public func start() {
         Log.line("controller: start — \(config.rules.count) rule(s), "
                  + "minStrokePx=\(config.minStrokePx), "
-                 + "trigger=\(config.trigger.button.rawValue)")
+                 + "trigger=\(config.trigger.button.rawValue)"
+                 + (launcher == nil ? "" :
+                    ", launcher=\(config.launcher.trigger.button.rawValue)"
+                    + " (\(config.launcher.items.count) item(s))"))
         source.start { [weak self] event in
             self?.handle(event)
+        }
+        launcher?.start { [weak self] event in
+            // Launcher fires on the event-tap main thread; menu popup
+            // and dispatch both need the main actor.
+            MainActor.assumeIsolated {
+                self?.handleLauncher(event)
+            }
         }
         installCLIControl()
         writeStatus()
     }
 
-    public func stop() { source.stop() }
+    public func stop() {
+        source.stop()
+        launcher?.stop()
+    }
 
 
     private func handle(_ event: WandEvent) {
@@ -111,6 +136,32 @@ public final class Controller: @unchecked Sendable {
         Dispatch.execute(rule.action, on: target)
     }
 
+    @MainActor
+    private func handleLauncher(_ event: LauncherEvent) {
+        let cfg = config
+        counterLauncherFired += 1
+        let visibleItems = Matcher.itemsFor(
+            target: event.target, items: cfg.launcher.items,
+            excludes: cfg.excludeApps)
+        Log.line("controller: launcher fired on \(event.target.bundleID) "
+                 + "— \(visibleItems.count)/\(cfg.launcher.items.count) item(s) "
+                 + "visible")
+        record("launcher on \(event.target.bundleID) "
+               + "(\(visibleItems.count) item(s))")
+        writeStatus()
+        LauncherMenu.present(
+            items: cfg.launcher.items,
+            excludes: cfg.excludeApps,
+            target: event.target,
+            cgPoint: event.point
+        ) { [weak self] item, target in
+            self?.counterLauncherDispatched += 1
+            Log.line("controller: → launcher item \"\(item.name)\"")
+            self?.writeStatus()
+            Dispatch.execute(item.action, on: target)
+        }
+    }
+
     /// Append to the ring buffer, dropping the oldest entry past the cap.
     private func record(_ entry: String) {
         recentGestures.append(entry)
@@ -143,6 +194,17 @@ public final class Controller: @unchecked Sendable {
                      + "startup so no overlay window exists; flipping to "
                      + "true now needs a full daemon restart")
         }
+        if new.launcher.enabled != startupConfig.launcher.enabled {
+            Log.line("controller: reload — [launcher].enabled toggled "
+                     + "(\(startupConfig.launcher.enabled) → "
+                     + "\(new.launcher.enabled)); the tap is installed at "
+                     + "startup, restart required to apply")
+        }
+        if new.launcher.trigger != startupConfig.launcher.trigger {
+            Log.line("controller: reload — [launcher].trigger changed; "
+                     + "the event mask is baked into the running tap, "
+                     + "restart required to apply")
+        }
         config = new
         lastReload = (Date(), cause)
         Log.line("controller: reload (\(cause)) — "
@@ -171,9 +233,22 @@ public final class Controller: @unchecked Sendable {
         if config.overlayEnabled && !startupConfig.overlayEnabled {
             pending.append("[overlay].enabled = false→true")
         }
+        if config.launcher.enabled != startupConfig.launcher.enabled {
+            pending.append("[launcher].enabled "
+                + "\(startupConfig.launcher.enabled)→\(config.launcher.enabled)")
+        }
+        if config.launcher.trigger != startupConfig.launcher.trigger {
+            pending.append("[launcher].trigger")
+        }
         let pendingLine = pending.isEmpty
             ? ""
             : "\npending-restart: \(pending.joined(separator: ", "))"
+        let launcherLine = config.launcher.enabled
+            ? "\nlauncher=on (button=\(config.launcher.trigger.button.rawValue), "
+              + "items=\(config.launcher.items.count), "
+              + "fired=\(counterLauncherFired), "
+              + "dispatched=\(counterLauncherDispatched))"
+            : "\nlauncher=off"
         let s = """
         pid=\(ProcessInfo.processInfo.processIdentifier)
         rules=\(config.rules.count)
@@ -182,7 +257,7 @@ public final class Controller: @unchecked Sendable {
         max-segment-ms=\(config.maxSegmentMs)
         cancel-reversals=\(config.cancelReversals)
         cancel-window-ms=\(config.cancelWindowMs)
-        overlay=\(config.overlayEnabled ? "on" : "off")
+        overlay=\(config.overlayEnabled ? "on" : "off")\(launcherLine)
         counters: recognised=\(counterRecognised) \
         dispatched=\(counterDispatched) \
         no-rule=\(counterNoRule) excluded=\(counterExcluded)

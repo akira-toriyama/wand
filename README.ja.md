@@ -57,6 +57,35 @@ explode / vibrate / fireworks / confetti(花火・紙吹雪)。
 操作、`key` は raise してからキーを送る、`shell` はそのウィンドウの
 識別子(bundle id, pid, title, frame)を環境変数で受け取る。
 
+## ランチャー(opt-in)
+
+stroke は **中ボタンクリックで出るコンテキストメニュー** も第二の
+トリガーとして持っている。既定で off。`[launcher].enabled = true`
+にすると、ジェスチャー用 event tap と別にもう一つの tap を立ち上げる。
+メニューは macOS ネイティブの `NSMenu`(サブメニュー / キーボードナビ
+/ クリック外で消える、すべて無料)、**ボタン押下時にカーソル直下に
+あったウィンドウ** に対して発動する — ジェスチャーと同じ不変条件。
+各 `[[item]]` が 1 行:
+
+```toml
+[launcher]
+enabled = true
+button = "middle"                 # "middle" / "side1" / "side2" / "right"
+
+[[item]]
+name = "新規タブ"
+apps = ["*chrome*", "*safari*"]
+action-type = "key"
+action-keys = "cmd+t"
+
+[[item]]
+name = "名前順"
+group = ["並び替え"]               # 「並び替え」サブメニュー配下
+separator-before = true            # 行の上にセパレータ
+action-type = "shell"
+action-cmd = "echo name"
+```
+
 ## インストール
 
 ```sh

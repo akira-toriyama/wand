@@ -108,10 +108,14 @@ enum WandApp {
         if argv.contains("--doctor") { runDoctor() }
         if argv.contains("--validate") {
             let cfg = WandConfig.load()
+            let launcherLine = cfg.launcher.enabled
+                ? ", launcher=\(cfg.launcher.trigger.button.rawValue) "
+                  + "(\(cfg.launcher.items.count) item(s))"
+                : ""
             FileHandle.standardError.write(Data((
                 "stroke: loaded \(cfg.rules.count) rule(s), "
                 + "trigger=\(cfg.trigger.button.rawValue), "
-                + "minStrokePx=\(cfg.minStrokePx)\n"
+                + "minStrokePx=\(cfg.minStrokePx)\(launcherLine)\n"
             ).utf8))
             exit(0)
         }
@@ -144,6 +148,14 @@ enum WandApp {
             cancelWindowMs: cfg.cancelWindowMs
         )
 
+        // Launcher trigger — only allocated when opted in at startup.
+        // Like the gesture tap, its button is baked into the event
+        // mask, so toggling enabled / changing button needs a restart
+        // (surfaced as pending-restart in `--status`).
+        let launcher: LauncherSource? = cfg.launcher.enabled
+            ? MacOSLauncherSource(trigger: cfg.launcher.trigger)
+            : nil
+
         // Construct Controller up front so the overlay's onSample
         // closure can read its live `config` snapshot per-sample,
         // instead of capturing the startup rules locally. Otherwise
@@ -151,7 +163,9 @@ enum WandApp {
         // tooltips (which would read captured locals) would drift
         // apart after a hot-reload — the user would see candidate
         // cards for the OLD rule set while a NEW rule fired.
-        let controller = Controller(source: source, config: cfg)
+        let controller = Controller(source: source,
+                                    launcher: launcher,
+                                    config: cfg)
 
         // Gesture-trail overlay (passive observer of the sample
         // stream). Held for the process lifetime via `app.run()`.
@@ -272,6 +286,22 @@ enum WandApp {
         ok = ok && tap
         print(line(tap, "Event tap:",
                    tap ? "can install" : "cannot install (needs Accessibility)"))
+
+        // Launcher diagnostics — only meaningful when opted in.
+        if cfg.launcher.enabled {
+            let lTap = MacOSLauncherSource.canInstallTap(
+                trigger: cfg.launcher.trigger)
+            ok = ok && lTap
+            print(line(lTap, "Launcher tap:",
+                       lTap
+                         ? "can install (button="
+                           + "\(cfg.launcher.trigger.button.rawValue), "
+                           + "\(cfg.launcher.items.count) item(s))"
+                         : "cannot install"))
+        } else {
+            print(line(true, "Launcher:",
+                       "disabled (`[launcher] enabled = false`)"))
+        }
 
         // Tuned values — the same ones the daemon would apply. Lets a
         // remote diagnosis confirm what's in effect without parsing

@@ -59,6 +59,35 @@ actions raise it first and send the keystroke, and `shell` actions
 receive its identity (bundle id, pid, title, frame) as environment
 variables.
 
+## Launcher (opt-in)
+
+stroke also ships a **middle-click contextual menu** as a second
+trigger. Off by default — set `[launcher].enabled = true` in your
+config and the daemon installs a second event tap alongside the
+gesture one. The menu is a native macOS `NSMenu` (submenus,
+keyboard navigation, click-outside dismiss all for free), anchored
+to the **window under the cursor at button-down** — same invariant
+as the gesture path. Each `[[item]]` is one row:
+
+```toml
+[launcher]
+enabled = true
+button = "middle"                 # or "side1" / "side2" / "right"
+
+[[item]]
+name = "新規タブ"
+apps = ["*chrome*", "*safari*"]
+action-type = "key"
+action-keys = "cmd+t"
+
+[[item]]
+name = "並び替え > 名前順"
+group = ["並び替え"]               # nests this row inside a "並び替え" submenu
+separator-before = true            # divider line above the row
+action-type = "shell"
+action-cmd = "echo name"
+```
+
 ## Install
 
 ```sh

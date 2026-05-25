@@ -58,6 +58,11 @@ public struct WandConfig: Sendable {
     /// Overall size of the chosen effects. Applied uniformly to both
     /// `unmatch` and `match`. Unknown config values clamp to `.normal`.
     public var effectIntensity: Intensity
+    /// Launcher trigger family — middle-click (or other configured
+    /// button) pops a contextual menu near the cursor. Trigger lives
+    /// inside the spec so each family owns its own button; the
+    /// top-level `trigger` is the gesture family.
+    public var launcher: LauncherSpec
 
     public static let `default` = WandConfig(
         trigger: Trigger(button: .right, modifiers: []),
@@ -77,7 +82,8 @@ public struct WandConfig: Sendable {
         overlayAnimEnabled: true,
         effectUnmatch: .none,
         effectMatch: .none,
-        effectIntensity: .normal
+        effectIntensity: .normal,
+        launcher: .default
     )
 
     /// The single source-of-truth path. Shared by `load()` and the
@@ -149,6 +155,50 @@ public struct WandConfig: Sendable {
         let effectIntensity: Intensity = parseEnum(
             ef, key: "intensity", section: "effect", default: .normal)
 
+        // [launcher] — sibling trigger family. Tap not installed when
+        // `enabled = false` (default), so a stale `[[item]]` list
+        // can't surprise anyone who hasn't opted in.
+        let lr = doc.tables["launcher"] ?? [:]
+        let launcherEnabled = lr.bool("enabled", false)
+        let launcherButton = Trigger.Button(rawValue: lr.string("button").lowercased())
+            ?? .middle
+        let launcherMods = Set(lr.strings("modifiers")
+            .compactMap { Modifier(rawValue: $0.lowercased()) })
+
+        // [[item]] — launcher menu rows. Same drop-on-typo policy as
+        // [[rules]]: bad rows surface in the log with their position.
+        let items: [LauncherItem] = (doc.arrays["item"] ?? []).enumerated()
+            .compactMap { idx, row in
+                let label = "[[item]][\(idx)]"
+                    + (row.string("name").isEmpty
+                       ? "" : " \(row.string("name"))")
+                guard let action = parseAction(row) else {
+                    Log.line("config: dropped \(label) — invalid or missing "
+                             + "action (need action-type + matching "
+                             + "action-keys / action-verb / action-cmd)")
+                    return nil
+                }
+                let name = row.string("name")
+                guard !name.isEmpty else {
+                    Log.line("config: dropped \(label) — `name` is required "
+                             + "(it's the menu label)")
+                    return nil
+                }
+                let apps = row.strings("apps")
+                let group = row.strings("group")
+                let sep = row.bool("separator-before", false)
+                return LauncherItem(
+                    name: name,
+                    group: group,
+                    separatorBefore: sep,
+                    apps: apps.isEmpty ? ["*"] : apps,
+                    action: action)
+            }
+        let launcher = LauncherSpec(
+            enabled: launcherEnabled,
+            trigger: Trigger(button: launcherButton, modifiers: launcherMods),
+            items: items)
+
         // Log every dropped rule with its position + reason so
         // `--validate` and the daemon log both surface them — silent
         // `compactMap`-of-nil was the worst typo footgun.
@@ -194,7 +244,8 @@ public struct WandConfig: Sendable {
             overlayAnimEnabled: overlayAnimEnabled,
             effectUnmatch: effectUnmatch,
             effectMatch: effectMatch,
-            effectIntensity: effectIntensity
+            effectIntensity: effectIntensity,
+            launcher: launcher
         )
     }
 
