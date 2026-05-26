@@ -94,11 +94,12 @@ public struct LauncherItem: Sendable, Equatable {
     ///   `"on"`          — always ✓
     ///   `"off"`         — explicit no-marker (same as empty)
     ///   `"mixed"`       — dash marker
-    ///   `"shell:<cmd>"` — run `<cmd>` at menu-open; exit 0 → ✓,
+    ///   `"shell:<cmd>"` — run `<cmd>` at panel open; exit 0 → ✓,
     ///                     non-zero → no marker. 100 ms timeout.
-    /// Adapter evaluates this once per menu popup (no caching) and
-    /// sets `NSMenuItem.state` accordingly. Use it for mode / toggle
-    /// items where macOS context menus show ✓ for the active option.
+    /// Adapter evaluates this once per popup (no caching) and
+    /// prepends the resolved glyph (`✓` / `–`) to the row title. Use
+    /// it for toggle items where the active option should read as
+    /// "selected" at a glance.
     public let state: String
     /// Dynamic-row producer. Non-empty marks the item as a
     /// submenu-with-shell-children: at every menu-open the adapter
@@ -140,12 +141,18 @@ public struct LauncherItem: Sendable, Equatable {
 /// level `[trigger]` which gestures own) so each family has its own
 /// button. `enabled = false` keeps the tap from being installed at
 /// all — same opt-out shape as `overlay.enabled`.
+///
+/// The launcher UI is always a non-activating NSPanel — the user
+/// keeps keyboard focus in the underlying app while picking. There
+/// is no NSMenu fallback (it was removed once panel-mode covered the
+/// schema completely).
 public struct LauncherSpec: Sendable, Equatable {
     public let enabled: Bool
     public let trigger: Trigger
     public let items: [LauncherItem]
 
-    public init(enabled: Bool, trigger: Trigger, items: [LauncherItem]) {
+    public init(enabled: Bool, trigger: Trigger,
+                items: [LauncherItem]) {
         self.enabled = enabled
         self.trigger = trigger
         self.items = items

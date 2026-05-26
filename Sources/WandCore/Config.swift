@@ -190,7 +190,7 @@ public struct WandConfig: Sendable {
         let launcherMods = Set(lr.strings("modifiers")
             .compactMap { Modifier(rawValue: $0.lowercased()) })
 
-        // [[launcher.item]] — launcher menu rows. Same drop-on-typo
+        // [[launcher.item]] — launcher rows. Same drop-on-typo
         // policy as [[gesture.rule]]: bad rows surface in the log
         // with their position.
         let items: [LauncherItem] = (doc.arrays["launcher.item"] ?? []).enumerated()

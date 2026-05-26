@@ -64,10 +64,14 @@ variables.
 wand also ships a **middle-click contextual menu** as a second
 trigger. Off by default — set `[launcher].enabled = true` in your
 config and the daemon installs a second event tap alongside the
-gesture one. The menu is a native macOS `NSMenu` (submenus,
-keyboard navigation, click-outside dismiss all for free), anchored
-to the **window under the cursor at button-down** — same invariant
-as the gesture path. Each `[[launcher.item]]` is one row:
+gesture one. The launcher renders as a **non-activating panel**
+(PopClip parity): it floats above the underlying app *without*
+stealing keyboard focus, so you can keep typing in your editor
+while picking a row with the mouse. Submenus open on hover as an
+adjacent child panel (`group = ["..."]`). Click outside or press
+Esc to dismiss. The panel is anchored to the **window under the
+cursor at button-down** — same invariant as the gesture path. Each
+`[[launcher.item]]` is one row:
 
 ```toml
 [launcher]

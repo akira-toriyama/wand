@@ -1,10 +1,11 @@
 // Shared time-bounded `/bin/sh -c` runner. Used inside main-thread
-// hot paths (NSMenu.popUp blocks the run loop while children resolve)
-// where a slow command would freeze the UI — `BoundedShell.run` kills
-// the process after `timeoutMs` so the menu can't hang.
+// hot paths where a slow command would freeze the UI —
+// `BoundedShell.run` kills the process after `timeoutMs` so the
+// caller can't hang.
 //
-// Synchronous on purpose: callers (`DynamicItems`, the checkmark
-// state evaluator) need the result before the menu paints.
+// Synchronous on purpose: callers (the panel's checkmark state
+// evaluator, the `filter-shell` predicate) need the result before
+// the panel paints / before the matcher decides.
 
 import Foundation
 import WandCore

@@ -176,7 +176,7 @@ public final class Controller: @unchecked Sendable {
                      + "\(sel.count) char(s)")
         }
         let env: [String: String] = selection.map { ["SELECTION": $0] } ?? [:]
-        LauncherMenu.present(
+        LauncherPanel.present(
             filteredItems: visibleItems,
             target: event.target,
             cocoaPoint: ScreenCoords.cocoaPoint(fromCG: event.point)
@@ -239,7 +239,7 @@ public final class Controller: @unchecked Sendable {
         // as an env var — keeps the LauncherMenu signature trigger-
         // agnostic (no `selection` field on items or menu state).
         let env: [String: String] = selection.map { ["SELECTION": $0] } ?? [:]
-        LauncherMenu.present(
+        LauncherPanel.present(
             filteredItems: visible,
             target: target,
             cocoaPoint: cocoaPoint
