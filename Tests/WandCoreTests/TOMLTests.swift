@@ -18,7 +18,7 @@ final class TOMLTests: XCTestCase {
         // The inline-strip branch must keep the quoted `#` and only
         // drop the trailing comment. Without it the value picks up
         // " # this is a comment …".
-        XCTAssertEqual(doc.tables["trigger"]?["button"], .string("right"))
+        XCTAssertEqual(doc.tables["gesture"]?["button"], .string("right"))
     }
 
     func testTOMLInlineCommentAfterArray() {
@@ -26,7 +26,7 @@ final class TOMLTests: XCTestCase {
         [gesture]
         modifiers = ["cmd", "opt"] # mods
         """)
-        XCTAssertEqual(doc.tables["trigger"]?["modifiers"],
+        XCTAssertEqual(doc.tables["gesture"]?["modifiers"],
                        .stringArray(["cmd", "opt"]))
     }
 
@@ -40,7 +40,7 @@ final class TOMLTests: XCTestCase {
         button = "right"
         more garbage
         """)
-        XCTAssertEqual(doc.tables["trigger"]?["button"], .string("right"))
+        XCTAssertEqual(doc.tables["gesture"]?["button"], .string("right"))
     }
 
     func testTOMLBoolAndIntParsing() {
@@ -49,8 +49,8 @@ final class TOMLTests: XCTestCase {
         enabled = true
         width = 7
         """)
-        XCTAssertEqual(doc.tables["overlay"]?["enabled"], .bool(true))
-        XCTAssertEqual(doc.tables["overlay"]?["width"], .int(7))
+        XCTAssertEqual(doc.tables["gesture.overlay"]?["enabled"], .bool(true))
+        XCTAssertEqual(doc.tables["gesture.overlay"]?["width"], .int(7))
     }
 
     func testTOMLMultipleArrayOfTables() {
@@ -69,7 +69,7 @@ final class TOMLTests: XCTestCase {
         pattern = "C"
         action-keys = "cmd+3"
         """)
-        let rows = doc.arrays["rules"] ?? []
+        let rows = doc.arrays["gesture.rule"] ?? []
         XCTAssertEqual(rows.count, 3)
         XCTAssertEqual(rows[0]["pattern"], .string("A"))
         XCTAssertEqual(rows[0]["action-keys"], .string("cmd+1"))
