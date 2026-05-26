@@ -12,7 +12,7 @@ final class TOMLTests: XCTestCase {
 
     func testTOMLInlineCommentAfterString() {
         let doc = parseTOMLSubset("""
-        [trigger]
+        [gesture]
         button = "right" # this is a comment with # inside
         """)
         // The inline-strip branch must keep the quoted `#` and only
@@ -23,7 +23,7 @@ final class TOMLTests: XCTestCase {
 
     func testTOMLInlineCommentAfterArray() {
         let doc = parseTOMLSubset("""
-        [trigger]
+        [gesture]
         modifiers = ["cmd", "opt"] # mods
         """)
         XCTAssertEqual(doc.tables["trigger"]?["modifiers"],
@@ -36,7 +36,7 @@ final class TOMLTests: XCTestCase {
         // and the rest still loads.
         let doc = parseTOMLSubset("""
         garbage line with no equals
-        [trigger]
+        [gesture]
         button = "right"
         more garbage
         """)
@@ -45,7 +45,7 @@ final class TOMLTests: XCTestCase {
 
     func testTOMLBoolAndIntParsing() {
         let doc = parseTOMLSubset("""
-        [overlay]
+        [gesture.overlay]
         enabled = true
         width = 7
         """)
@@ -54,18 +54,18 @@ final class TOMLTests: XCTestCase {
     }
 
     func testTOMLMultipleArrayOfTables() {
-        // Three `[[rules]]` rows in order, no key bleed between rows
+        // Three `[[gesture.rule]]` rows in order, no key bleed between rows
         // (each row is a fresh dictionary).
         let doc = parseTOMLSubset("""
-        [[rules]]
+        [[gesture.rule]]
         pattern = "A"
         action-keys = "cmd+1"
 
-        [[rules]]
+        [[gesture.rule]]
         pattern = "B"
         action-keys = "cmd+2"
 
-        [[rules]]
+        [[gesture.rule]]
         pattern = "C"
         action-keys = "cmd+3"
         """)
