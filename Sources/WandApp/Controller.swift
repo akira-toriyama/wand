@@ -176,11 +176,10 @@ public final class Controller: @unchecked Sendable {
                      + "\(sel.count) char(s)")
         }
         let env: [String: String] = selection.map { ["SELECTION": $0] } ?? [:]
-        LauncherMenu.present(
+        LauncherPanel.present(
             filteredItems: visibleItems,
             target: event.target,
-            cocoaPoint: ScreenCoords.cocoaPoint(fromCG: event.point),
-            mode: cfg.launcher.mode
+            cocoaPoint: ScreenCoords.cocoaPoint(fromCG: event.point)
         ) { [weak self] item, target in
             self?.counterLauncherDispatched += 1
             Log.line("controller: → launcher item \"\(item.name)\"")
@@ -240,11 +239,10 @@ public final class Controller: @unchecked Sendable {
         // as an env var — keeps the LauncherMenu signature trigger-
         // agnostic (no `selection` field on items or menu state).
         let env: [String: String] = selection.map { ["SELECTION": $0] } ?? [:]
-        LauncherMenu.present(
+        LauncherPanel.present(
             filteredItems: visible,
             target: target,
-            cocoaPoint: cocoaPoint,
-            mode: cfg.launcher.mode
+            cocoaPoint: cocoaPoint
         ) { [weak self] item, target in
             self?.counterShowMenuDispatched += 1
             Log.line("controller: → show-menu item \"\(item.name)\"")

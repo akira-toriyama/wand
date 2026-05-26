@@ -94,11 +94,12 @@ public struct LauncherItem: Sendable, Equatable {
     ///   `"on"`          — always ✓
     ///   `"off"`         — explicit no-marker (same as empty)
     ///   `"mixed"`       — dash marker
-    ///   `"shell:<cmd>"` — run `<cmd>` at menu-open; exit 0 → ✓,
+    ///   `"shell:<cmd>"` — run `<cmd>` at panel open; exit 0 → ✓,
     ///                     non-zero → no marker. 100 ms timeout.
-    /// Adapter evaluates this once per menu popup (no caching) and
-    /// sets `NSMenuItem.state` accordingly. Use it for mode / toggle
-    /// items where macOS context menus show ✓ for the active option.
+    /// Adapter evaluates this once per popup (no caching) and
+    /// prepends the resolved glyph (`✓` / `–`) to the row title. Use
+    /// it for toggle items where the active option should read as
+    /// "selected" at a glance.
     public let state: String
     /// Dynamic-row producer. Non-empty marks the item as a
     /// submenu-with-shell-children: at every menu-open the adapter
@@ -136,43 +137,30 @@ public struct LauncherItem: Sendable, Equatable {
     }
 }
 
-/// Which UI surface the launcher uses.
-/// - `.menu`  — native `NSMenu`. Keyboard navigation, submenus,
-///              dynamic items, state markers all work. Modal: takes
-///              keyboard focus from the underlying app.
-/// - `.panel` — non-activating `NSPanel` (PopClip parity). Does NOT
-///              take keyboard focus, so the user can keep typing in
-///              the underlying editor while the launcher is up. No
-///              keyboard navigation; submenu / dynamic / state are
-///              flattened or skipped in MVP scope.
-public enum LauncherMode: String, Sendable, Hashable, CaseIterable {
-    case menu
-    case panel
-}
-
 /// The whole `[launcher]` block. `trigger` lives here(not the top-
 /// level `[trigger]` which gestures own) so each family has its own
 /// button. `enabled = false` keeps the tap from being installed at
 /// all — same opt-out shape as `overlay.enabled`.
+///
+/// The launcher UI is always a non-activating NSPanel — the user
+/// keeps keyboard focus in the underlying app while picking. There
+/// is no NSMenu fallback (it was removed once panel-mode covered the
+/// schema completely).
 public struct LauncherSpec: Sendable, Equatable {
     public let enabled: Bool
     public let trigger: Trigger
-    public let mode: LauncherMode
     public let items: [LauncherItem]
 
     public init(enabled: Bool, trigger: Trigger,
-                mode: LauncherMode = .menu,
                 items: [LauncherItem]) {
         self.enabled = enabled
         self.trigger = trigger
-        self.mode = mode
         self.items = items
     }
 
     public static let `default` = LauncherSpec(
         enabled: false,
         trigger: Trigger(button: .middle, modifiers: []),
-        mode: .menu,
         items: []
     )
 }

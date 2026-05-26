@@ -1,26 +1,28 @@
-// Non-activating panel variant of `LauncherMenu`. Picked at runtime
-// when `[launcher].mode = "panel"` (see `LauncherMode`). Goal: do not
-// steal keyboard focus from the underlying app while the launcher is
-// visible — PopClip parity. The user keeps typing in their editor,
-// uses the mouse to pick an item, panel closes.
+// The launcher UI surface. A non-activating NSPanel that does NOT
+// take keyboard focus from the underlying app — the user keeps typing
+// in their editor while picking an item with the mouse (PopClip
+// parity). Used for both the native middle-click trigger and the
+// `wand --show-menu` external trigger.
 //
-// Trade-offs vs `LauncherMenu` (NSMenu):
-//   - No keyboard navigation (panel cannot become key by design).
-//   - Submenus are flattened into one list with " › " breadcrumbs;
-//     hierarchical pop-out isn't worth re-implementing for the MVP.
-//   - Dynamic items are not yet supported (rendered disabled with a
-//     placeholder label, so they don't silently vanish).
-//   - State markers (✓ / —) prefix the title instead of using
-//     NSMenuItem.state's native rendering.
+// Behaviour notes:
+//   - No keyboard navigation (panel cannot become key by design);
+//     Esc dismisses the whole tree.
+//   - Submenus open as adjacent child panels on hover. The gap
+//     between panels is zero so moving the cursor straight right
+//     from the folder row into the child works reliably; the native
+//     NSMenu diagonal-cursor tolerance is NOT reproduced — hovering
+//     a non-folder row inside the parent closes the child.
+//   - Dynamic items (`dynamic = "..."`) are rendered as a disabled
+//     placeholder; expanding them as a child panel is future work.
+//   - State markers (✓ / –) prefix the row title.
 //
-// Spec contract vs `LauncherMenu.present`:
-//   - `present(...)` returns **immediately** (`NSMenu.popUp` blocks
-//     until dismissed; the panel does not). Callers must not assume
-//     synchronous selection.
+// Spec contract:
+//   - `present(...)` returns **immediately** (unlike `NSMenu.popUp`,
+//     which blocks). Callers must not assume synchronous selection.
 //   - `onSelect` fires asynchronously on click and is followed by
-//     the panel closing.
-//   - Only one panel is visible at a time. A second `present(...)`
-//     dismisses the first.
+//     the whole panel tree closing.
+//   - Only one panel tree is visible at a time. A second
+//     `present(...)` dismisses the first.
 
 import AppKit
 import Foundation
@@ -29,10 +31,8 @@ import WandCore
 @MainActor
 public enum LauncherPanel {
 
-    /// Strong reference holder for the currently-visible panel. Both
-    /// the controller and its event monitors / closures need to live
-    /// past the synchronous return of `present(...)`. Replaced when a
-    /// new panel opens; cleared in `dismiss()`.
+    /// Strong reference holder for the currently-visible root panel.
+    /// Replaced when a new panel opens; cleared in `dismiss()`.
     private static var current: PanelController?
 
     public static func present(filteredItems items: [LauncherItem],
@@ -45,13 +45,87 @@ public enum LauncherPanel {
                      + "panel suppressed")
             return
         }
+        let nodes = PanelTree.build(from: items)
+        let header = makeHeader(for: target)
         let controller = PanelController(
-            items: items, target: target,
-            cocoaPoint: cocoaPoint,
+            nodes: nodes,
+            header: header,
+            anchor: cocoaPoint,
+            target: target,
             onSelect: onSelect,
-            onDismiss: { current = nil })
+            isRoot: true,
+            onDismissRoot: { current = nil })
         current = controller
         controller.show()
+    }
+
+    private static func makeHeader(for target: Target) -> HeaderSpec? {
+        let (name, icon) = AppIconCache.shared.lookup(
+            bundleID: target.bundleID, iconSize: 16)
+        if name.isEmpty && icon == nil { return nil }
+        return HeaderSpec(name: name, icon: icon)
+    }
+}
+
+/// One non-leaf or leaf node in the panel tree. Built from the flat
+/// `[LauncherItem]` list by `PanelTree.build`. `separatorBefore` is
+/// carried on `.item` only — folder nodes don't need it because each
+/// item that opens a new section keeps its own flag.
+indirect enum PanelNode {
+    case item(LauncherItem)
+    case folder(name: String, children: [PanelNode])
+}
+
+/// App-header data flowed into the root panel.
+private struct HeaderSpec {
+    let name: String
+    let icon: NSImage?
+}
+
+/// Convert `[LauncherItem]` → `[PanelNode]`. Walks each item's `group`
+/// path, creating folders on first reference and appending into them
+/// on subsequent ones — same shape as `LauncherMenu.resolveParent`,
+/// but produces an immutable tree instead of mutating NSMenus.
+private enum PanelTree {
+    static func build(from items: [LauncherItem]) -> [PanelNode] {
+        let root = FolderBuilder(name: "")
+        for item in items {
+            var current = root
+            for segment in item.group {
+                if let existing = current.subs[segment] {
+                    current = existing
+                } else {
+                    let f = FolderBuilder(name: segment)
+                    current.subs[segment] = f
+                    current.children.append(.folder(f))
+                    current = f
+                }
+            }
+            current.children.append(.leaf(item))
+        }
+        return root.toNodes()
+    }
+
+    /// Mutable intermediate. Class so siblings share folder references.
+    private final class FolderBuilder {
+        let name: String
+        var children: [Child] = []
+        var subs: [String: FolderBuilder] = [:]
+        init(name: String) { self.name = name }
+        enum Child {
+            case folder(FolderBuilder)
+            case leaf(LauncherItem)
+        }
+        func toNodes() -> [PanelNode] {
+            children.map { c in
+                switch c {
+                case .folder(let f):
+                    return .folder(name: f.name, children: f.toNodes())
+                case .leaf(let item):
+                    return .item(item)
+                }
+            }
+        }
     }
 }
 
@@ -66,29 +140,56 @@ private final class NonActivatingPanel: NSPanel {
 
 @MainActor
 private final class PanelController {
-    private let panel: NonActivatingPanel
+    let panel: NonActivatingPanel
+    private let nodes: [PanelNode]
     private let target: Target
     private let onSelect: (LauncherItem, Target) -> Void
-    private let onDismiss: () -> Void
+    private let isRoot: Bool
+    /// Root-only: cleared in `dismiss()`, called once when the entire
+    /// tree is gone. Non-root controllers leave this nil.
+    private let onDismissRoot: (() -> Void)?
+    /// Set when this panel is a child of another. Used to walk back
+    /// up the tree for tree-wide dismissal.
+    private weak var parent: PanelController?
+    /// Currently-open child (one at a time per level). Cleared in
+    /// `closeChild()`.
+    private var child: PanelController?
+    /// The folder row that spawned `child` (so we can detect "still
+    /// hovering the same folder" vs "moved to a different row").
+    private weak var childAnchor: ItemRow?
+
     private var globalMouseMonitor: Any?
     private var globalKeyMonitor: Any?
 
-    init(items: [LauncherItem], target: Target, cocoaPoint: NSPoint,
+    init(nodes: [PanelNode],
+         header: HeaderSpec? = nil,
+         anchor: NSPoint,
+         anchorIsRow: Bool = false,
+         target: Target,
          onSelect: @escaping (LauncherItem, Target) -> Void,
-         onDismiss: @escaping () -> Void) {
+         isRoot: Bool,
+         onDismissRoot: (() -> Void)? = nil) {
+        self.nodes = nodes
         self.target = target
         self.onSelect = onSelect
-        self.onDismiss = onDismiss
+        self.isRoot = isRoot
+        self.onDismissRoot = isRoot ? onDismissRoot : nil
 
-        let content = Self.buildContent(items: items, target: target)
+        let content = NSView()
+        let rows = PanelController.buildRows(nodes: nodes, header: header,
+                                              into: content)
         let size = content.fittingSize
-        // Cursor sits at the panel's top-left corner — same anchor as
-        // NSMenu.popUp. NSPanel's contentRect is bottom-left origin,
-        // so subtract the height to put the top there.
-        let raw = NSRect(
-            origin: NSPoint(x: cocoaPoint.x, y: cocoaPoint.y - size.height),
-            size: size)
-        let placed = Self.clampToScreen(raw, anchor: cocoaPoint)
+        let raw = anchorIsRow
+            // For child panels: `anchor` is the top-left where the
+            // child should appear (Cocoa screen coords). Panel's
+            // bottom-left = anchor.x, anchor.y - height.
+            ? NSRect(origin: NSPoint(x: anchor.x, y: anchor.y - size.height),
+                     size: size)
+            // For the root panel: `anchor` is the cursor. Same as
+            // NSMenu.popUp's anchor: top-left of panel = cursor.
+            : NSRect(origin: NSPoint(x: anchor.x, y: anchor.y - size.height),
+                     size: size)
+        let placed = PanelController.clampToScreen(raw, anchor: anchor)
 
         self.panel = NonActivatingPanel(
             contentRect: placed,
@@ -108,18 +209,41 @@ private final class PanelController {
         panel.appearance = NSAppearance(named: .darkAqua)
         panel.contentView = content
 
-        // Wire each row's tap closure to dispatch + dismiss. Rows are
-        // built without a back-reference to the controller; we patch
-        // it in here so PanelController owns the closure lifetime.
-        wireRowTaps(in: content)
+        // Wire row callbacks now that `self` exists. Each row reports
+        // its hover and click events back to this controller; the
+        // controller decides what they mean (open child / dismiss /
+        // fire action).
+        for row in rows {
+            row.onHover = { [weak self, weak row] in
+                guard let self, let row else { return }
+                self.handleRowHover(row)
+            }
+            row.onClick = { [weak self, weak row] in
+                guard let self, let row else { return }
+                self.handleRowClick(row)
+            }
+        }
     }
 
     func show() {
         panel.orderFront(nil)
-        installDismissMonitors()
+        if isRoot { installDismissMonitors() }
     }
 
+    /// Dismiss the entire tree from any level. Walks up to root, then
+    /// tears down monitors and orders out every panel from the deepest
+    /// child back to the root.
     func dismiss() {
+        var top: PanelController = self
+        while let p = top.parent { top = p }
+        top.tearDown()
+    }
+
+    private func tearDown() {
+        // Depth-first: close grandchild → child → self.
+        child?.tearDown()
+        child = nil
+        childAnchor = nil
         if let g = globalMouseMonitor {
             NSEvent.removeMonitor(g)
             globalMouseMonitor = nil
@@ -129,24 +253,99 @@ private final class PanelController {
             globalKeyMonitor = nil
         }
         panel.orderOut(nil)
-        onDismiss()
+        onDismissRoot?()
     }
 
-    // MARK: - Dismiss monitors
+    // MARK: - Row callbacks
+
+    private func handleRowClick(_ row: ItemRow) {
+        switch row.kind {
+        case .leaf(let item):
+            onSelect(item, target)
+            dismiss()
+        case .folder, .header, .placeholder:
+            break  // folders open on hover, not click
+        }
+    }
+
+    private func handleRowHover(_ row: ItemRow) {
+        switch row.kind {
+        case .folder(_, let children):
+            if childAnchor === row { return }  // already open for this row
+            closeChild()
+            openChild(for: row, children: children)
+        case .leaf, .header, .placeholder:
+            // Moved to a non-folder row in this panel — close any open
+            // child. The user's cursor is now committed to the current
+            // panel's level.
+            closeChild()
+        }
+    }
+
+    // MARK: - Child management
+
+    private func openChild(for row: ItemRow, children: [PanelNode]) {
+        guard let win = row.window else { return }
+        // Compute top-right of row in screen coords. The child's
+        // top-left will sit there (no gap → cursor moves smoothly into
+        // the child without crossing dead space).
+        let rowInWin = row.convert(row.bounds, to: nil)
+        let rowOnScreen = win.convertToScreen(rowInWin)
+        let topRight = NSPoint(x: rowOnScreen.maxX, y: rowOnScreen.maxY)
+        let c = PanelController(
+            nodes: children,
+            anchor: topRight,
+            anchorIsRow: true,
+            target: target,
+            onSelect: onSelect,
+            isRoot: false)
+        c.parent = self
+        // Flip horizontally if the child would fall off the right
+        // edge of the screen — try opening to the left of the parent.
+        c.maybeFlipLeftOfParent(parentRow: row)
+        child = c
+        childAnchor = row
+        c.show()
+    }
+
+    private func closeChild() {
+        child?.tearDown()
+        child = nil
+        childAnchor = nil
+    }
+
+    /// Called by the parent after init when the placed child runs off
+    /// the right edge. We use the parent's panel frame to flip across.
+    private func maybeFlipLeftOfParent(parentRow: ItemRow) {
+        guard let parent else { return }
+        guard let screen = NSScreen.screens.first(where: {
+            $0.frame.contains(NSPoint(x: panel.frame.midX, y: panel.frame.midY))
+        }) ?? NSScreen.main else { return }
+        if panel.frame.maxX > screen.visibleFrame.maxX {
+            // Flip: child's right edge at parent's left edge.
+            let parentLeft = parent.panel.frame.minX
+            var f = panel.frame
+            f.origin.x = parentLeft - f.width
+            if f.origin.x < screen.visibleFrame.minX {
+                f.origin.x = screen.visibleFrame.minX
+            }
+            panel.setFrame(f, display: false)
+        }
+        _ = parentRow  // reserved for fine vertical alignment later
+    }
+
+    // MARK: - Dismiss monitors (root only)
 
     private func installDismissMonitors() {
         // Global monitor (other-app events). Because wand is
         // LSUIElement + the panel is non-activating, "another app" is
         // effectively every app — including our own underlying
-        // target. So a click anywhere routes here. We deliberately
-        // DON'T install a local monitor for clicks inside the panel
-        // — the row buttons handle those via their own action.
+        // target. So a click anywhere outside our panels routes here.
+        // We deliberately DON'T install a local monitor for clicks
+        // inside any panel — rows handle those via their own action.
         globalMouseMonitor = NSEvent.addGlobalMonitorForEvents(
             matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]
         ) { [weak self] _ in
-            // addGlobalMonitor delivers on the main thread already,
-            // but the closure is non-isolated; hop to MainActor
-            // explicitly so the dismiss call type-checks.
             Task { @MainActor in self?.dismiss() }
         }
         globalKeyMonitor = NSEvent.addGlobalMonitorForEvents(
@@ -163,31 +362,17 @@ private final class PanelController {
 
     // MARK: - Content building
 
-    private func wireRowTaps(in view: NSView) {
-        for sub in view.subviews {
-            if let row = sub as? ItemRow {
-                row.onTap = { [weak self] item in
-                    guard let self else { return }
-                    self.onSelect(item, self.target)
-                    self.dismiss()
-                }
-            } else {
-                wireRowTaps(in: sub)
-            }
-        }
-    }
-
     /// Panel internal width target. Wide enough for typical
-    /// breadcrumbed labels (e.g. "ウィンドウ › 最大化(ズーム)") without
-    /// wrapping; narrow enough not to feel like a dialog. Each row
-    /// constrains to this so right edges align and the hover
-    /// highlight is rectangular.
-    static let contentWidth: CGFloat = 260
+    /// breadcrumbed labels without wrapping; narrow enough not to feel
+    /// like a dialog. Each row constrains to this so right edges align
+    /// and the hover highlight is rectangular.
+    static let contentWidth: CGFloat = 240
 
-    private static func buildContent(items: [LauncherItem],
-                                      target: Target) -> NSView {
-        // Background blur — matches the gesture overlay's dark
-        // vibrant look (see overlayBlurEnabled in WandConfig).
+    /// Build the row views into `content` (NSVisualEffectView wrapper)
+    /// and return the row list so the caller can wire callbacks.
+    private static func buildRows(nodes: [PanelNode],
+                                   header: HeaderSpec?,
+                                   into content: NSView) -> [ItemRow] {
         let bg = NSVisualEffectView()
         bg.material = .menu
         bg.blendingMode = .behindWindow
@@ -195,6 +380,7 @@ private final class PanelController {
         bg.wantsLayer = true
         bg.layer?.cornerRadius = 8
         bg.layer?.masksToBounds = true
+        bg.translatesAutoresizingMaskIntoConstraints = false
 
         let stack = NSStackView()
         stack.orientation = .vertical
@@ -203,25 +389,32 @@ private final class PanelController {
         stack.edgeInsets = NSEdgeInsets(top: 5, left: 5, bottom: 5, right: 5)
         stack.translatesAutoresizingMaskIntoConstraints = false
 
-        var rows: [NSView] = []
-        if let header = makeHeader(for: target) {
-            rows.append(header)
-            rows.append(makeSeparator())
-        }
-        for item in items {
-            if item.separatorBefore && !rows.isEmpty {
-                rows.append(makeSeparator())
-            }
-            rows.append(makeRow(item))
+        var rows: [ItemRow] = []
+        var views: [NSView] = []
+
+        if let h = header {
+            let hr = ItemRow(kind: .header, label: h.name, icon: h.icon)
+            rows.append(hr)
+            views.append(hr)
+            views.append(makeSeparator())
         }
 
-        // Constrain each row to a fixed width so right edges align
-        // and ItemRow's hover-highlight fills the full row. The stack's
-        // `.leading` alignment otherwise lets each row size to its own
-        // intrinsic width.
-        for row in rows {
-            stack.addArrangedSubview(row)
-            row.widthAnchor.constraint(equalToConstant: contentWidth).isActive = true
+        for node in nodes {
+            switch node {
+            case .item(let item):
+                if item.separatorBefore && !views.isEmpty {
+                    views.append(makeSeparator())
+                }
+                views.append(makeItemRow(item, into: &rows))
+            case .folder(let name, let children):
+                views.append(makeFolderRow(name: name, children: children,
+                                            into: &rows))
+            }
+        }
+
+        for v in views {
+            stack.addArrangedSubview(v)
+            v.widthAnchor.constraint(equalToConstant: contentWidth).isActive = true
         }
 
         bg.addSubview(stack)
@@ -231,44 +424,132 @@ private final class PanelController {
             stack.trailingAnchor.constraint(equalTo: bg.trailingAnchor),
             stack.bottomAnchor.constraint(equalTo: bg.bottomAnchor),
         ])
-        bg.frame = NSRect(origin: .zero, size: stack.fittingSize)
-        return bg
+
+        content.addSubview(bg)
+        NSLayoutConstraint.activate([
+            bg.topAnchor.constraint(equalTo: content.topAnchor),
+            bg.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+            bg.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+            bg.bottomAnchor.constraint(equalTo: content.bottomAnchor),
+        ])
+        content.frame = NSRect(origin: .zero, size: stack.fittingSize)
+        return rows
     }
 
-    private static func makeHeader(for target: Target) -> NSView? {
-        let (name, icon) = AppIconCache.shared.lookup(
-            bundleID: target.bundleID, iconSize: 16)
-        if name.isEmpty && icon == nil { return nil }
-        let row = ItemRow(label: name, icon: icon, item: nil)
-        row.isEnabled = false
-        row.isHeader = true
-        return row
-    }
-
-    private static func makeRow(_ item: LauncherItem) -> NSView {
+    private static func makeItemRow(_ item: LauncherItem,
+                                     into rows: inout [ItemRow]) -> NSView {
         if !item.dynamic.isEmpty {
             // Dynamic items aren't supported in panel mode yet —
-            // expanding them would mean rendering a child panel /
-            // disclosure section, which is out of MVP scope. Show a
-            // disabled placeholder so the user notices instead of
-            // wondering why their dynamic item silently vanished.
-            let row = ItemRow(
+            // expanding them would mean rendering a child panel
+            // populated by shell output, which is out of MVP scope.
+            // Show a disabled placeholder so the user notices instead
+            // of wondering why their dynamic item silently vanished.
+            let r = ItemRow(
+                kind: .placeholder,
                 label: "\(item.name) (dynamic — N/A in panel)",
-                icon: nil, item: nil)
-            row.isEnabled = false
-            return row
+                icon: nil)
+            rows.append(r)
+            return r
         }
-        let label = renderLabel(item)
+        let label = renderItemLabel(item)
         let icon = item.icon.isEmpty
             ? nil
-            : LauncherMenu.resolveItemIcon(item.icon)
-        return ItemRow(label: label, icon: icon, item: item)
+            : resolveItemIcon(item.icon)
+        let r = ItemRow(kind: .leaf(item), label: label, icon: icon)
+        rows.append(r)
+        return r
     }
 
-    /// Build the row title from the item, folding in group breadcrumb
-    /// and state marker. Submenu nesting isn't rendered — the path
-    /// becomes a prefix so the user still sees the grouping.
-    private static func renderLabel(_ item: LauncherItem) -> String {
+    /// Item-icon resolution. See `LauncherItem.icon` for the
+    /// recognised forms. Returns nil (which collapses to no image on
+    /// the row) on miss; logs once so a typo is visible in
+    /// `/tmp/wand.log` without spamming every popup.
+    static func resolveItemIcon(_ spec: String) -> NSImage? {
+        let pt: CGFloat = 16
+
+        // SF Symbol prefix.
+        if spec.hasPrefix("SF:") {
+            let name = String(spec.dropFirst(3))
+            let cfg = NSImage.SymbolConfiguration(pointSize: pt,
+                                                   weight: .regular)
+            guard let img = NSImage(systemSymbolName: name,
+                                     accessibilityDescription: nil)?
+                .withSymbolConfiguration(cfg) else {
+                Log.line("launcher-panel: unknown SF Symbol \"\(name)\" "
+                         + "in item icon — falling back to no icon")
+                return nil
+            }
+            return img
+        }
+
+        // File path — absolute, tilde, or relative to the config dir.
+        let looksLikePath = spec.hasPrefix("/")
+            || spec.hasPrefix("~")
+            || spec.contains("/")
+            || spec.hasSuffix(".png")
+            || spec.hasSuffix(".jpg")
+            || spec.hasSuffix(".jpeg")
+            || spec.hasSuffix(".gif")
+            || spec.hasSuffix(".tiff")
+            || spec.hasSuffix(".icns")
+        if looksLikePath {
+            let path = resolveIconPath(spec)
+            guard let img = NSImage(contentsOfFile: path) else {
+                Log.line("launcher-panel: could not load item icon "
+                         + "from \(path) — falling back to no icon")
+                return nil
+            }
+            img.size = NSSize(width: pt, height: pt)
+            return img
+        }
+
+        // Text / emoji — draw the glyph into an NSImage.
+        return textIcon(spec, pointSize: pt)
+    }
+
+    private static func resolveIconPath(_ spec: String) -> String {
+        if spec.hasPrefix("/") { return spec }
+        if spec.hasPrefix("~") {
+            return (spec as NSString).expandingTildeInPath
+        }
+        // Relative — resolve against the config file's directory.
+        let configDir = (WandConfig.path as NSString)
+            .deletingLastPathComponent
+        return "\(configDir)/\(spec)"
+    }
+
+    private static func textIcon(_ text: String,
+                                  pointSize pt: CGFloat) -> NSImage? {
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: pt * 0.85),
+        ]
+        let attributed = NSAttributedString(string: text, attributes: attrs)
+        let measured = attributed.size()
+        guard measured.width > 0 && measured.height > 0 else { return nil }
+        let size = NSSize(width: pt, height: pt)
+        let img = NSImage(size: size)
+        img.lockFocus()
+        let origin = NSPoint(
+            x: (size.width - measured.width) / 2,
+            y: (size.height - measured.height) / 2)
+        attributed.draw(at: origin)
+        img.unlockFocus()
+        return img
+    }
+
+    private static func makeFolderRow(name: String,
+                                       children: [PanelNode],
+                                       into rows: inout [ItemRow]) -> NSView {
+        let r = ItemRow(kind: .folder(name: name, children: children),
+                        label: name, icon: nil)
+        rows.append(r)
+        return r
+    }
+
+    /// Build the row title from the item, folding in state marker.
+    /// The group path is consumed by tree-building so it doesn't
+    /// appear in the label anymore.
+    private static func renderItemLabel(_ item: LauncherItem) -> String {
         var parts: [String] = []
         switch item.state {
         case "on":    parts.append("✓")
@@ -282,9 +563,6 @@ private final class PanelController {
                 default: break
                 }
             }
-        }
-        if !item.group.isEmpty {
-            parts.append(item.group.joined(separator: " › ") + " ›")
         }
         parts.append(item.name)
         return parts.joined(separator: " ")
@@ -310,10 +588,9 @@ private final class PanelController {
     }
 
     /// Nudge `rect` so it stays on the screen containing `anchor`.
-    /// PopClip-style: prefer down-right; if it falls off the bottom
-    /// or right, flip / clamp.
-    private static func clampToScreen(_ rect: NSRect,
-                                       anchor: NSPoint) -> NSRect {
+    /// PopClip-style: prefer down-right; if it falls off the bottom or
+    /// right, flip / clamp.
+    static func clampToScreen(_ rect: NSRect, anchor: NSPoint) -> NSRect {
         let screen = NSScreen.screens.first(where: { $0.frame.contains(anchor) })
             ?? NSScreen.main
             ?? NSScreen.screens.first
@@ -331,35 +608,37 @@ private final class PanelController {
     }
 }
 
+/// One row's visual + behavioural kind. `header` is the app-icon
+/// banner at top of the root panel; `placeholder` is a disabled row
+/// (e.g. dynamic-not-supported); `leaf` fires onSelect; `folder` opens
+/// a child panel on hover.
+private enum RowKind {
+    case header
+    case placeholder
+    case leaf(LauncherItem)
+    case folder(name: String, children: [PanelNode])
+}
+
 /// One clickable launcher row. Custom NSView containing a fixed-size
-/// NSImageView + an NSTextField, laid out manually so every row has
-/// the same height regardless of icon kind (SF Symbol vs emoji glyph
-/// vs app .icns). Hover highlight fills the row corner-to-corner.
-///
-/// Built without the target controller — PanelController patches
-/// `onTap` in after construction so it owns the closure lifetime.
+/// NSImageView + an NSTextField + an optional chevron, laid out
+/// manually so every row has the same height regardless of icon kind
+/// (SF Symbol vs emoji glyph vs app .icns). Hover highlight fills the
+/// row corner-to-corner.
 @MainActor
 private final class ItemRow: NSView {
 
-    var onTap: ((LauncherItem) -> Void)?
-    var isEnabled: Bool = true {
-        didSet { applyEnabledStyle() }
-    }
-    /// Header rows (app icon + name) render with a muted title and
-    /// don't react to hover. Same disabled visual as `isEnabled =
-    /// false`, but without the placeholder-row connotation.
-    var isHeader: Bool = false {
-        didSet { applyEnabledStyle() }
-    }
+    let kind: RowKind
+    var onClick: (() -> Void)?
+    var onHover: (() -> Void)?
 
     private let iconView = NSImageView()
     private let titleField = NSTextField(labelWithString: "")
-    private let item: LauncherItem?
+    private var chevronView: NSImageView?
     private static let iconSize: CGFloat = 16
     private static let rowHeight: CGFloat = 22
 
-    init(label: String, icon: NSImage?, item: LauncherItem?) {
-        self.item = item
+    init(kind: RowKind, label: String, icon: NSImage?) {
+        self.kind = kind
         super.init(frame: .zero)
 
         translatesAutoresizingMaskIntoConstraints = false
@@ -374,11 +653,35 @@ private final class ItemRow: NSView {
         titleField.translatesAutoresizingMaskIntoConstraints = false
         titleField.stringValue = label
         titleField.font = .menuFont(ofSize: 0)
-        titleField.textColor = .labelColor
         titleField.lineBreakMode = .byTruncatingTail
         titleField.maximumNumberOfLines = 1
         titleField.cell?.usesSingleLineMode = true
         addSubview(titleField)
+
+        var trailingAnchorTarget = trailingAnchor
+        var trailingConst: CGFloat = -10
+
+        if case .folder = kind {
+            let cv = NSImageView()
+            cv.translatesAutoresizingMaskIntoConstraints = false
+            cv.image = NSImage(systemSymbolName: "chevron.right",
+                                accessibilityDescription: nil)?
+                .withSymbolConfiguration(
+                    .init(pointSize: 9, weight: .semibold))
+            cv.contentTintColor = .secondaryLabelColor
+            cv.imageScaling = .scaleProportionallyDown
+            addSubview(cv)
+            NSLayoutConstraint.activate([
+                cv.trailingAnchor.constraint(equalTo: trailingAnchor,
+                                              constant: -8),
+                cv.centerYAnchor.constraint(equalTo: centerYAnchor),
+                cv.widthAnchor.constraint(equalToConstant: 10),
+                cv.heightAnchor.constraint(equalToConstant: 10),
+            ])
+            chevronView = cv
+            trailingAnchorTarget = cv.leadingAnchor
+            trailingConst = -6
+        }
 
         NSLayoutConstraint.activate([
             heightAnchor.constraint(equalToConstant: Self.rowHeight),
@@ -390,21 +693,41 @@ private final class ItemRow: NSView {
 
             titleField.leadingAnchor.constraint(equalTo: iconView.trailingAnchor,
                                                 constant: 8),
-            titleField.trailingAnchor.constraint(equalTo: trailingAnchor,
-                                                 constant: -10),
+            titleField.trailingAnchor.constraint(equalTo: trailingAnchorTarget,
+                                                  constant: trailingConst),
             titleField.centerYAnchor.constraint(equalTo: centerYAnchor),
         ])
+
+        applyIdleStyle()
     }
 
     required init?(coder: NSCoder) { fatalError("not used") }
 
-    private func applyEnabledStyle() {
-        if isHeader {
-            titleField.textColor = .secondaryLabelColor
-        } else {
-            titleField.textColor = isEnabled
-                ? .labelColor : .tertiaryLabelColor
+    private var isInteractive: Bool {
+        switch kind {
+        case .leaf, .folder: return true
+        case .header, .placeholder: return false
         }
+    }
+
+    private func applyIdleStyle() {
+        layer?.backgroundColor = NSColor.clear.cgColor
+        switch kind {
+        case .header:
+            titleField.textColor = .secondaryLabelColor
+        case .placeholder:
+            titleField.textColor = .tertiaryLabelColor
+        case .leaf, .folder:
+            titleField.textColor = .labelColor
+        }
+        chevronView?.contentTintColor = .secondaryLabelColor
+    }
+
+    private func applyHoverStyle() {
+        layer?.backgroundColor = NSColor.controlAccentColor
+            .withAlphaComponent(0.85).cgColor
+        titleField.textColor = .white
+        chevronView?.contentTintColor = .white
     }
 
     override func updateTrackingAreas() {
@@ -419,19 +742,17 @@ private final class ItemRow: NSView {
     }
 
     override func mouseEntered(with event: NSEvent) {
-        guard isEnabled, !isHeader else { return }
-        layer?.backgroundColor = NSColor.controlAccentColor
-            .withAlphaComponent(0.85).cgColor
-        titleField.textColor = .white
+        guard isInteractive else { return }
+        applyHoverStyle()
+        onHover?()
     }
 
     override func mouseExited(with event: NSEvent) {
-        layer?.backgroundColor = NSColor.clear.cgColor
-        applyEnabledStyle()
+        applyIdleStyle()
     }
 
     override func mouseUp(with event: NSEvent) {
-        guard isEnabled, !isHeader, let item else { return }
-        onTap?(item)
+        guard isInteractive else { return }
+        onClick?()
     }
 }
