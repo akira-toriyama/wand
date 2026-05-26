@@ -135,6 +135,26 @@ under the cursor. App-specific items there are filtered out
 automatically. Good fit for Spotlight, lock screen, "open
 Terminal", etc.
 
+### Selection-aware shell items (`$SELECTION`)
+
+Shell actions launched from the menu also see a `$SELECTION` env
+var carrying the text selected in the focused element at the
+moment you middle-clicked. Empty if nothing is selected or the
+focused app doesn't expose AX selection. Use it for translate /
+search / send-to-app workflows:
+
+```toml
+[[launcher.item]]
+name = "Translate"
+icon = "SF:globe"
+action-type = "shell"
+action-cmd = 'open "https://translate.google.com/?sl=auto&tl=en&text=$(printf %s "$SELECTION" | sed "s/ /%20/g")"'
+```
+
+Quote `$SELECTION` in shell commands — the content is whatever the
+user happened to highlight (URLs, code, shell metacharacters), and
+is **untrusted** in the same sense `WAND_TARGET_TITLE` is.
+
 ### Conditional filters (`filter-title` / `filter-shell`)
 
 `apps` decides which apps a rule / item belongs to.
