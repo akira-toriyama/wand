@@ -37,7 +37,7 @@ final class AppIconCache {
                                 as? NSRunningApplication)?.bundleIdentifier
             else { return }
             MainActor.assumeIsolated {
-                self?.entries.removeValue(forKey: bid)
+                _ = self?.entries.removeValue(forKey: bid)
             }
         }
     }
