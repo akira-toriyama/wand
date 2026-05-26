@@ -45,7 +45,7 @@ public enum LauncherMenu {
     private static func buildMenu(_ items: [LauncherItem],
                                    target: Target,
                                    actionTarget: MenuActionTarget) -> NSMenu {
-        let root = NSMenu()
+        let root = darkMenu()
         // App-icon header so the user sees which window the menu is
         // acting on — the cursor-anchored target is often NOT the
         // focused app, and an unmarked "閉じる" would be ambiguous.
@@ -87,7 +87,7 @@ public enum LauncherMenu {
                 if !item.icon.isEmpty {
                     header.image = resolveItemIcon(item.icon)
                 }
-                let sub = NSMenu(title: item.name)
+                let sub = darkMenu(title: item.name)
                 for child in DynamicItems.expand(
                     parent: item, actionTarget: actionTarget) {
                     sub.addItem(child)
@@ -221,6 +221,16 @@ public enum LauncherMenu {
         return header
     }
 
+    /// NSMenu forced to dark appearance so the launcher matches the
+    /// gesture overlay's dark look even when the system is in light
+    /// mode. macOS still applies vibrancy / translucency over the
+    /// background — pure-black requires an NSPanel rewrite.
+    private static func darkMenu(title: String = "") -> NSMenu {
+        let m = NSMenu(title: title)
+        m.appearance = NSAppearance(named: .darkAqua)
+        return m
+    }
+
     /// Walk down `path`, creating folder NSMenuItems as needed.
     private static func resolveParent(_ path: [String],
                                        root: NSMenu,
@@ -234,7 +244,7 @@ public enum LauncherMenu {
                 continue
             }
             let folder = NSMenuItem(title: segment, action: nil, keyEquivalent: "")
-            let sub = NSMenu(title: segment)
+            let sub = darkMenu(title: segment)
             folder.submenu = sub
             current.addItem(folder)
             cache[key] = sub
