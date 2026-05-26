@@ -1,22 +1,40 @@
 import Foundation
 
+/// Predicate evaluator for `filter-shell` rows. Returns `true` when
+/// the shell command exits 0 inside the adapter's bounded budget.
+/// Core can't shell out, so this is an injection point — the App
+/// layer wires `BoundedShell.run` in. The default ("always true")
+/// keeps callsites that don't care (overlay prefix-candidates, the
+/// `--test` CLI dry-run) unchanged.
+public typealias ShellFilterEval = @Sendable (String) -> Bool
+public let defaultShellFilterEval: ShellFilterEval = { _ in true }
+
 public enum Matcher {
 
     public static func match(pattern: String,
-                             bundleID: String,
-                             rules: [Rule]) -> Rule? {
-        let bid = bundleID.lowercased()
+                             target: Target,
+                             rules: [Rule],
+                             evalShell: ShellFilterEval = defaultShellFilterEval)
+        -> Rule? {
         for r in rules {
             guard r.pattern == pattern else { continue }
-            if appsAllow(r.apps, bundleID: bid) { return r }
+            if passesFilter(apps: r.apps,
+                            filterTitle: r.filterTitle,
+                            filterShell: r.filterShell,
+                            target: target,
+                            evalShell: evalShell) { return r }
         }
         return nil
     }
 
     /// Rules whose pattern **starts with** `prefix` — drives the
-    /// overlay's gesture-assist (what's reachable from here). An exact
-    /// match (`pattern == prefix`) is included since that's a prefix
-    /// of itself.
+    /// overlay's gesture-assist (what's reachable from here). An
+    /// exact match (`pattern == prefix`) is included since that's a
+    /// prefix of itself. **Apps-only filter** on this path: the
+    /// assist tooltips redraw on every sample, and re-running
+    /// title-glob / shell predicates per sample is too costly. The
+    /// overlay's hint is permissive — it shows what *might* fire;
+    /// the actual decision at button-up runs the full filter chain.
     public static func candidates(prefix: String, bundleID: String,
                                   rules: [Rule]) -> [Rule] {
         guard !prefix.isEmpty else { return [] }
@@ -29,10 +47,13 @@ public enum Matcher {
     /// Single source of truth for "this gesture acts." Controller and
     /// overlay both call it so the dispatch decision and the trail
     /// color can't drift apart.
-    public static func resolve(pattern: String, bundleID: String,
-                               rules: [Rule], excludes: [String]) -> Rule? {
-        if isExcluded(bundleID: bundleID, by: excludes) { return nil }
-        return match(pattern: pattern, bundleID: bundleID, rules: rules)
+    public static func resolve(pattern: String, target: Target,
+                               rules: [Rule], excludes: [String],
+                               evalShell: ShellFilterEval = defaultShellFilterEval)
+        -> Rule? {
+        if isExcluded(bundleID: target.bundleID, by: excludes) { return nil }
+        return match(pattern: pattern, target: target, rules: rules,
+                     evalShell: evalShell)
     }
 
     public static func isExcluded(bundleID: String, by excludes: [String]) -> Bool {
@@ -41,15 +62,47 @@ public enum Matcher {
     }
 
     /// Launcher counterpart of `match` — filters items by both the
-    /// global `excludeApps` and each item's own `apps` glob, keeping
-    /// document order so the menu builder can place items as written.
-    /// Returns empty if the target is excluded entirely.
+    /// global `excludeApps` and each item's own `apps` + filter-title
+    /// + filter-shell, keeping document order so the menu builder
+    /// can place items as written. Returns empty if the target is
+    /// excluded entirely.
     public static func itemsFor(target: Target,
                                 items: [LauncherItem],
-                                excludes: [String]) -> [LauncherItem] {
+                                excludes: [String],
+                                evalShell: ShellFilterEval = defaultShellFilterEval)
+        -> [LauncherItem] {
         if isExcluded(bundleID: target.bundleID, by: excludes) { return [] }
+        return items.filter {
+            passesFilter(apps: $0.apps,
+                         filterTitle: $0.filterTitle,
+                         filterShell: $0.filterShell,
+                         target: target,
+                         evalShell: evalShell)
+        }
+    }
+
+    /// Apps glob + optional title glob + optional shell predicate —
+    /// the three conditions all rules / items use, in increasing
+    /// cost order so an early-fail skips the more expensive check.
+    /// Filter-title and filter-shell default to empty (no filter),
+    /// so an item with neither set behaves exactly like before this
+    /// feature landed.
+    public static func passesFilter(apps: [String],
+                                     filterTitle: String,
+                                     filterShell: String,
+                                     target: Target,
+                                     evalShell: ShellFilterEval)
+        -> Bool {
         let bid = target.bundleID.lowercased()
-        return items.filter { appsAllow($0.apps, bundleID: bid) }
+        if !appsAllow(apps, bundleID: bid) { return false }
+        if !filterTitle.isEmpty {
+            let title = target.title.lowercased()
+            if !glob(filterTitle.lowercased(), title) { return false }
+        }
+        if !filterShell.isEmpty {
+            if !evalShell(filterShell) { return false }
+        }
+        return true
     }
 
     /// Per-rule `apps` filter:

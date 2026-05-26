@@ -9,9 +9,9 @@
 import Foundation
 import WandCore
 
-enum BoundedShell {
+public enum BoundedShell {
 
-    enum Outcome {
+    public enum Outcome {
         /// Process exited normally — `stdout` is the captured output,
         /// `exitCode` is the child's exit status (zero or non-zero).
         case exited(stdout: String, exitCode: Int32)
@@ -23,12 +23,20 @@ enum BoundedShell {
 
     /// Run `cmd` under `/bin/sh -c`, blocking for at most `timeoutMs`
     /// milliseconds. Stdout is captured (stderr discarded — caller
-    /// inspects exit code for failure detection). Safe to call on
-    /// the main thread; the bounded wait keeps the UI responsive.
-    static func run(_ cmd: String, timeoutMs: Int) -> Outcome {
+    /// inspects exit code for failure detection). `extraEnv` merges
+    /// on top of the daemon's inherited env; pass an empty dict if
+    /// the child doesn't need extra vars. Safe to call on the main
+    /// thread; the bounded wait keeps the UI responsive.
+    public static func run(_ cmd: String, timeoutMs: Int,
+                           env extraEnv: [String: String] = [:]) -> Outcome {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/bin/sh")
         p.arguments = ["-c", cmd]
+        if !extraEnv.isEmpty {
+            var env = ProcessInfo.processInfo.environment
+            for (k, v) in extraEnv { env[k] = v }
+            p.environment = env
+        }
         let out = Pipe()
         p.standardOutput = out
         p.standardError = Pipe()

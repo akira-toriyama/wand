@@ -36,7 +36,7 @@ private func matchStroke(_ event: WandEvent, _ rules: [Rule]) -> Rule? {
     let dirs = Recognition.recognize(samples: event.samples, minStrokePx: 16)
     guard !dirs.isEmpty else { return nil }
     return Matcher.match(pattern: dirs.patternString,
-                         bundleID: event.target.bundleID, rules: rules)
+                         target: event.target, rules: rules)
 }
 
 /// Sendable sink for the @Sendable handler to record into — the

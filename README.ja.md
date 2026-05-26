@@ -134,6 +134,34 @@ AX target が無い場所でも menu が出る(アプリ特定アイテムは
 自動で除外)。Spotlight / 画面ロック / "ターミナルを開く" 等の
 システム横断機能の置き場として最適。
 
+### 条件フィルタ(`filter-title` / `filter-shell`)
+
+`apps` で「どのアプリの行か」を決め、**`filter-title`** で
+ウィンドウタイトルを glob 絞り込み、**`filter-shell`** で
+何でもありの shell 述語を評価する。`[[gesture.rule]]` /
+`[[launcher.item]]` どちらでも使える:
+
+```toml
+[[launcher.item]]
+name = "Issue を PR にする"
+icon = "SF:arrow.triangle.pull"
+apps = ["*chrome*"]
+filter-title = "*github.com*/issues/*"      # GitHub Issue のときだけ
+action-type = "url"
+action-url = "..."
+
+[[launcher.item]]
+name = "深夜限定リマインダ"
+filter-shell = "test $(date +%H) -ge 22"    # 22:00 以降のみ
+action-type = "shell"
+action-cmd  = "afplay /System/Library/Sounds/Glass.aiff"
+```
+
+`filter-title` はサブマイクロ秒(in-process グロブ、タイトルは
+ボタン押下 / クリック時点でキャプチャ済)。`filter-shell` は
+1 行あたり 5〜20ms(プロセス起動コスト)、100ms 強制
+タイムアウト — 多用注意。
+
 ## インストール
 
 ```sh

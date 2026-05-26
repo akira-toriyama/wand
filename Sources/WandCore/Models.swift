@@ -66,12 +66,26 @@ public struct Rule: Sendable, Equatable {
     public let name: String
     public let pattern: String
     public let apps: [String]
+    /// Optional title-glob filter — evaluated on top of `apps` at
+    /// match time. Empty = no filter. See `Matcher.passesFilter`.
+    public let filterTitle: String
+    /// Optional shell predicate — evaluated on top of `apps` +
+    /// `filterTitle`. Empty = no filter. The body runs via
+    /// `BoundedShell.run` with a tight budget; exit 0 means the
+    /// rule fires. The `WAND_TARGET_*` env vars carry the target
+    /// identity into the shell, same shape as `Action.shell`.
+    public let filterShell: String
     public let action: Action
 
-    public init(name: String, pattern: String, apps: [String], action: Action) {
+    public init(name: String, pattern: String, apps: [String],
+                filterTitle: String = "",
+                filterShell: String = "",
+                action: Action) {
         self.name = name
         self.pattern = pattern
         self.apps = apps
+        self.filterTitle = filterTitle
+        self.filterShell = filterShell
         self.action = action
     }
 }

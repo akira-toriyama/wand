@@ -3,6 +3,15 @@
 import XCTest
 @testable import WandCore
 
+/// Test helper: build a minimal `Target` from a bundle id for the
+/// match callsites that don't exercise title / pid / frame /
+/// windowID. The empty title means filter-title tests must pass it
+/// explicitly (none of these tests do).
+private func tgt(_ bid: String, title: String = "") -> Target {
+    Target(pid: 0, bundleID: bid, title: title,
+           frame: .zero, windowID: 0)
+}
+
 final class MatcherTests: XCTestCase {
 
     func testMatcherFirstWins() {
@@ -11,7 +20,7 @@ final class MatcherTests: XCTestCase {
             Rule(name: "B", pattern: "D", apps: ["*"], action: .key("cmd+2")),
         ]
         XCTAssertEqual(Matcher.match(pattern: "D",
-                                     bundleID: "com.apple.Finder",
+                                     target: tgt("com.apple.Finder"),
                                      rules: rules)?.name, "A")
     }
 
@@ -22,10 +31,10 @@ final class MatcherTests: XCTestCase {
                  action: .key("cmd+w"))
         ]
         XCTAssertNil(Matcher.match(pattern: "D",
-                                   bundleID: "com.apple.dt.Xcode",
+                                   target: tgt("com.apple.dt.Xcode"),
                                    rules: rules))
         XCTAssertNotNil(Matcher.match(pattern: "D",
-                                      bundleID: "com.apple.Finder",
+                                      target: tgt("com.apple.Finder"),
                                       rules: rules))
     }
 
@@ -36,7 +45,7 @@ final class MatcherTests: XCTestCase {
             Rule(name: "any", pattern: "D", apps: [], action: .key("cmd+w"))
         ]
         XCTAssertNotNil(Matcher.match(pattern: "D",
-                                      bundleID: "com.anything.here",
+                                      target: tgt("com.anything.here"),
                                       rules: rules))
     }
 
@@ -48,10 +57,10 @@ final class MatcherTests: XCTestCase {
                  apps: ["!com.apple.dt.Xcode"], action: .key("cmd+w"))
         ]
         XCTAssertNil(Matcher.match(pattern: "D",
-                                   bundleID: "com.apple.dt.Xcode",
+                                   target: tgt("com.apple.dt.Xcode"),
                                    rules: rules))
         XCTAssertNotNil(Matcher.match(pattern: "D",
-                                      bundleID: "com.apple.Finder",
+                                      target: tgt("com.apple.Finder"),
                                       rules: rules))
     }
 
@@ -63,7 +72,7 @@ final class MatcherTests: XCTestCase {
                  apps: ["com.apple.safari"], action: .key("cmd+w"))
         ]
         XCTAssertNotNil(Matcher.match(pattern: "D",
-                                      bundleID: "COM.APPLE.SAFARI",
+                                      target: tgt("COM.APPLE.SAFARI"),
                                       rules: rules))
     }
 
@@ -123,10 +132,10 @@ final class MatcherTests: XCTestCase {
             Rule(name: "any", pattern: "D", apps: ["*"], action: .key("cmd+w"))
         ]
         XCTAssertNotNil(
-            Matcher.resolve(pattern: "D", bundleID: "com.apple.finder",
+            Matcher.resolve(pattern: "D", target: tgt("com.apple.finder"),
                             rules: rules, excludes: []))
         XCTAssertNil(
-            Matcher.resolve(pattern: "D", bundleID: "com.apple.finder",
+            Matcher.resolve(pattern: "D", target: tgt("com.apple.finder"),
                             rules: rules, excludes: ["com.apple.finder"]))
     }
 
