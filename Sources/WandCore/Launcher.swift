@@ -137,7 +137,22 @@ public struct LauncherItem: Sendable, Equatable {
     }
 }
 
-/// The whole `[launcher]` block. `trigger` lives here(not the top-
+/// Visual orientation of the launcher panel.
+/// - `.list`    — vertical list of rows (icon + label). The default,
+///                fits up to ~30 items, supports submenus and dynamic
+///                items, scales naturally for menu-like usage.
+/// - `.toolbar` — horizontal row of icon-only buttons (PopClip
+///                style). The item's `name` becomes a tooltip. Best
+///                for short, focused command sets (text-selection
+///                actions, ~6-8 items). Folder / dynamic items still
+///                open a child panel below, which uses `.list`
+///                regardless of the parent's layout.
+public enum LauncherLayout: String, Sendable, Hashable, CaseIterable {
+    case list
+    case toolbar
+}
+
+/// The whole `[launcher]` block. `trigger` lives here (not the top-
 /// level `[trigger]` which gestures own) so each family has its own
 /// button. `enabled = false` keeps the tap from being installed at
 /// all — same opt-out shape as `overlay.enabled`.
@@ -145,22 +160,41 @@ public struct LauncherItem: Sendable, Equatable {
 /// The launcher UI is always a non-activating NSPanel — the user
 /// keeps keyboard focus in the underlying app while picking. There
 /// is no NSMenu fallback (it was removed once panel-mode covered the
-/// schema completely).
+/// schema completely). `layout` chooses the panel's orientation;
+/// the items-file `[launcher].layout` overrides this one for the
+/// `wand --show-menu` external-trigger path.
 public struct LauncherSpec: Sendable, Equatable {
     public let enabled: Bool
     public let trigger: Trigger
+    public let layout: LauncherLayout
     public let items: [LauncherItem]
 
     public init(enabled: Bool, trigger: Trigger,
+                layout: LauncherLayout = .list,
                 items: [LauncherItem]) {
         self.enabled = enabled
         self.trigger = trigger
+        self.layout = layout
         self.items = items
     }
 
     public static let `default` = LauncherSpec(
         enabled: false,
         trigger: Trigger(button: .middle, modifiers: []),
+        layout: .list,
         items: []
     )
+}
+
+/// Result of parsing a standalone items file (the `--show-menu
+/// --items <PATH>` input). Carries both the items and the file's
+/// optional `[launcher].layout` declaration so the external-trigger
+/// path can pick the right UI without consulting the main config.
+public struct LauncherItemsFile: Sendable, Equatable {
+    public let layout: LauncherLayout
+    public let items: [LauncherItem]
+    public init(layout: LauncherLayout, items: [LauncherItem]) {
+        self.layout = layout
+        self.items = items
+    }
 }
