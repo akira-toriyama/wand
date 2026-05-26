@@ -264,6 +264,12 @@ modifiers = []                 # e.g. ["ctrl"] to require ctrl + middle
 # Shell actions receive these env vars describing the target:
 #   WAND_TARGET_BUNDLE_ID, WAND_TARGET_PID,
 #   WAND_TARGET_TITLE,     WAND_TARGET_FRAME (x,y,w,h)
+# Launcher items additionally receive:
+#   SELECTION              the text selected in the focused element
+#                          at button-down (empty if none / AX not
+#                          granted). Use for translate / search /
+#                          send-to-app workflows. Untrusted — same
+#                          quoting caveat as WAND_TARGET_TITLE.
 
 
 # -----------------------------------------------------------------

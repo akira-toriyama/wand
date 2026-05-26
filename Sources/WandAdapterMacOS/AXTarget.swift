@@ -189,6 +189,37 @@ public enum AXTarget {
     /// Current trust state, without prompting — for `wand --doctor`.
     public static func isTrusted() -> Bool { AXIsProcessTrusted() }
 
+    /// Text selected in the system-focused element, or nil if none
+    /// (or AX not granted, or focused element doesn't expose
+    /// selected-text). Cheap synchronous AX lookup — safe to call
+    /// from the launcher hot path (button-down callback).
+    ///
+    /// The selection lives on the *focused* element, which is often
+    /// in a window different from the cursor-anchored target — e.g.
+    /// the user selects in window A then middle-clicks over window B
+    /// to act on that selection. Returning the focused element's
+    /// selection matches that mental model. (Cursor-anchored
+    /// targeting still applies to the *action's* destination — only
+    /// the `$SELECTION` payload comes from the focused element.)
+    public static func selectedText() -> String? {
+        let sys = AXUIElementCreateSystemWide()
+        var focused: AnyObject?
+        guard AXUIElementCopyAttributeValue(
+                sys, kAXFocusedUIElementAttribute as CFString, &focused)
+                == .success,
+              let elem = focused
+        else { return nil }
+        let axElem = elem as! AXUIElement
+        var text: AnyObject?
+        guard AXUIElementCopyAttributeValue(
+                axElem, kAXSelectedTextAttribute as CFString, &text)
+                == .success,
+              let s = text as? String,
+              !s.isEmpty
+        else { return nil }
+        return s
+    }
+
     /// Ensure Accessibility is granted; prompt the user if not.
     /// Called once from `Main` at server startup. Mirrors facet's
     /// `AX.ensureTrusted()`.

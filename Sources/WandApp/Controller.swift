@@ -164,6 +164,18 @@ public final class Controller: @unchecked Sendable {
         guard !visibleItems.isEmpty else { writeStatus(); return }
         counterLauncherShown += 1
         writeStatus()
+        // Capture the focused element's selected text at button-down
+        // time, so shell actions can read it via `$SELECTION` — same
+        // env-var contract the `--show-menu` external path already
+        // honours, now native too. Captured once at button-down
+        // (not at menu-close): the user's selection at the moment
+        // they triggered the menu is what they intended to act on.
+        let selection = AXTarget.selectedText()
+        if let sel = selection {
+            Log.line("controller: launcher captured $SELECTION = "
+                     + "\(sel.count) char(s)")
+        }
+        let env: [String: String] = selection.map { ["SELECTION": $0] } ?? [:]
         LauncherMenu.present(
             filteredItems: visibleItems,
             target: event.target,
@@ -172,7 +184,7 @@ public final class Controller: @unchecked Sendable {
             self?.counterLauncherDispatched += 1
             Log.line("controller: → launcher item \"\(item.name)\"")
             self?.writeStatus()
-            Dispatch.execute(item.action, on: target)
+            Dispatch.execute(item.action, on: target, extraEnv: env)
         }
     }
 
