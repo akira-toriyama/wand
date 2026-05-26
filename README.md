@@ -45,12 +45,12 @@ a small badge shows the **target app's icon** so the window wand
 will act on is unambiguous even when keyboard focus sits elsewhere.
 
 Colors, width, on/off, and per-piece toggles (badge / blur / size /
-animation) live in the `[overlay]` section of `config.toml`.
+animation) live in the `[gesture.overlay]` section of `config.toml`.
 
 The assist cards can also animate out — drop, slide, explode, vibrate,
 or burst with fireworks / confetti particles. Pick one effect for the
 moment a card becomes unreachable mid-gesture (`unmatch`) and another
-for the moment a rule actually fires (`match`), in `[effect]`. Default
+for the moment a rule actually fires (`match`), in `[gesture.effect]`. Default
 is silent.
 
 Actions target the window **under the cursor**, not whichever window
@@ -67,21 +67,21 @@ config and the daemon installs a second event tap alongside the
 gesture one. The menu is a native macOS `NSMenu` (submenus,
 keyboard navigation, click-outside dismiss all for free), anchored
 to the **window under the cursor at button-down** — same invariant
-as the gesture path. Each `[[item]]` is one row:
+as the gesture path. Each `[[launcher.item]]` is one row:
 
 ```toml
 [launcher]
 enabled = true
 button = "middle"                 # or "side1" / "side2" / "right"
 
-[[item]]
+[[launcher.item]]
 name = "新規タブ"
 icon = "🌐"                        # emoji / SF:<name> / file path
 apps = ["*chrome*", "*safari*"]
 action-type = "key"
 action-keys = "cmd+t"
 
-[[item]]
+[[launcher.item]]
 name = "名前順"
 icon = "SF:textformat.abc"         # macOS SF Symbol
 group = ["並び替え"]               # nests this row inside a "並び替え" submenu
@@ -100,7 +100,7 @@ shell command and provide `template-*` fields; each stdout line
 becomes one child item with `{line}` substituted in the template:
 
 ```toml
-[[item]]
+[[launcher.item]]
 name = "ブランチ切替"
 icon = "SF:point.3.connected.trianglepath.dotted"
 dynamic = 'cd ~/repo && git branch --format="%(refname:short)"'
@@ -118,7 +118,7 @@ shell commands — the line content is untrusted.
 Items can also carry a **checkmark state** via `state`:
 
 ```toml
-[[item]]
+[[launcher.item]]
 name = "ダークモード"
 state = "shell:defaults read -g AppleInterfaceStyle 2>/dev/null | grep -q Dark"
 action-type = "shell"
@@ -172,7 +172,7 @@ explicitly with `wand --validate`.
 A rule looks like this:
 
 ```toml
-[[rules]]
+[[gesture.rule]]
 name = "close tab"
 pattern = "DR"                        # down → right
 apps = ["*chrome*", "*safari*"]       # matches the window under the cursor
@@ -204,14 +204,14 @@ exists) **and no `!` entry matches**. Case-insensitive. Examples:
 | `["*", "!*.chrome.beta*"]` | every app except Chrome's beta channel |
 | `["*chrome*", "*safari*"]` | Chrome OR Safari |
 
-`[recognition] max-segment-ms` caps how long any one segment may
+`[gesture] max-segment-ms` caps how long any one segment may
 take — the clock resets on every turn, so a multi-segment gesture
 gets the full budget per leg and only a stalled single direction (an
 ordinary deliberate right-drag) runs past it and is abandoned. `0`
 (default) = no limit; the trail turns the no-match color once a
 segment runs past the budget.
 
-`[recognition] cancel-reversals` is the escape hatch: scribble the
+`[gesture] cancel-reversals` is the escape hatch: scribble the
 cursor back and forth and the in-progress gesture is abandoned on the
 spot — no waiting for a timeout, and releasing fires nothing. It
 counts 180° direction reversals; the default `2` catches a deliberate
@@ -220,13 +220,13 @@ back-and-forth without tripping on real gestures. `0` = off.
 must land within that window, so a fast scribble cancels but a slow
 deliberate back-and-forth doesn't; `0` = any speed.
 
-`[effect]` adds optional exit animations to the assist cards. Each
+`[gesture.effect]` adds optional exit animations to the assist cards. Each
 card normally pops out the moment it's no longer reachable from the
 shape you've drawn; with an effect set it eases out instead. Two
 hooks:
 
 ```toml
-[effect]
+[gesture.effect]
 unmatch = "drop"        # cards that became unreachable mid-gesture
 match   = "fireworks"   # the firing card, on button-up
 ```
@@ -251,7 +251,7 @@ wand --validate         # parse config.toml, exit 0/2
 wand --doctor           # health check: Accessibility, config, daemon, tap
 wand --test DR [app]    # dry-run: which rule fires for a pattern
 wand --record           # interactive recorder — draw a gesture, get a
-                          # paste-ready [[rules]] snippet on stdout
+                          # paste-ready [[gesture.rule]] snippet on stdout
 
 wand --status           # rule count, trigger, last gesture
 wand --reload           # re-read config.toml (also automatic on save)
@@ -267,9 +267,9 @@ reverse — it refuses if the daemon *is* running, because both
 would fight over the same CGEventTap.
 
 **Two transitions need a daemon restart** — everything else hot-reloads:
-- `[trigger]` (button / modifiers) — baked into the running tap's
+- `[gesture]` (button / modifiers) — baked into the running tap's
   event mask at `tapCreate` time
-- `[overlay].enabled = false → true` — when the daemon started with
+- `[gesture.overlay].enabled = false → true` — when the daemon started with
   overlay disabled, the window was never created; flipping it on
   later has nothing to attach to
 

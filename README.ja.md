@@ -44,13 +44,13 @@ L = 左    U = 上    R = 右    D = 下
 分かる。
 
 色・太さ・on/off と各パーツのトグル(badge / blur / size / anim)は
-`config.toml` の `[overlay]` で設定。
+`config.toml` の `[gesture.overlay]` で設定。
 
 ヒントカードには退場アニメーションも付けられる — drop / slide /
 explode / vibrate / fireworks / confetti(花火・紙吹雪)。
 ジェスチャー途中にカードが到達不能になった瞬間(`unmatch`)と、
 ボタンを離してルールが発動した瞬間(`match`)それぞれに別の効果を
-`[effect]` で割り当てられる。既定はどちらも無し(静かに消える)。
+`[gesture.effect]` で割り当てられる。既定はどちらも無し(静かに消える)。
 
 アクションは **カーソル直下のウィンドウ** を対象にする(キーボード
 フォーカスを持つウィンドウではない): `ax` はそのウィンドウを直接
@@ -65,21 +65,21 @@ wand は **中ボタンクリックで出るコンテキストメニュー** も
 メニューは macOS ネイティブの `NSMenu`(サブメニュー / キーボードナビ
 / クリック外で消える、すべて無料)、**ボタン押下時にカーソル直下に
 あったウィンドウ** に対して発動する — ジェスチャーと同じ不変条件。
-各 `[[item]]` が 1 行:
+各 `[[launcher.item]]` が 1 行:
 
 ```toml
 [launcher]
 enabled = true
 button = "middle"                 # "middle" / "side1" / "side2" / "right"
 
-[[item]]
+[[launcher.item]]
 name = "新規タブ"
 icon = "🌐"                        # emoji / SF:<name> / ファイルパス
 apps = ["*chrome*", "*safari*"]
 action-type = "key"
 action-keys = "cmd+t"
 
-[[item]]
+[[launcher.item]]
 name = "名前順"
 icon = "SF:textformat.abc"         # macOS SF Symbol
 group = ["並び替え"]               # 「並び替え」サブメニュー配下
@@ -99,7 +99,7 @@ action-cmd = "echo name"
 置換された子アイテムになる:
 
 ```toml
-[[item]]
+[[launcher.item]]
 name = "ブランチ切替"
 icon = "SF:point.3.connected.trianglepath.dotted"
 dynamic = 'cd ~/repo && git branch --format="%(refname:short)"'
@@ -117,7 +117,7 @@ disabled プレースホルダ(`(no items)` / `(error: exit N)` /
 アイテムに **チェックマーク** も付けられる:
 
 ```toml
-[[item]]
+[[launcher.item]]
 name = "ダークモード"
 state = "shell:defaults read -g AppleInterfaceStyle 2>/dev/null | grep -q Dark"
 action-type = "shell"
@@ -170,7 +170,7 @@ wand は **config.toml 駆動**。設定 GUI は意図的に持たない。
 ルール例:
 
 ```toml
-[[rules]]
+[[gesture.rule]]
 name = "close tab"
 pattern = "DR"                        # 下 → 右
 apps = ["*chrome*", "*safari*"]       # カーソル直下のウィンドウで判定
@@ -199,14 +199,14 @@ action-keys = "cmd+w"
 | `["*", "!*.chrome.beta*"]` | Chrome ベータ以外の全アプリ |
 | `["*chrome*", "*safari*"]` | Chrome または Safari |
 
-`[recognition] max-segment-ms` で 1 セグメントの制限時間を設定 —
+`[gesture] max-segment-ms` で 1 セグメントの制限時間を設定 —
 **曲がるたびにリセット**されるので、全体ではなく方向ごとの予算。
 複数方向のジェスチャーは各区間にフル予算が与えられ、ひとつの方向で
 止まったまま予算を超えたもの(通常の意図的な右ドラッグ)だけが破棄
 される。`0`(既定)= 無制限。区間が予算を超えると軌跡が no-match
 色に変わる。
 
-`[recognition] cancel-reversals` は緊急脱出 — カーソルを **ぐしゃぐしゃ
+`[gesture] cancel-reversals` は緊急脱出 — カーソルを **ぐしゃぐしゃ
 と往復**させるとその場で進行中のジェスチャーを破棄する(タイムアウト
 待ち不要、離しても何も発動しない)。180° の方向反転の回数で数え、既定
 `2` なら通常のジェスチャーを誤判定せず意図的な往復だけを拾う。`0` = 無効。
@@ -214,12 +214,12 @@ action-keys = "cmd+w"
 窓内に収まったときだけキャンセルするので、素早い往復は効くがゆっくりした
 往復は効かない。`0` = 速度不問。
 
-`[effect]` でヒントカードの退場アニメを設定。各カードは普段だと、現在
+`[gesture.effect]` でヒントカードの退場アニメを設定。各カードは普段だと、現在
 の形から到達できなくなった瞬間にパッと消えるだけだが、効果を設定すると
 ふわっと退場する。フックは 2 つ:
 
 ```toml
-[effect]
+[gesture.effect]
 unmatch = "drop"        # ジェスチャー途中で到達不能になったカード
 match   = "fireworks"   # ボタン離しで発動したカード
 ```
@@ -242,7 +242,7 @@ wand --debug            # 詳細ログを /tmp/wand.log + stderr へ
 wand --validate         # config.toml をパース、0 / 2 で exit
 wand --doctor           # 健康診断: AX / config / daemon / tap
 wand --test DR [app]    # ドライラン: そのパターンでどのルールが発動するか
-wand --record           # 対話型レコーダ — 描くと貼れる [[rules]]
+wand --record           # 対話型レコーダ — 描くと貼れる [[gesture.rule]]
                           # スニペットが stdout に出る
 
 wand --status           # ルール数・トリガー・最後のジェスチャー
@@ -258,9 +258,9 @@ daemon が居なければ exit 3 で拒否。
 (同じ CGEventTap を取り合うため)。
 
 **再起動が必要な変更は 2 つだけ** — 残り全部はホットリロードで反映:
-- `[trigger]`(button / modifiers) — `tapCreate` の event mask に
+- `[gesture]`(button / modifiers) — `tapCreate` の event mask に
   焼き込まれている
-- `[overlay].enabled = false → true` — 起動時に overlay 無効だと
+- `[gesture.overlay].enabled = false → true` — 起動時に overlay 無効だと
   ウィンドウ自体作られないため、後で true にしても反映先がない
 
 どちらも `wand --status` の `pending-restart:` 行に出る + リロード

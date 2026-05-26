@@ -9,14 +9,48 @@
 #     https://raw.githubusercontent.com/akira-toriyama/wand/main/config.toml
 #
 # wand only ever READS this file. Out-of-range / unknown values are
-# silently clamped to safe defaults rather than rejected — a typo can
-# never break the daemon. Validate explicitly with `wand --validate`.
+# silently clamped to safe defaults rather than rejected — a typo
+# can never break the daemon. Validate explicitly with
+# `wand --validate`.
 
 
 # -----------------------------------------------------------------
-# Trigger — which button (and optional modifiers) starts a stroke
+# Schema layout (v4.0)
 # -----------------------------------------------------------------
-[trigger]
+# Sections cluster by trigger family:
+#
+#   [exclude]          — global: applies to every trigger
+#
+#   [gesture]          — gesture trigger (right-button + drag)
+#   [gesture.overlay]   — gesture HUD trail / cards / badge
+#   [gesture.effect]    — gesture HUD exit animations
+#   [[gesture.rule]]    — one gesture pattern → action mapping
+#
+#   [launcher]         — launcher trigger (middle-click etc)
+#   [[launcher.item]]   — one menu row
+#
+# v3.x config still has the old keys ([trigger] / [recognition] /
+# [overlay] / [effect] / [[rules]] / [[item]]) — those are no
+# longer read in v4.0. Daemon log warns once per old section
+# detected, with the new location.
+
+
+# -----------------------------------------------------------------
+# Global — disable wand entirely for specific bundle ids
+# -----------------------------------------------------------------
+[exclude]
+
+# Bundle IDs where wand is completely disabled — useful for apps
+# that already have native gestures (Xcode, video editors, …).
+# Supports `*` / `?` glob. Applies to both gesture rules and
+# launcher items.
+apps = []
+
+
+# -----------------------------------------------------------------
+# Gesture — right-button + drag draws a shape that fires a rule
+# -----------------------------------------------------------------
+[gesture]
 
 # Which mouse button initiates a stroke.
 #   "right"   — right mouse button (most common)
@@ -30,49 +64,39 @@ button = "right"
 # Valid values: "cmd", "opt", "ctrl", "shift", "fn"
 modifiers = []
 
-
-# -----------------------------------------------------------------
-# Recognition — how samples turn into a direction sequence
-# -----------------------------------------------------------------
-[recognition]
-
 # Minimum displacement (px) before a new direction is emitted.
 # Smaller = more sensitive (catches small flicks), bigger = more
 # tolerant of jitter. Clamped 4..200.
 min-stroke-px = 16
 
 # Maximum time (ms) a single segment may take — the clock resets on
-# every turn, so it's a per-segment budget, not a whole-stroke one. A
-# multi-segment gesture gets the full budget for each leg; only a
+# every turn, so it's a per-segment budget, not a whole-stroke one.
+# A multi-segment gesture gets the full budget for each leg; only a
 # stalled single direction (an ordinary, deliberate right-drag) runs
 # past it and is abandoned (no action fires). 0 = no limit. Clamped
 # 100..60000 when set.
 max-segment-ms = 0
 
-# Scribble-to-cancel: the number of 180° direction reversals (a quick
-# back-and-forth) that abandons the in-progress stroke. Once reached
-# the gesture is dead — releasing fires nothing, with no waiting for a
-# timeout. A real gesture rarely reverses, so 2 catches a deliberate
-# scribble without false positives. 0 = off. Clamped 1..20 when set.
-# Raise it above the most-reversing rule you define.
+# Scribble-to-cancel: the number of 180° direction reversals (a
+# quick back-and-forth) that abandons the in-progress stroke. Once
+# reached the gesture is dead — releasing fires nothing, with no
+# waiting for a timeout. A real gesture rarely reverses, so 2
+# catches a deliberate scribble without false positives. 0 = off.
+# Clamped 1..20 when set. Raise it above the most-reversing rule
+# you define.
 cancel-reversals = 2
 
-# Speed gate for the scribble: the reversals above must all fall within
-# this window (ms) to cancel, so a *fast* back-and-forth cancels but a
-# slow deliberate one doesn't. 0 = any speed (count alone cancels).
-# Clamped 100..5000 when set.
+# Speed gate for the scribble: the reversals above must all fall
+# within this window (ms) to cancel, so a *fast* back-and-forth
+# cancels but a slow deliberate one doesn't. 0 = any speed (count
+# alone cancels). Clamped 100..5000 when set.
 cancel-window-ms = 500
 
-# Bundle IDs where wand is completely disabled — useful for apps
-# that already have native gestures (Xcode, video editors, …).
-# Supports `*` / `?` glob.
-exclude-apps = []
-
 
 # -----------------------------------------------------------------
-# Overlay — the translucent trail drawn while you draw a gesture
+# Gesture overlay — translucent trail drawn while you draw a gesture
 # -----------------------------------------------------------------
-[overlay]
+[gesture.overlay]
 
 # Show the trail while a stroke is in progress. The overlay is
 # click-through and clears the instant you release the button.
@@ -84,9 +108,9 @@ enabled = true
 #                     moved enough to recognise any direction)
 #   color-no-match  — once the shape matches no rule (e.g. you set
 #                     up "RD" but drew "RL")
-# Either a name (blue red green orange purple pink yellow white black,
-# or "accent" for the system accent color) or a hex string ("#rgb",
-# "#rrggbb", "#rrggbbaa").
+# Either a name (blue red green orange purple pink yellow white
+# black, or "accent" for the system accent color) or a hex string
+# ("#rgb", "#rrggbb", "#rrggbbaa").
 color = "#3b82f6"
 color-no-match = "#ef4444"
 
@@ -95,9 +119,9 @@ width = 3
 
 # Show the target-app icon as a small "badge" at the gesture's
 # start point (where the right button went down). Confirms which
-# window the gesture will act on — useful when keyboard focus is
-# on a different window than the cursor is over. Off keeps just
-# the trail + assist tooltips.
+# window the gesture will act on — useful when keyboard focus is on
+# a different window than the cursor is over. Off keeps just the
+# trail + assist tooltips.
 badge-enabled = true
 
 # Origin-badge size in points. Clamped 32..96.
@@ -108,14 +132,13 @@ badge-size = 56
 # easier on the eyes for some screens, and a touch cheaper.
 blur-enabled = true
 
-# Tiny scale-in pop (0.85 → 1.0 over 150 ms) when the origin
-# badge first appears. Decorative; set false if motion bothers
-# you.
+# Tiny scale-in pop (0.85 → 1.0 over 150 ms) when the origin badge
+# first appears. Decorative; set false if motion bothers you.
 anim-enabled = true
 
 
 # -----------------------------------------------------------------
-# Effects — animate assist cards as they leave the screen
+# Gesture effects — animate assist cards as they leave the screen
 # -----------------------------------------------------------------
 # The overlay shows one assist card per reachable rule. Two moments
 # can make a card disappear:
@@ -123,8 +146,7 @@ anim-enabled = true
 #     reaches that card → driven by `unmatch`
 #   - at button-up, when a rule actually fires → driven by `match`
 #
-# Default for both is "none" (cards just vanish). Pick a kind for
-# either or both:
+# Default for both is "none" (cards just vanish). Pick a kind:
 #
 #   none           — instant disappear (default)
 #   drop           — falls down off-screen
@@ -141,7 +163,7 @@ anim-enabled = true
 # Particle effects (fireworks / confetti) are the most attention-
 # grabbing, so they're most natural on `match` — the moment a rule
 # actually fires.
-[effect]
+[gesture.effect]
 unmatch = "none"
 match = "none"
 
@@ -161,8 +183,8 @@ intensity = "normal"
 #
 # The menu is a native macOS context menu (NSMenu) — submenus open
 # on hover, keyboard nav works (↑↓→← Enter Escape), click-outside
-# dismisses. Each `[[item]]` is one menu row with the same
-# action-type vocabulary as `[[rules]]`.
+# dismisses. Each `[[launcher.item]]` is one menu row with the same
+# action-type vocabulary as `[[gesture.rule]]`.
 #
 # The cursor-anchored target is captured at button-down, exactly
 # like the gesture path, so the chosen item dispatches against the
@@ -177,11 +199,102 @@ enabled = false                # opt-in
 button = "middle"              # "middle" | "side1" | "side2" | "right"
 modifiers = []                 # e.g. ["ctrl"] to require ctrl + middle
 
+
+# -----------------------------------------------------------------
+# Items (launcher) and rules (gesture) — shared field reference
+# -----------------------------------------------------------------
+# Both `[[gesture.rule]]` and `[[launcher.item]]` use the same
+# action-* vocabulary and app-filter syntax. Differences:
+#
+#   [[gesture.rule]]    needs `pattern` (LURD sequence)
+#   [[launcher.item]]   needs `name` (menu label); supports
+#                        icon / group / separator-before / state /
+#                        dynamic / template-* for richer menu UI
+#
+# Pattern alphabet (gesture rules):
+#   L  = left      U  = up
+#   R  = right     D  = down
+# Sequences combine: "DR" = down then right; "URD" = up, right, down.
+#
+# IMPORTANT — cursor-anchored matching:
+#   `apps` matches against the **window under the cursor at
+#   stroke-start / click time**, NOT the focused app. So a gesture
+#   started while pointing at Chrome on display 2 always sees
+#   `*chrome*` even if Finder happens to be focused on display 1.
+#   This is the whole design point of wand.
+#
+# `apps` syntax:
+#   "*"                 — match every bundle id
+#   "com.apple.Safari"  — exact
+#   "*chrome*"          — glob (`*`, `?`)
+#   "!com.apple.dt.Xcode" — exclusion (any matching exclusion wins)
+#
+# Truly global items (`apps = ["*"]` or `apps` omitted) ALSO fire on
+# Dock / menu bar / Desktop — places where no AX target resolves
+# under the cursor. App-specific items there are filtered out.
+#
+# Action shapes (decomposed across dotted-style keys — the minimal
+# TOML parser doesn't support inline tables):
+#
+#   action-type = "key"    + action-keys = "cmd+w"
+#   action-type = "ax"     + action-verb = "close" | "minimize" |
+#                                            "zoom" | "raise"
+#   action-type = "shell"  + action-cmd  = "open -a Terminal …"
+#   action-type = "url"    + action-url  = "https://github.com"
+#                                          # also handles slack://,
+#                                          # vscode://, file://, …
+#
+# Shell actions receive these env vars describing the target:
+#   WAND_TARGET_BUNDLE_ID, WAND_TARGET_PID,
+#   WAND_TARGET_TITLE,     WAND_TARGET_FRAME (x,y,w,h)
+
+
+# -----------------------------------------------------------------
+# Gesture rules — first match wins, applied to the cursor-anchored
+# target. `name` is shown in the overlay while drawing a shape that
+# matches this rule, so you can see what it'll do before releasing
+# — make it human-readable.
+# -----------------------------------------------------------------
+
+[[gesture.rule]]
+name = "close tab"
+pattern = "DR"
+apps = ["*chrome*", "*safari*"]
+action-type = "key"
+action-keys = "cmd+w"
+
+[[gesture.rule]]
+name = "reopen tab"
+pattern = "UR"
+apps = ["*chrome*", "*safari*"]
+action-type = "key"
+action-keys = "cmd+shift+t"
+
+[[gesture.rule]]
+name = "close window"
+pattern = "DRU"
+apps = ["*"]
+action-type = "ax"
+action-verb = "close"
+
+[[gesture.rule]]
+name = "minimize"
+pattern = "L"
+apps = ["*"]
+action-type = "ax"
+action-verb = "minimize"
+
+
+# -----------------------------------------------------------------
+# Launcher items — sample blocks below. Uncomment after
+# `[launcher].enabled = true`.
+# -----------------------------------------------------------------
+
 # Each item supports an optional `icon` field (drawn to the left of
 # the menu label). Recognised syntax:
 #
 #   icon = "🌐"                  — emoji / 1-2 character text glyph
-#   icon = "SF:globe"            — SF Symbol (macOS 11+; symbol catalog:
+#   icon = "SF:globe"            — SF Symbol (macOS 11+; catalog:
 #                                  open Symbols.app)
 #   icon = "~/icons/foo.png"     — tilde-expanded path
 #   icon = "icons/foo.png"       — relative to ~/.config/wand/
@@ -189,33 +302,33 @@ modifiers = []                 # e.g. ["ctrl"] to require ctrl + middle
 #
 # Unrecognised values fall back to no icon (logged to /tmp/wand.log).
 #
-# Sample items — uncomment to try once `enabled = true`:
-#
-# [[item]]
+# # Basic row:
+# [[launcher.item]]
 # name = "新規タブ"
 # icon = "🌐"
 # apps = ["*chrome*", "*safari*"]
 # action-type = "key"
 # action-keys = "cmd+t"
 #
-# [[item]]
+# # Separator before this row + SF Symbol icon:
+# [[launcher.item]]
 # name = "再読み込み"
 # icon = "SF:arrow.clockwise"
 # apps = ["*chrome*", "*safari*"]
-# separator-before = true             # divider line above this row
+# separator-before = true
 # action-type = "key"
 # action-keys = "cmd+r"
 #
 # # Nested submenu — `group = ["..."]` is the path to the parent
 # # submenu. The folder is created on first reference; subsequent
 # # items with the same group land inside it.
-# [[item]]
+# [[launcher.item]]
 # name = "名前順"
 # group = ["並び替え"]
 # action-type = "shell"
 # action-cmd = "echo name"
 #
-# # Dynamic items — the parent is a submenu populated at every menu-
+# # Dynamic items — the parent is a submenu populated at every menu
 # # open by running `dynamic` (shell) and emitting one child per
 # # stdout line. `{line}` in any `template-*` field is substituted
 # # with the line content. Killed after 500ms if the shell hangs.
@@ -223,7 +336,7 @@ modifiers = []                 # e.g. ["ctrl"] to require ctrl + middle
 # # SECURITY: `{line}` carries untrusted text. When the line ends up
 # # in a shell command, quote it: 'git switch "{line}"', not
 # # 'git switch {line}'.
-# [[item]]
+# [[launcher.item]]
 # name = "ブランチ切替"
 # icon = "SF:point.3.connected.trianglepath.dotted"
 # dynamic = 'cd ~/repo && git branch --format="%(refname:short)"'
@@ -237,86 +350,8 @@ modifiers = []                 # e.g. ["ctrl"] to require ctrl + middle
 # # Dynamic: "shell:<cmd>" → evaluated at menu-open, exit 0 → ✓.
 # # 100ms timeout (state should be a cheap check; longer probes
 # # belong in `dynamic` items).
-# [[item]]
+# [[launcher.item]]
 # name = "ダークモード"
 # state = "shell:defaults read -g AppleInterfaceStyle 2>/dev/null | grep -q Dark"
 # action-type = "shell"
 # action-cmd  = "osascript -e 'tell app \"System Events\" to keystroke \"d\" using {control down, option down, command down}'"
-
-
-# -----------------------------------------------------------------
-# Rules — first match wins, applied to the cursor-anchored target
-# -----------------------------------------------------------------
-# Each `[[rules]]` block defines one gesture → action mapping.
-# Rules are matched in document order; the FIRST one whose
-# `pattern` matches and whose `apps` filter allows the target
-# window's bundle id fires.
-#
-# Pattern alphabet:
-#   L  = left      U  = up
-#   R  = right     D  = down
-# Sequences combine: "DR" = down then right; "URD" = up, right, down.
-#
-# IMPORTANT — cursor-anchored matching:
-#   `apps` matches against the **window under the cursor at
-#   stroke-start**, NOT the focused app. So a gesture started while
-#   pointing at Chrome on display 2 always sees `*chrome*` even if
-#   Finder happens to be focused on display 1. This is the whole
-#   design point of wand.
-#
-# `apps` syntax:
-#   "*"                 — match every bundle id
-#   "com.apple.Safari"  — exact
-#   "*chrome*"          — glob (`*`, `?`)
-#   "!com.apple.dt.Xcode" — exclusion (any matching exclusion wins)
-#
-# Truly global items (`apps = ["*"]` or `apps` omitted) ALSO fire on
-# Dock / menu bar / Desktop — places where no AX target resolves
-# under the cursor. App-specific items there are filtered out.
-#
-# Action shapes (decomposed across keys to keep the TOML parser
-# minimal — no inline tables):
-#
-#   action-type = "key"    + action-keys = "cmd+w"
-#   action-type = "ax"     + action-verb = "close" | "minimize" |
-#                                            "zoom" | "raise"
-#   action-type = "shell"  + action-cmd  = "open -a Terminal …"
-#   action-type = "url"    + action-url  = "https://github.com"
-#                                          # also handles slack://,
-#                                          # vscode://, file://, …
-#
-# `name` is also shown in the overlay while you're drawing a shape
-# that matches this rule, so you can see what it'll do before
-# releasing — make it human-readable.
-#
-# Shell actions receive these env vars describing the target:
-#   WAND_TARGET_BUNDLE_ID, WAND_TARGET_PID,
-#   WAND_TARGET_TITLE,     WAND_TARGET_FRAME (x,y,w,h)
-
-[[rules]]
-name = "close tab"
-pattern = "DR"
-apps = ["*chrome*", "*safari*"]
-action-type = "key"
-action-keys = "cmd+w"
-
-[[rules]]
-name = "reopen tab"
-pattern = "UR"
-apps = ["*chrome*", "*safari*"]
-action-type = "key"
-action-keys = "cmd+shift+t"
-
-[[rules]]
-name = "close window"
-pattern = "DRU"
-apps = ["*"]
-action-type = "ax"
-action-verb = "close"
-
-[[rules]]
-name = "minimize"
-pattern = "L"
-apps = ["*"]
-action-type = "ax"
-action-verb = "minimize"

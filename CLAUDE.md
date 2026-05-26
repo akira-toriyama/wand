@@ -12,7 +12,7 @@ for event-driven daemons to share the same launcher UI:
   draw a shape with the cursor; the recogniser turns it into a
   `LURD` string; rules fire actions.
 - **launcher** (middle-click, opt-in via `[launcher].enabled`):
-  pops a native `NSMenu` near the cursor; each `[[item]]` is one
+  pops a native `NSMenu` near the cursor; each `[[launcher.item]]` is one
   row with the same action-type vocabulary.
 - **`wand --show-menu`** (external trigger CLI): other daemons
   (`eventfx` text-selection / focus observers, …) post a
@@ -243,7 +243,7 @@ Everything below depends on this contract:
 - **`parseTOMLSubset` is hand-rolled** in
   [Sources/WandCore/TOML.swift](Sources/WandCore/TOML.swift)
   — extended from facet's port with `[[array-of-tables]]`
-  support because `[[rules]]` needs it. Inline tables (`{a=1,
+  support because `[[gesture.rule]]` needs it. Inline tables (`{a=1,
   b=2}`) are **not** supported and rules use dotted-key style
   (`action-type` + `action-keys` / `action-verb` /
   `action-cmd` / `action-url`) instead. Don't add an inline-table
@@ -282,7 +282,7 @@ Everything below depends on this contract:
   `NSEvent.mouseLocation` freezes at the button-down position and
   every sample reports the same coords. We learned this in M2's
   first-run (samples=600, max|dx|=0).
-- **Tunable via `[recognition].min-stroke-px`** in config.toml,
+- **Tunable via `[gesture].min-stroke-px`** in config.toml,
   clamped 4..200 by `WandConfig.parse`.
 
 ### Logging
@@ -462,7 +462,7 @@ decisions. Subsections ordered broad → narrow.
   *(reviewed 2026-05-23)* — what the hand-rolled
   `parseTOMLSubset` approximates. We intentionally support a strict
   subset (no inline tables, no nested arrays-of-arrays, dotted-key
-  style for `[[rules]]` rows). New `.toml` features must justify the
+  style for `[[gesture.rule]]` rows). New `.toml` features must justify the
   added parser surface against the "≈100-line parser" budget.
 - [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/)
   *(reviewed 2026-05-23)* — type / scope grammar

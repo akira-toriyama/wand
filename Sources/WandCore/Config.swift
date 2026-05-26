@@ -102,49 +102,60 @@ public struct WandConfig: Sendable {
         return parse(text)
     }
 
-    /// Parse a TOML document containing only `[[item]]` entries — the
-    /// schema `wand --show-menu --items <PATH>` expects. Same
+    /// Parse a TOML document containing only `[[launcher.item]]`
+    /// entries — the schema `wand --show-menu --items <PATH>`
+    /// expects. Same
     /// row-level validation as `[launcher]` items in the main config
     /// (drop on missing name / invalid action, with a loud log line),
     /// so a client that screws up the file gets a diagnostic.
     public static func parseItems(_ text: String) -> [LauncherItem] {
         let doc = parseTOMLSubset(text)
-        return (doc.arrays["item"] ?? []).enumerated()
+        return (doc.arrays["launcher.item"] ?? []).enumerated()
             .compactMap { idx, row in parseItem(row, idx: idx) }
     }
 
     static func parse(_ text: String) -> WandConfig {
         let doc = parseTOMLSubset(text)
+        logMigrationWarnings(doc)
 
-        let trig = doc.tables["trigger"] ?? [:]
-        let button = Trigger.Button(rawValue: trig.string("button").lowercased())
+        // ── Global ────────────────────────────────────────────
+        // [exclude] — bundle ids where wand is fully disabled.
+        // Applies to BOTH gesture rules and launcher items; the old
+        // location was `[recognition].exclude-apps`, which was
+        // misleading (gesture-flavoured) and inconsistent with the
+        // actual scope.
+        let excl = doc.tables["exclude"] ?? [:]
+        let excludes = excl.strings("apps")
+
+        // ── [gesture.*] ───────────────────────────────────────
+        // Right-button-drag trigger family. Top-level [gesture]
+        // holds the trigger (button / modifiers) AND the recognition
+        // timing knobs (min-stroke-px, max-segment-ms, cancel-*) —
+        // collapsing the old [trigger] + [recognition] split now
+        // that they're explicitly gesture-scoped.
+        let g = doc.tables["gesture"] ?? [:]
+        let button = Trigger.Button(rawValue: g.string("button").lowercased())
             ?? .right
-        let mods = Set(trig.strings("modifiers")
+        let mods = Set(g.strings("modifiers")
             .compactMap { Modifier(rawValue: $0.lowercased()) })
 
         // Each clamp helper logs when the parsed value differs from
         // user input, so a typo like `min-stroke-px = 9999` is visible
-        // in /tmp/stroke.log instead of silently capping.
-        let reco = doc.tables["recognition"] ?? [:]
-        let minPx = clampInt(reco, key: "min-stroke-px",
+        // in /tmp/wand.log instead of silently capping.
+        let minPx = clampInt(g, key: "min-stroke-px",
                              default: 16, lo: 4, hi: 200)
-        let maxMs = clampMs(reco, key: "max-segment-ms",
+        let maxMs = clampMs(g, key: "max-segment-ms",
                             default: 0, lo: 100, hi: 60000)
-        // v1.5 accepted `max-stroke-ms` as a deprecated alias; v2.0
-        // drops it. Warn loudly so a stale config doesn't silently
-        // run with `0` (= no timeout).
-        if reco["max-stroke-ms"] != nil {
-            Log.line("config: `max-stroke-ms` was removed in v2.0 — "
-                     + "rename to `max-segment-ms` (same semantic). "
-                     + "Until you do, the timeout is unset (0 = no limit).")
-        }
-        let cancelRev = clampMs(reco, key: "cancel-reversals",
+        let cancelRev = clampMs(g, key: "cancel-reversals",
                                 default: 2, lo: 1, hi: 20)
-        let cancelWin = clampMs(reco, key: "cancel-window-ms",
+        let cancelWin = clampMs(g, key: "cancel-window-ms",
                                 default: 500, lo: 100, hi: 5000)
-        let excludes = reco.strings("exclude-apps")
 
-        let ov = doc.tables["overlay"] ?? [:]
+        // [gesture.overlay] — gesture-trail HUD (badge / cards /
+        // trail color / blur). Renamed from bare [overlay] to make
+        // the scope obvious next to a future [launcher.overlay]
+        // (when ring/panel mode lands).
+        let ov = doc.tables["gesture.overlay"] ?? [:]
         let overlayEnabled = ov.bool("enabled", true)
         let overlayColor = { let c = ov.string("color"); return c.isEmpty ? "#3b82f6" : c }()
         let overlayColorNoMatch = { let c = ov.string("color-no-match"); return c.isEmpty ? "#ef4444" : c }()
@@ -156,19 +167,22 @@ public struct WandConfig: Sendable {
                                         default: 56, lo: 32, hi: 96)
         let overlayAnimEnabled = ov.bool("anim-enabled", true)
 
-        // Same typo-tolerant policy as `[recognition]`: unknown names
-        // log + clamp to default, never throw.
-        let ef = doc.tables["effect"] ?? [:]
+        // [gesture.effect] — gesture-HUD exit animations on the
+        // assist cards. Unknown enum names log + clamp to default,
+        // never throw (typo-tolerant policy).
+        let ef = doc.tables["gesture.effect"] ?? [:]
         let effectUnmatch: Effect = parseEnum(
-            ef, key: "unmatch", section: "effect", default: .none)
+            ef, key: "unmatch", section: "gesture.effect", default: .none)
         let effectMatch: Effect = parseEnum(
-            ef, key: "match", section: "effect", default: .none)
+            ef, key: "match", section: "gesture.effect", default: .none)
         let effectIntensity: Intensity = parseEnum(
-            ef, key: "intensity", section: "effect", default: .normal)
+            ef, key: "intensity", section: "gesture.effect", default: .normal)
 
-        // [launcher] — sibling trigger family. Tap not installed when
-        // `enabled = false` (default), so a stale `[[item]]` list
-        // can't surprise anyone who hasn't opted in.
+        // ── [launcher.*] ──────────────────────────────────────
+        // Middle-click (or other configured button) contextual
+        // menu. Tap not installed when `enabled = false` (default),
+        // so a stale `[[launcher.item]]` list can't surprise anyone
+        // who hasn't opted in.
         let lr = doc.tables["launcher"] ?? [:]
         let launcherEnabled = lr.bool("enabled", false)
         let launcherButton = Trigger.Button(rawValue: lr.string("button").lowercased())
@@ -176,21 +190,22 @@ public struct WandConfig: Sendable {
         let launcherMods = Set(lr.strings("modifiers")
             .compactMap { Modifier(rawValue: $0.lowercased()) })
 
-        // [[item]] — launcher menu rows. Same drop-on-typo policy as
-        // [[rules]]: bad rows surface in the log with their position.
-        let items: [LauncherItem] = (doc.arrays["item"] ?? []).enumerated()
+        // [[launcher.item]] — launcher menu rows. Same drop-on-typo
+        // policy as [[gesture.rule]]: bad rows surface in the log
+        // with their position.
+        let items: [LauncherItem] = (doc.arrays["launcher.item"] ?? []).enumerated()
             .compactMap { idx, row in parseItem(row, idx: idx) }
         let launcher = LauncherSpec(
             enabled: launcherEnabled,
             trigger: Trigger(button: launcherButton, modifiers: launcherMods),
             items: items)
 
+        // [[gesture.rule]] — gesture pattern → action mappings.
         // Log every dropped rule with its position + reason so
-        // `--validate` and the daemon log both surface them — silent
-        // `compactMap`-of-nil was the worst typo footgun.
-        let rules: [Rule] = (doc.arrays["rules"] ?? []).enumerated()
+        // `--validate` and the daemon log both surface them.
+        let rules: [Rule] = (doc.arrays["gesture.rule"] ?? []).enumerated()
             .compactMap { idx, row in
-                let label = "[[rules]][\(idx)]"
+                let label = "[[gesture.rule]][\(idx)]"
                     + (row.string("name").isEmpty
                        ? "" : " \(row.string("name"))")
                 let pattern = row.string("pattern")
@@ -201,7 +216,8 @@ public struct WandConfig: Sendable {
                 guard let action = parseAction(row) else {
                     Log.line("config: dropped \(label) — invalid or missing "
                              + "action (need action-type + matching "
-                             + "action-keys / action-verb / action-cmd)")
+                             + "action-keys / action-verb / action-cmd / "
+                             + "action-url)")
                     return nil
                 }
                 let name = row.string("name")
@@ -243,6 +259,34 @@ public struct WandConfig: Sendable {
     ///     action-keys = "cmd+w"         # for type=key
     ///     action-verb = "close"         # for type=ax
     ///     action-cmd  = "open ..."      # for type=shell
+    /// Scan a parsed TOML doc for v3.x section / array names that
+    /// were retired in v4.0, and log one line per occurrence with
+    /// the new location. The parser already ignored unknown
+    /// sections; this just turns the silent ignore into a loud
+    /// "your config still has the old shape" pointer.
+    private static func logMigrationWarnings(_ doc: TOMLDocument) {
+        let renames: [(old: String, new: String)] = [
+            ("trigger",     "gesture (button / modifiers folded in)"),
+            ("recognition", "gesture (timing knobs folded in) + [exclude].apps"),
+            ("overlay",     "gesture.overlay"),
+            ("effect",      "gesture.effect"),
+        ]
+        for r in renames where doc.tables[r.old] != nil {
+            Log.line("config: [\(r.old)] section was retired in v4.0 — "
+                     + "move keys to [\(r.new)]. Until renamed, the "
+                     + "values from this section are ignored.")
+        }
+        let arrayRenames: [(old: String, new: String)] = [
+            ("rules", "[[gesture.rule]]"),
+            ("item",  "[[launcher.item]]"),
+        ]
+        for r in arrayRenames where doc.arrays[r.old] != nil {
+            Log.line("config: [[\(r.old)]] array was retired in v4.0 — "
+                     + "rename each block to \(r.new). Until renamed, "
+                     + "the rows in this array are ignored.")
+        }
+    }
+
     /// Clamp a `[lo, hi]` integer, logging when the parsed value
     /// differs from what the user wrote. Used for every fixed-range
     /// knob — covers the "user typed 9999 and it silently capped to

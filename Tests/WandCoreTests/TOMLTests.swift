@@ -12,21 +12,21 @@ final class TOMLTests: XCTestCase {
 
     func testTOMLInlineCommentAfterString() {
         let doc = parseTOMLSubset("""
-        [trigger]
+        [gesture]
         button = "right" # this is a comment with # inside
         """)
         // The inline-strip branch must keep the quoted `#` and only
         // drop the trailing comment. Without it the value picks up
         // " # this is a comment …".
-        XCTAssertEqual(doc.tables["trigger"]?["button"], .string("right"))
+        XCTAssertEqual(doc.tables["gesture"]?["button"], .string("right"))
     }
 
     func testTOMLInlineCommentAfterArray() {
         let doc = parseTOMLSubset("""
-        [trigger]
+        [gesture]
         modifiers = ["cmd", "opt"] # mods
         """)
-        XCTAssertEqual(doc.tables["trigger"]?["modifiers"],
+        XCTAssertEqual(doc.tables["gesture"]?["modifiers"],
                        .stringArray(["cmd", "opt"]))
     }
 
@@ -36,40 +36,40 @@ final class TOMLTests: XCTestCase {
         // and the rest still loads.
         let doc = parseTOMLSubset("""
         garbage line with no equals
-        [trigger]
+        [gesture]
         button = "right"
         more garbage
         """)
-        XCTAssertEqual(doc.tables["trigger"]?["button"], .string("right"))
+        XCTAssertEqual(doc.tables["gesture"]?["button"], .string("right"))
     }
 
     func testTOMLBoolAndIntParsing() {
         let doc = parseTOMLSubset("""
-        [overlay]
+        [gesture.overlay]
         enabled = true
         width = 7
         """)
-        XCTAssertEqual(doc.tables["overlay"]?["enabled"], .bool(true))
-        XCTAssertEqual(doc.tables["overlay"]?["width"], .int(7))
+        XCTAssertEqual(doc.tables["gesture.overlay"]?["enabled"], .bool(true))
+        XCTAssertEqual(doc.tables["gesture.overlay"]?["width"], .int(7))
     }
 
     func testTOMLMultipleArrayOfTables() {
-        // Three `[[rules]]` rows in order, no key bleed between rows
+        // Three `[[gesture.rule]]` rows in order, no key bleed between rows
         // (each row is a fresh dictionary).
         let doc = parseTOMLSubset("""
-        [[rules]]
+        [[gesture.rule]]
         pattern = "A"
         action-keys = "cmd+1"
 
-        [[rules]]
+        [[gesture.rule]]
         pattern = "B"
         action-keys = "cmd+2"
 
-        [[rules]]
+        [[gesture.rule]]
         pattern = "C"
         action-keys = "cmd+3"
         """)
-        let rows = doc.arrays["rules"] ?? []
+        let rows = doc.arrays["gesture.rule"] ?? []
         XCTAssertEqual(rows.count, 3)
         XCTAssertEqual(rows[0]["pattern"], .string("A"))
         XCTAssertEqual(rows[0]["action-keys"], .string("cmd+1"))
