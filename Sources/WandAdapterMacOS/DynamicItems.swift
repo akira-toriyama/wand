@@ -30,7 +30,7 @@ enum DynamicItems {
             return [placeholder("(timeout)")]
         case .spawnFailed:
             return [placeholder("(spawn failed)")]
-        case .exited(let stdout, let exit) where exit != 0:
+        case .exited(_, let exit) where exit != 0:
             return [placeholder("(error: exit \(exit))")]
         case .exited(let stdout, _):
             let lines = stdout
