@@ -134,11 +134,19 @@ ws-tabs.
   us a debugging cycle once; the regression test is: open a folder
   row by hovering it (don't click — there's no click handler on
   folder rows).
-- **Dynamic items** (`dynamic = "..."`) with `LauncherTemplate`
-  children are PARSED but currently render as a disabled
-  placeholder row labelled `(dynamic — N/A)`. Wiring them as
-  hover-spawned child panels populated by `BoundedShell.run` is
-  pending — same expand-at-popup contract the old NSMenu path used.
+- **Dynamic items** (`dynamic = "..."` + `LauncherTemplate`) render
+  as folder-style rows with a chevron. Hovering one runs the shell
+  via `BoundedShell.run` (500 ms timeout) and pops a child panel
+  populated by `PanelLayout.expandDynamic`: each non-empty stdout
+  line becomes a synthetic leaf `LauncherItem` with `{line}`
+  substituted in the template's name / icon / payload. Errors
+  (timeout, spawn fail, non-zero exit, empty stdout) collapse to a
+  single `(timeout)` / `(spawn failed)` / `(error: exit N)` /
+  `(no items)` placeholder row so the user always sees something.
+  Expansion happens at hover time, not at panel-open time — the
+  shell runs only when the user actually opens the submenu, and
+  re-runs on each re-open (no caching). `{line}` is untrusted —
+  same caveat as `WAND_TARGET_TITLE`.
 - **Checkmark / radio state** is decoded inline in
   `PanelLayout.renderItemLabel`: `"on"` / `"off"` / `"mixed"` for
   static markers, `"shell:<cmd>"` for live eval at panel-open via

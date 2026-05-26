@@ -74,13 +74,19 @@ public enum LauncherPanel {
 
 // MARK: - Tree types
 
-/// One non-leaf or leaf node in the panel tree. Built from the flat
-/// `[LauncherItem]` list by `PanelTree.build`. `separatorBefore` is
-/// carried on `.item` only — folder nodes don't need it because each
-/// item that opens a new section keeps its own flag.
+/// One node in the panel tree. Built from the flat `[LauncherItem]`
+/// list by `PanelTree.build`. `separatorBefore` is carried on
+/// `.item` only — folder nodes don't need it because each item that
+/// opens a new section keeps its own flag.
+///
+/// `.placeholder` is used for synthesized disabled rows (e.g. "(no
+/// items)" when a dynamic-item expansion's shell command returned
+/// nothing). It's NOT in the tree at build time; only injected into
+/// expansion results at hover time.
 indirect enum PanelNode {
     case item(LauncherItem)
     case folder(name: String, children: [PanelNode])
+    case placeholder(label: String)
 }
 
 /// App-header data flowed into the root panel.
@@ -202,6 +208,8 @@ private enum PanelLayout {
             case .folder(let name, let children):
                 views.append(makeFolderRow(name: name, children: children,
                                             sink: &rows))
+            case .placeholder(let label):
+                views.append(makePlaceholderRow(label: label, sink: &rows))
             }
         }
 
@@ -291,15 +299,14 @@ private enum PanelLayout {
     private static func makeItemRow(_ item: LauncherItem,
                                      sink rows: inout [ItemRow]) -> NSView {
         if !item.dynamic.isEmpty {
-            // Dynamic items aren't supported in panel mode yet —
-            // expanding them would mean rendering a child panel
-            // populated by shell output, which is out of MVP scope.
-            // Show a disabled placeholder so the user notices instead
-            // of wondering why their dynamic item silently vanished.
-            let r = ItemRow(
-                kind: .placeholder,
-                label: "\(item.name) (dynamic — N/A)",
-                icon: nil)
+            // Dynamic item — render as a folder-style row that
+            // hover-expands into a child panel populated by running
+            // `item.dynamic` (see `PanelController.openDynamicChild`).
+            let icon = item.icon.isEmpty
+                ? nil
+                : resolveItemIcon(item.icon)
+            let r = ItemRow(kind: .dynamic(item),
+                            label: item.name, icon: icon)
             rows.append(r)
             return r
         }
@@ -319,6 +326,79 @@ private enum PanelLayout {
                         label: name, icon: nil)
         rows.append(r)
         return r
+    }
+
+    private static func makePlaceholderRow(label: String,
+                                            sink rows: inout [ItemRow]) -> NSView {
+        let r = ItemRow(kind: .placeholder, label: label, icon: nil)
+        rows.append(r)
+        return r
+    }
+
+    /// Run `item.dynamic` under `/bin/sh -c`, kill it after 500 ms,
+    /// and convert each non-empty stdout line into a synthetic leaf
+    /// `LauncherItem` via `item.template`. Errors (timeout, spawn
+    /// fail, non-zero exit, empty stdout) become a single
+    /// `.placeholder` node so the user always sees something. Called
+    /// at hover time, not present time, so the cost is paid only when
+    /// the user actually opens the dynamic submenu.
+    static func expandDynamic(_ item: LauncherItem) -> [PanelNode] {
+        guard !item.dynamic.isEmpty, let template = item.template else {
+            return [.placeholder(label: "(invalid dynamic)")]
+        }
+        switch BoundedShell.run(item.dynamic, timeoutMs: 500) {
+        case .timeout:
+            return [.placeholder(label: "(timeout)")]
+        case .spawnFailed:
+            return [.placeholder(label: "(spawn failed)")]
+        case .exited(_, let exit) where exit != 0:
+            return [.placeholder(label: "(error: exit \(exit))")]
+        case .exited(let stdout, _):
+            let lines = stdout
+                .split(separator: "\n", omittingEmptySubsequences: false)
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty }
+            if lines.isEmpty { return [.placeholder(label: "(no items)")] }
+            return lines.map { line in
+                .item(synthesizeChild(template: template, line: line,
+                                       parent: item))
+            }
+        }
+    }
+
+    /// Build one synthetic leaf `LauncherItem` from a template + a
+    /// stdout line. `{line}` placeholders in the template's name,
+    /// icon and payload are substituted. Inherits `apps` from the
+    /// parent dynamic item so app-filter behaviour matches.
+    /// `{line}` content is untrusted — same caveat as
+    /// `WAND_TARGET_TITLE`; template authors must quote it when it
+    /// reaches a shell command.
+    private static func synthesizeChild(template: LauncherTemplate,
+                                         line: String,
+                                         parent: LauncherItem) -> LauncherItem {
+        let name = template.name.replacingOccurrences(of: "{line}", with: line)
+        let icon = template.icon.replacingOccurrences(of: "{line}", with: line)
+        let payload = template.payload.replacingOccurrences(of: "{line}",
+                                                              with: line)
+        let action: Action
+        switch template.kind {
+        case .key:   action = .key(payload)
+        case .ax:    action = .ax(payload)
+        case .shell: action = .shell(payload)
+        case .url:   action = .url(payload)
+        }
+        return LauncherItem(
+            name: name,
+            group: [],
+            separatorBefore: false,
+            apps: parent.apps,
+            icon: icon,
+            filterTitle: "",
+            filterShell: "",
+            state: "",
+            dynamic: "",
+            template: nil,
+            action: action)
     }
 
     /// Build the row title from the item, folding in state marker.
@@ -556,8 +636,8 @@ private final class PanelController {
         case .leaf(let item):
             onSelect(item, target)
             dismiss()
-        case .folder, .header, .placeholder:
-            break  // folders open on hover, not click
+        case .folder, .dynamic, .header, .placeholder:
+            break  // folders / dynamic open on hover, not click
         }
     }
 
@@ -566,7 +646,13 @@ private final class PanelController {
         case .folder(_, let children):
             if childAnchor === row { return }  // already open
             closeChild()
-            openChild(for: row, children: children)
+            openChild(for: row, children: children, label: row.titleForLog)
+        case .dynamic(let item):
+            if childAnchor === row { return }
+            closeChild()
+            let expanded = PanelLayout.expandDynamic(item)
+            openChild(for: row, children: expanded,
+                       label: "\(row.titleForLog) (dynamic)")
         case .leaf, .placeholder:
             // Moved to a non-folder row → close any open child. The
             // user's cursor is now committed to this level.
@@ -580,7 +666,8 @@ private final class PanelController {
 
     // MARK: Child management
 
-    private func openChild(for row: ItemRow, children: [PanelNode]) {
+    private func openChild(for row: ItemRow, children: [PanelNode],
+                            label: String) {
         guard let win = row.window else {
             Log.line("launcher-panel: openChild: row has no window — skip")
             return
@@ -601,7 +688,7 @@ private final class PanelController {
         child = c
         childAnchor = row
         c.show()
-        Log.line("launcher-panel: opened submenu \"\(row.titleForLog)\" "
+        Log.line("launcher-panel: opened submenu \"\(label)\" "
                  + "(\(children.count) items)")
     }
 
@@ -642,13 +729,18 @@ private final class PanelController {
 
 /// One row's visual + behavioural kind. `header` is the app-icon
 /// banner at top of the root panel; `placeholder` is a disabled row
-/// (e.g. dynamic-not-supported); `leaf` fires onSelect; `folder` opens
-/// a child panel on hover.
+/// (e.g. "(no items)" inside a dynamic expansion's error path);
+/// `leaf` fires onSelect; `folder` opens a child panel on hover with
+/// the precomputed children; `dynamic` opens a child panel on hover
+/// with children produced by `PanelLayout.expandDynamic` at hover
+/// time (i.e. the shell runs only when the user actually opens the
+/// submenu).
 private enum RowKind {
     case header
     case placeholder
     case leaf(LauncherItem)
     case folder(name: String, children: [PanelNode])
+    case dynamic(LauncherItem)
 }
 
 /// One clickable launcher row. Custom NSView containing a fixed-size
@@ -704,7 +796,14 @@ private final class ItemRow: NSView {
         var titleTrailingAnchor = trailingAnchor
         var titleTrailingConst: CGFloat = -10
 
-        if case .folder = kind {
+        let needsChevron: Bool = {
+            switch kind {
+            case .folder, .dynamic: return true
+            case .header, .placeholder, .leaf: return false
+            }
+        }()
+
+        if needsChevron {
             let cv = NSImageView()
             cv.translatesAutoresizingMaskIntoConstraints = false
             cv.image = NSImage(systemSymbolName: "chevron.right",
@@ -748,7 +847,7 @@ private final class ItemRow: NSView {
 
     private var isInteractive: Bool {
         switch kind {
-        case .leaf, .folder: return true
+        case .leaf, .folder, .dynamic: return true
         case .header, .placeholder: return false
         }
     }
@@ -761,7 +860,7 @@ private final class ItemRow: NSView {
             titleField.textColor = .secondaryLabelColor
         case .placeholder:
             titleField.textColor = .tertiaryLabelColor
-        case .leaf, .folder:
+        case .leaf, .folder, .dynamic:
             titleField.textColor = .labelColor
         }
         chevronView?.contentTintColor = .secondaryLabelColor
