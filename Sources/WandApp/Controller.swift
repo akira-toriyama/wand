@@ -122,8 +122,9 @@ public final class Controller: @unchecked Sendable {
         counterRecognised += 1
         let pattern = dirs.patternString
         Log.line("controller: recognised \(pattern) on \(target.bundleID)")
-        let rule = Matcher.match(pattern: pattern, bundleID: target.bundleID,
-                                 rules: cfg.rules)
+        let evalShell = shellEvaluator(for: target)
+        let rule = Matcher.match(pattern: pattern, target: target,
+                                 rules: cfg.rules, evalShell: evalShell)
         record("\(pattern) on \(target.bundleID)"
                + (rule.map { " → \"\($0.name)\"" } ?? " (no rule)"))
         guard let rule else {
@@ -151,9 +152,10 @@ public final class Controller: @unchecked Sendable {
         // increments only when the menu actually has items to show
         // — a click on the Dock / desktop is a "trigger" but not a
         // "shown" event, so the counter stays honest.
+        let evalShell = shellEvaluator(for: event.target)
         let visibleItems = Matcher.itemsFor(
             target: event.target, items: cfg.launcher.items,
-            excludes: cfg.excludeApps)
+            excludes: cfg.excludeApps, evalShell: evalShell)
         Log.line("controller: launcher fired on \(event.target.bundleID) "
                  + "— \(visibleItems.count)/\(cfg.launcher.items.count) item(s) "
                  + "visible")
@@ -208,8 +210,10 @@ public final class Controller: @unchecked Sendable {
         let target = Target(pid: app.processIdentifier,
                             bundleID: bid, title: "",
                             frame: .zero, windowID: 0)
+        let evalShell = shellEvaluator(for: target)
         let visible = Matcher.itemsFor(target: target, items: items,
-                                        excludes: cfg.excludeApps)
+                                        excludes: cfg.excludeApps,
+                                        evalShell: evalShell)
         Log.line("controller: --show-menu (external trigger) on "
                  + "\(bid) at \(cocoaPoint) — "
                  + "\(visible.count)/\(items.count) item(s) visible"
@@ -232,6 +236,31 @@ public final class Controller: @unchecked Sendable {
             Log.line("controller: → show-menu item \"\(item.name)\"")
             self?.writeStatus()
             Dispatch.execute(item.action, on: target, extraEnv: env)
+        }
+    }
+
+    /// Build a `ShellFilterEval` closure scoped to `target`. The
+    /// closure runs `filter-shell` commands via `BoundedShell.run`
+    /// with a tight 100 ms budget and the same `WAND_TARGET_*` env
+    /// shape `Action.shell` exports — so a filter shell can inspect
+    /// the window title / bundle id / frame the same way an action
+    /// shell would. Returns true (visible) only when the child
+    /// exits 0 inside the budget; anything else (non-zero, timeout,
+    /// spawn fail) hides the item.
+    private func shellEvaluator(for target: Target) -> ShellFilterEval {
+        let env: [String: String] = [
+            "WAND_TARGET_BUNDLE_ID": target.bundleID,
+            "WAND_TARGET_PID": String(target.pid),
+            "WAND_TARGET_TITLE": target.title,
+            "WAND_TARGET_FRAME":
+                "\(Int(target.frame.minX)),\(Int(target.frame.minY)),"
+                + "\(Int(target.frame.width)),\(Int(target.frame.height))",
+        ]
+        return { cmd in
+            switch BoundedShell.run(cmd, timeoutMs: 100, env: env) {
+            case .exited(_, let exitCode): return exitCode == 0
+            case .timeout, .spawnFailed:   return false
+            }
         }
     }
 

@@ -135,10 +135,22 @@ ws-tabs.
   falls through to `.off`.
 - **`BoundedShell` is the shared synchronous-with-timeout shell
   runner** ([Sources/WandAdapterMacOS/BoundedShell.swift](Sources/WandAdapterMacOS/BoundedShell.swift)).
-  Used by both `DynamicItems` and the state resolver. Returns
-  `.exited(stdout, exitCode)` / `.timeout` / `.spawnFailed`.
+  Used by `DynamicItems`, the state resolver, and the
+  `filter-shell` evaluator the Controller wires into `Matcher`.
+  Returns `.exited(stdout, exitCode)` / `.timeout` / `.spawnFailed`.
   All main-thread callers pass a budget short enough that the
   blocked `NSMenu.popUp` doesn't feel laggy.
+- **Filter chain in `Matcher.passesFilter`** — three predicates,
+  ordered cheapest first: `apps` glob → `filter-title` glob →
+  `filter-shell` predicate. The shell predicate is injected from
+  the App layer (`Controller.shellEvaluator(for:)`) so `Matcher`
+  stays in Core (no AppKit / Foundation Process dependency).
+  `Matcher.candidates()` is the one place that skips title /
+  shell entirely — it runs per-sample for the overlay's assist
+  hint, and any extra work blows the frame budget. Net: the
+  gesture trail can paint a rule as "reachable" that ends up
+  rejected at button-up; deliberate trade-off, documented at the
+  call site.
 - **The gesture-trail overlay lives in `WandAdapterMacOS`**, not a
   separate View module ([Sources/WandAdapterMacOS/GestureOverlay.swift](Sources/WandAdapterMacOS/GestureOverlay.swift)).
   It's the project's only on-screen UI; it's pure AppKit/CG rendering

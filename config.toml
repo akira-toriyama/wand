@@ -233,6 +233,23 @@ modifiers = []                 # e.g. ["ctrl"] to require ctrl + middle
 # Dock / menu bar / Desktop — places where no AX target resolves
 # under the cursor. App-specific items there are filtered out.
 #
+# `filter-title = "<glob>"` — optional. Extra gate on top of `apps`,
+# matched against the cursor-anchored target's window title (same
+# `*` / `?` glob). Use it to scope a rule / item to a specific page
+# or document.
+#
+#   filter-title = "*github.com*"      # only when title contains "github.com"
+#   filter-title = "*pull/*"            # only on a PR
+#
+# `filter-shell = "<cmd>"` — optional, niche escape hatch when title
+# isn't enough. Evaluated via `/bin/sh -c` with a 100 ms budget;
+# exit 0 = keep the row. Receives the same `WAND_TARGET_*` env vars
+# the action shell does, plus inherited env. Use sparingly — every
+# shell-gated row adds 5-20 ms of menu-open latency.
+#
+#   filter-shell = "test $(date +%H) -ge 17"   # only after 5pm
+#   filter-shell = "scripts/is_github_pr.sh"   # external predicate
+#
 # Action shapes (decomposed across dotted-style keys — the minimal
 # TOML parser doesn't support inline tables):
 #

@@ -135,6 +135,34 @@ under the cursor. App-specific items there are filtered out
 automatically. Good fit for Spotlight, lock screen, "open
 Terminal", etc.
 
+### Conditional filters (`filter-title` / `filter-shell`)
+
+`apps` decides which apps a rule / item belongs to.
+**`filter-title`** narrows that with a window-title glob, and
+**`filter-shell`** is an escape hatch — a `/bin/sh -c` predicate
+that decides at match time whether the row applies. Both work on
+`[[gesture.rule]]` and `[[launcher.item]]`:
+
+```toml
+[[launcher.item]]
+name = "Issue を PR にする"
+icon = "SF:arrow.triangle.pull"
+apps = ["*chrome*"]
+filter-title = "*github.com*/issues/*"      # only on a GitHub issue
+action-type = "url"
+action-url = "..."
+
+[[launcher.item]]
+name = "深夜限定リマインダ"
+filter-shell = "test $(date +%H) -ge 22"    # only after 22:00
+action-type = "shell"
+action-cmd  = "afplay /System/Library/Sounds/Glass.aiff"
+```
+
+`filter-title` is sub-microsecond (in-process glob against the
+title captured at button-down / click). `filter-shell` is ~5-20 ms
+per row (process spawn), 100 ms hard timeout — use sparingly.
+
 ## Install
 
 ```sh

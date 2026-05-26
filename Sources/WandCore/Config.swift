@@ -225,6 +225,8 @@ public struct WandConfig: Sendable {
                 return Rule(name: name.isEmpty ? pattern : name,
                             pattern: pattern,
                             apps: apps.isEmpty ? ["*"] : apps,
+                            filterTitle: row.string("filter-title"),
+                            filterShell: row.string("filter-shell"),
                             action: action)
             }
 
@@ -384,11 +386,15 @@ public struct WandConfig: Sendable {
         let group = row.strings("group")
         let sep = row.bool("separator-before", false)
         let icon = row.string("icon")
+        let filterTitle = row.string("filter-title")
+        let filterShell = row.string("filter-shell")
         let state = row.string("state")
         return LauncherItem(
             name: name, group: group, separatorBefore: sep,
             apps: apps.isEmpty ? ["*"] : apps,
-            icon: icon, state: state,
+            icon: icon,
+            filterTitle: filterTitle, filterShell: filterShell,
+            state: state,
             dynamic: dynamic, template: template,
             action: action)
     }

@@ -16,6 +16,11 @@ public struct TrailSample {
     public let point: CGPoint      // CG global coords, Y-down
     public let pattern: String
     public let bundleID: String
+    /// Title of the cursor-anchored target captured at button-down.
+    /// Lets the overlay's `valid` indicator + assist tooltips
+    /// honour `filter-title` rules without re-querying AX per
+    /// sample.
+    public let title: String
     public let expired: Bool       // exceeded maxSegmentMs
     public let cancelled: Bool     // scribble-cancelled (latched)
 }
@@ -373,9 +378,11 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
                 }
             }
         }
-        onSample?(TrailSample(point: cg, pattern: pattern,
-                              bundleID: currentTarget?.bundleID ?? "",
-                              expired: strokeExpired, cancelled: cancelled))
+        onSample?(TrailSample(
+            point: cg, pattern: pattern,
+            bundleID: currentTarget?.bundleID ?? "",
+            title: currentTarget?.title ?? "",
+            expired: strokeExpired, cancelled: cancelled))
     }
 
     /// Convert CG global coords (Y grows down) to the Y-up convention

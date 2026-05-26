@@ -80,6 +80,16 @@ public struct LauncherItem: Sendable, Equatable {
     ///     is typical: `"🌐"`, `"⚡"`, `"AI"`)
     /// Unresolvable specs log once and fall through to no-icon.
     public let icon: String
+    /// Title-glob filter on top of `apps`. Empty = no filter.
+    /// Matched against the cursor-anchored target's window title at
+    /// menu-open time. Same `*` / `?` glob as `apps`.
+    public let filterTitle: String
+    /// Shell predicate on top of `apps` + `filterTitle`. Empty = no
+    /// filter. Evaluated at menu-open via `BoundedShell.run` with a
+    /// tight budget; exit 0 keeps the item in the menu. Use for
+    /// niche conditions that can't be expressed as a title glob —
+    /// time of day, OS version, browser URL via AppleScript, etc.
+    public let filterShell: String
     /// Checkmark / radio state spec. Empty = no marker. Recognised:
     ///   `"on"`          — always ✓
     ///   `"off"`         — explicit no-marker (same as empty)
@@ -106,6 +116,8 @@ public struct LauncherItem: Sendable, Equatable {
                 separatorBefore: Bool = false,
                 apps: [String] = ["*"],
                 icon: String = "",
+                filterTitle: String = "",
+                filterShell: String = "",
                 state: String = "",
                 dynamic: String = "",
                 template: LauncherTemplate? = nil,
@@ -115,6 +127,8 @@ public struct LauncherItem: Sendable, Equatable {
         self.separatorBefore = separatorBefore
         self.apps = apps
         self.icon = icon
+        self.filterTitle = filterTitle
+        self.filterShell = filterShell
         self.state = state
         self.dynamic = dynamic
         self.template = template

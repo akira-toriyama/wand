@@ -242,8 +242,18 @@ enum WandApp {
                     // Match color when the *current* shape fires a
                     // rule; assist rows show every rule reachable
                     // from here.
+                    // Overlay's "current shape fires?" check uses
+                    // apps + filter-title (both cheap; title was
+                    // captured at button-down on the TrailSample).
+                    // filter-shell is skipped here — per-sample
+                    // shell evaluation is too costly. So a rule
+                    // gated by filter-shell may flash green in the
+                    // overlay yet not fire at button-up.
+                    let overlayTarget = Target(
+                        pid: 0, bundleID: s.bundleID,
+                        title: s.title, frame: .zero, windowID: 0)
                     valid = Matcher.match(pattern: s.pattern,
-                                          bundleID: s.bundleID,
+                                          target: overlayTarget,
                                           rules: live.rules) != nil
                     hint = assistHint(pattern: s.pattern,
                                       candidates: Matcher.candidates(
@@ -389,8 +399,11 @@ enum WandApp {
         if let bid = bundleID {
             if Matcher.isExcluded(bundleID: bid, by: cfg.excludeApps) {
                 print("\(pattern) on \(bid) → app excluded, nothing fires")
-            } else if let rule = Matcher.match(pattern: pattern,
-                                               bundleID: bid, rules: cfg.rules) {
+            } else if let rule = Matcher.match(
+                pattern: pattern,
+                target: Target(pid: 0, bundleID: bid, title: "",
+                               frame: .zero, windowID: 0),
+                rules: cfg.rules) {
                 print("\(pattern) on \(bid) → \"\(rule.name)\"  "
                       + "[\(actionDescription(rule.action))]")
             } else {
