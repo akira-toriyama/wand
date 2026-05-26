@@ -115,6 +115,20 @@ zero exit / timeout show a disabled placeholder (`(no items)` /
 `(error: exit N)` / `(timeout)`). Quote `{line}` substitutions in
 shell commands — the line content is untrusted.
 
+Items can also carry a **checkmark state** via `state`:
+
+```toml
+[[item]]
+name = "ダークモード"
+state = "shell:defaults read -g AppleInterfaceStyle 2>/dev/null | grep -q Dark"
+action-type = "shell"
+action-cmd  = "..."
+```
+
+`state` accepts `"on"` / `"off"` / `"mixed"` for static markers,
+or `"shell:<cmd>"` to evaluate live at menu-open (exit 0 → ✓,
+100 ms timeout).
+
 ## Install
 
 ```sh

@@ -80,6 +80,16 @@ public struct LauncherItem: Sendable, Equatable {
     ///     is typical: `"🌐"`, `"⚡"`, `"AI"`)
     /// Unresolvable specs log once and fall through to no-icon.
     public let icon: String
+    /// Checkmark / radio state spec. Empty = no marker. Recognised:
+    ///   `"on"`          — always ✓
+    ///   `"off"`         — explicit no-marker (same as empty)
+    ///   `"mixed"`       — dash marker
+    ///   `"shell:<cmd>"` — run `<cmd>` at menu-open; exit 0 → ✓,
+    ///                     non-zero → no marker. 100 ms timeout.
+    /// Adapter evaluates this once per menu popup (no caching) and
+    /// sets `NSMenuItem.state` accordingly. Use it for mode / toggle
+    /// items where macOS context menus show ✓ for the active option.
+    public let state: String
     /// Dynamic-row producer. Non-empty marks the item as a
     /// submenu-with-shell-children: at every menu-open the adapter
     /// runs `dynamic` under `/bin/sh -c`, splits stdout by newline,
@@ -96,6 +106,7 @@ public struct LauncherItem: Sendable, Equatable {
                 separatorBefore: Bool = false,
                 apps: [String] = ["*"],
                 icon: String = "",
+                state: String = "",
                 dynamic: String = "",
                 template: LauncherTemplate? = nil,
                 action: Action) {
@@ -104,6 +115,7 @@ public struct LauncherItem: Sendable, Equatable {
         self.separatorBefore = separatorBefore
         self.apps = apps
         self.icon = icon
+        self.state = state
         self.dynamic = dynamic
         self.template = template
         self.action = action

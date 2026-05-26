@@ -72,6 +72,9 @@ public enum LauncherMenu {
                 if !item.icon.isEmpty {
                     mi.image = resolveItemIcon(item.icon)
                 }
+                if !item.state.isEmpty {
+                    mi.state = resolveItemState(item.state)
+                }
                 parent.addItem(mi)
             } else {
                 // Dynamic row — submenu populated at expand time.
@@ -94,6 +97,33 @@ public enum LauncherMenu {
             }
         }
         return root
+    }
+
+    /// Checkmark / radio state resolution. See `LauncherItem.state`
+    /// for the recognised forms. The `shell:` form is evaluated
+    /// synchronously inside `BoundedShell.run` with a tight 100 ms
+    /// budget — same main-thread-friendly contract as
+    /// `DynamicItems.expand` but cheaper because we only need an
+    /// exit code, not stdout parsing.
+    private static func resolveItemState(_ spec: String) -> NSControl.StateValue {
+        switch spec {
+        case "on":    return .on
+        case "off":   return .off
+        case "mixed": return .mixed
+        default: break
+        }
+        if spec.hasPrefix("shell:") {
+            let cmd = String(spec.dropFirst("shell:".count))
+            switch BoundedShell.run(cmd, timeoutMs: 100) {
+            case .exited(_, let exitCode):
+                return exitCode == 0 ? .on : .off
+            case .timeout, .spawnFailed:
+                return .off
+            }
+        }
+        Log.line("launcher-menu: unknown state spec \"\(spec)\" — "
+                 + "valid: \"on\" / \"off\" / \"mixed\" / \"shell:<cmd>\"")
+        return .off
     }
 
     /// Item-icon resolution. See `LauncherItem.icon` for the

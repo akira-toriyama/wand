@@ -340,10 +340,12 @@ public struct WandConfig: Sendable {
         let group = row.strings("group")
         let sep = row.bool("separator-before", false)
         let icon = row.string("icon")
+        let state = row.string("state")
         return LauncherItem(
             name: name, group: group, separatorBefore: sep,
             apps: apps.isEmpty ? ["*"] : apps,
-            icon: icon, dynamic: dynamic, template: template,
+            icon: icon, state: state,
+            dynamic: dynamic, template: template,
             action: action)
     }
 

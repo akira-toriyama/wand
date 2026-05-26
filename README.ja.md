@@ -114,6 +114,20 @@ disabled プレースホルダ(`(no items)` / `(error: exit N)` /
 `(timeout)`)。`{line}` 内容は untrusted なのでシェルコマンド側で
 必ずクオート(`"{line}"`)。
 
+アイテムに **チェックマーク** も付けられる:
+
+```toml
+[[item]]
+name = "ダークモード"
+state = "shell:defaults read -g AppleInterfaceStyle 2>/dev/null | grep -q Dark"
+action-type = "shell"
+action-cmd  = "..."
+```
+
+`state` は静的に `"on"` / `"off"` / `"mixed"`、または
+`"shell:<cmd>"` で menu-open ごとに評価(exit 0 → ✓、100ms
+タイムアウト)。
+
 ## インストール
 
 ```sh

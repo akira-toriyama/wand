@@ -115,6 +115,20 @@ ws-tabs.
   it when it reaches a shell command. Empty / non-zero exit /
   timeout cases each surface as a disabled placeholder NSMenuItem
   so the user always sees something.
+- **Checkmark / radio state** is decoded by
+  `LauncherMenu.resolveItemState`: `"on"` / `"off"` / `"mixed"`
+  for static markers, `"shell:<cmd>"` for live eval at menu-open
+  via `BoundedShell.run` with a tight 100 ms budget — same
+  main-thread contract as dynamic items but cheaper (no stdout
+  parsing, just exit code). Sets `NSMenuItem.state` so wand uses
+  AppKit's native ✓ / dash rendering. Unknown spec logs and
+  falls through to `.off`.
+- **`BoundedShell` is the shared synchronous-with-timeout shell
+  runner** ([Sources/WandAdapterMacOS/BoundedShell.swift](Sources/WandAdapterMacOS/BoundedShell.swift)).
+  Used by both `DynamicItems` and the state resolver. Returns
+  `.exited(stdout, exitCode)` / `.timeout` / `.spawnFailed`.
+  All main-thread callers pass a budget short enough that the
+  blocked `NSMenu.popUp` doesn't feel laggy.
 - **The gesture-trail overlay lives in `WandAdapterMacOS`**, not a
   separate View module ([Sources/WandAdapterMacOS/GestureOverlay.swift](Sources/WandAdapterMacOS/GestureOverlay.swift)).
   It's the project's only on-screen UI; it's pure AppKit/CG rendering

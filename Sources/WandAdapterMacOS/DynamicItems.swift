@@ -25,13 +25,14 @@ enum DynamicItems {
         guard !parent.dynamic.isEmpty, let template = parent.template else {
             return [placeholder("(invalid dynamic)")]
         }
-        let outcome = runShell(parent.dynamic, timeoutMs: timeoutMs)
-        switch outcome {
+        switch BoundedShell.run(parent.dynamic, timeoutMs: timeoutMs) {
         case .timeout:
             return [placeholder("(timeout)")]
-        case .failed(let exit):
+        case .spawnFailed:
+            return [placeholder("(spawn failed)")]
+        case .exited(let stdout, let exit) where exit != 0:
             return [placeholder("(error: exit \(exit))")]
-        case .ok(let stdout):
+        case .exited(let stdout, _):
             let lines = stdout
                 .split(separator: "\n", omittingEmptySubsequences: false)
                 .map { $0.trimmingCharacters(in: .whitespaces) }
@@ -95,55 +96,8 @@ enum DynamicItems {
         return mi
     }
 
-    // MARK: - bounded shell exec
-
     /// Hard cap on the producer command. Anything slower freezes the
     /// menu (popUp blocks the main thread while we resolve children).
     /// Tunable later via config if a real use case demands it.
     private static let timeoutMs = 500
-
-    private enum ShellOutcome {
-        case ok(String)
-        case timeout
-        case failed(Int32)
-    }
-
-    private static func runShell(_ cmd: String, timeoutMs: Int) -> ShellOutcome {
-        let p = Process()
-        p.executableURL = URL(fileURLWithPath: "/bin/sh")
-        p.arguments = ["-c", cmd]
-        let out = Pipe()
-        p.standardOutput = out
-        p.standardError = Pipe()
-
-        do { try p.run() } catch {
-            Log.line("dynamic-item: spawn failed — \(error)")
-            return .failed(-1)
-        }
-
-        // Bound the wait — if the process is still alive after the
-        // budget, kill it. Reading stdout inside the deadline avoids
-        // a stale pipe blocking us forever after the timeout fires.
-        let deadline = DispatchTime.now() + .milliseconds(timeoutMs)
-        let killer = DispatchWorkItem {
-            if p.isRunning { p.terminate() }
-        }
-        DispatchQueue.global().asyncAfter(deadline: deadline, execute: killer)
-
-        // Drain pipe + wait — on timeout the terminate above unblocks
-        // waitUntilExit and we read whatever stdout the child managed
-        // to flush before SIGTERM.
-        let data = out.fileHandleForReading.readDataToEndOfFile()
-        p.waitUntilExit()
-        killer.cancel()
-
-        let text = String(data: data, encoding: .utf8) ?? ""
-        if p.terminationReason == .uncaughtSignal {
-            return .timeout
-        }
-        if p.terminationStatus != 0 {
-            return .failed(p.terminationStatus)
-        }
-        return .ok(text)
-    }
 }

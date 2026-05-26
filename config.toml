@@ -231,6 +231,17 @@ modifiers = []                 # e.g. ["ctrl"] to require ctrl + middle
 # template-icon = "SF:arrow.triangle.branch"
 # template-action-type = "shell"
 # template-action-cmd  = 'cd ~/repo && git switch "{line}"'
+#
+# # Checkmark / radio state — `state` decorates a row with macOS's
+# # native ✓ / dash indicator. Static values: "on" / "off" / "mixed".
+# # Dynamic: "shell:<cmd>" → evaluated at menu-open, exit 0 → ✓.
+# # 100ms timeout (state should be a cheap check; longer probes
+# # belong in `dynamic` items).
+# [[item]]
+# name = "ダークモード"
+# state = "shell:defaults read -g AppleInterfaceStyle 2>/dev/null | grep -q Dark"
+# action-type = "shell"
+# action-cmd  = "osascript -e 'tell app \"System Events\" to keystroke \"d\" using {control down, option down, command down}'"
 
 
 # -----------------------------------------------------------------
