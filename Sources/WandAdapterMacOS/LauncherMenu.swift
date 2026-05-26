@@ -62,15 +62,36 @@ public enum LauncherMenu {
             if item.separatorBefore && !parent.items.isEmpty {
                 parent.addItem(.separator())
             }
-            let mi = NSMenuItem(title: item.name,
-                                action: #selector(MenuActionTarget.fire(_:)),
-                                keyEquivalent: "")
-            mi.target = actionTarget
-            mi.representedObject = item
-            if !item.icon.isEmpty {
-                mi.image = resolveItemIcon(item.icon)
+            if item.dynamic.isEmpty {
+                // Static row — usual path.
+                let mi = NSMenuItem(title: item.name,
+                                    action: #selector(MenuActionTarget.fire(_:)),
+                                    keyEquivalent: "")
+                mi.target = actionTarget
+                mi.representedObject = item
+                if !item.icon.isEmpty {
+                    mi.image = resolveItemIcon(item.icon)
+                }
+                parent.addItem(mi)
+            } else {
+                // Dynamic row — submenu populated at expand time.
+                // The shell runs synchronously inside `expand` (we're
+                // already on the main thread inside popUp, which
+                // blocks anyway), so the children are ready before
+                // the user has a chance to hover the parent.
+                let header = NSMenuItem(title: item.name,
+                                        action: nil, keyEquivalent: "")
+                if !item.icon.isEmpty {
+                    header.image = resolveItemIcon(item.icon)
+                }
+                let sub = NSMenu(title: item.name)
+                for child in DynamicItems.expand(
+                    parent: item, actionTarget: actionTarget) {
+                    sub.addItem(child)
+                }
+                header.submenu = sub
+                parent.addItem(header)
             }
-            parent.addItem(mi)
         }
         return root
     }
@@ -79,7 +100,9 @@ public enum LauncherMenu {
     /// recognised string forms. Returns nil (which collapses to no
     /// image on the menu row) on miss; logs once so a typo is
     /// visible in `/tmp/wand.log` without spamming on every popup.
-    private static func resolveItemIcon(_ spec: String) -> NSImage? {
+    /// `internal` so `DynamicItems` can reuse it for each expanded
+    /// child row.
+    static func resolveItemIcon(_ spec: String) -> NSImage? {
         let pt: CGFloat = 18  // match the app-header glyph size
 
         // SF Symbol prefix
@@ -194,8 +217,11 @@ public enum LauncherMenu {
 /// Bridge between NSMenuItem's @objc selection callback and Swift
 /// closures. Holds the chosen target so the click handler can route
 /// the item's action to the correct cursor-anchored window.
+/// `internal` so `DynamicItems` can reuse the same instance when it
+/// builds child rows — keeps the dispatch path identical for
+/// static and dynamic items.
 @MainActor
-private final class MenuActionTarget: NSObject {
+final class MenuActionTarget: NSObject {
     private let onSelect: (LauncherItem, Target) -> Void
     private let target: Target
     init(onSelect: @escaping (LauncherItem, Target) -> Void,

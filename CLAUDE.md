@@ -104,6 +104,17 @@ ws-tabs.
   tilde / config-dir-relative), or falls back to drawing the string
   as a glyph (emoji / 1-2 char text). Unresolvable specs log once
   and collapse to no-icon; never throws.
+- **Dynamic items expand via `DynamicItems.expand`**
+  ([Sources/WandAdapterMacOS/DynamicItems.swift](Sources/WandAdapterMacOS/DynamicItems.swift)).
+  An item with non-empty `dynamic` becomes a submenu populated at
+  every menu-open by running the shell under `/bin/sh -c`, killing
+  it after 500 ms if it hangs, and emitting one synthetic
+  `LauncherItem` per non-empty stdout line with `{line}` substituted
+  in the `LauncherTemplate` payload. `{line}` content is untrusted
+  — same caveat as `WAND_TARGET_TITLE`; template authors must quote
+  it when it reaches a shell command. Empty / non-zero exit /
+  timeout cases each surface as a disabled placeholder NSMenuItem
+  so the user always sees something.
 - **The gesture-trail overlay lives in `WandAdapterMacOS`**, not a
   separate View module ([Sources/WandAdapterMacOS/GestureOverlay.swift](Sources/WandAdapterMacOS/GestureOverlay.swift)).
   It's the project's only on-screen UI; it's pure AppKit/CG rendering

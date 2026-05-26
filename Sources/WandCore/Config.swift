@@ -300,17 +300,41 @@ public struct WandConfig: Sendable {
         -> LauncherItem? {
         let label = "[[item]][\(idx)]"
             + (row.string("name").isEmpty ? "" : " \(row.string("name"))")
-        guard let action = parseAction(row) else {
-            Log.line("config: dropped \(label) — invalid or missing "
-                     + "action (need action-type + matching "
-                     + "action-keys / action-verb / action-cmd / action-url)")
-            return nil
-        }
         let name = row.string("name")
         guard !name.isEmpty else {
             Log.line("config: dropped \(label) — `name` is required "
                      + "(it's the menu label)")
             return nil
+        }
+        let dynamic = row.string("dynamic")
+        let action: Action
+        let template: LauncherTemplate?
+        if dynamic.isEmpty {
+            // Static item — need a regular action.
+            template = nil
+            guard let parsed = parseAction(row) else {
+                Log.line("config: dropped \(label) — invalid or missing "
+                         + "action (need action-type + matching "
+                         + "action-keys / action-verb / action-cmd / "
+                         + "action-url)")
+                return nil
+            }
+            action = parsed
+        } else {
+            // Dynamic producer — needs a template for children. The
+            // parent's own `action` is unused (a sentinel keeps the
+            // type total — `.shell("")` doubles as a no-op marker;
+            // expansion paths never call it).
+            guard let t = parseTemplate(row) else {
+                Log.line("config: dropped \(label) — `dynamic` is set "
+                         + "but no valid template-* fields found "
+                         + "(need template-action-type + matching "
+                         + "template-action-keys / template-action-verb / "
+                         + "template-action-cmd / template-action-url)")
+                return nil
+            }
+            template = t
+            action = .shell("")  // unused for dynamic items
         }
         let apps = row.strings("apps")
         let group = row.strings("group")
@@ -319,7 +343,37 @@ public struct WandConfig: Sendable {
         return LauncherItem(
             name: name, group: group, separatorBefore: sep,
             apps: apps.isEmpty ? ["*"] : apps,
-            icon: icon, action: action)
+            icon: icon, dynamic: dynamic, template: template,
+            action: action)
+    }
+
+    /// Parse the `template-*` block — sibling of `parseAction` but
+    /// reads from `template-action-type` etc., and keeps the body as
+    /// a raw string (it may contain `{line}` placeholders that the
+    /// adapter substitutes at expansion time).
+    private static func parseTemplate(_ row: [String: TOMLValue])
+        -> LauncherTemplate? {
+        let kindRaw = row.string("template-action-type").lowercased()
+        guard let kind = LauncherTemplate.Kind(rawValue: kindRaw)
+        else { return nil }
+        let payload: String
+        switch kind {
+        case .key:   payload = row.string("template-action-keys")
+        case .ax:
+            let verb = row.string("template-action-verb").lowercased()
+            guard Action.axVerbs.contains(verb) || verb.contains("{line}")
+            else { return nil }
+            payload = verb
+        case .shell: payload = row.string("template-action-cmd")
+        case .url:   payload = row.string("template-action-url")
+        }
+        guard !payload.isEmpty else { return nil }
+        let name = row.string("template-name")
+        return LauncherTemplate(
+            kind: kind,
+            payload: payload,
+            name: name.isEmpty ? "{line}" : name,
+            icon: row.string("template-icon"))
     }
 
     private static func parseAction(_ row: [String: TOMLValue]) -> Action? {

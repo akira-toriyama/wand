@@ -214,6 +214,23 @@ modifiers = []                 # e.g. ["ctrl"] to require ctrl + middle
 # group = ["並び替え"]
 # action-type = "shell"
 # action-cmd = "echo name"
+#
+# # Dynamic items — the parent is a submenu populated at every menu-
+# # open by running `dynamic` (shell) and emitting one child per
+# # stdout line. `{line}` in any `template-*` field is substituted
+# # with the line content. Killed after 500ms if the shell hangs.
+# #
+# # SECURITY: `{line}` carries untrusted text. When the line ends up
+# # in a shell command, quote it: 'git switch "{line}"', not
+# # 'git switch {line}'.
+# [[item]]
+# name = "ブランチ切替"
+# icon = "SF:point.3.connected.trianglepath.dotted"
+# dynamic = 'cd ~/repo && git branch --format="%(refname:short)"'
+# template-name = "{line}"
+# template-icon = "SF:arrow.triangle.branch"
+# template-action-type = "shell"
+# template-action-cmd  = 'cd ~/repo && git switch "{line}"'
 
 
 # -----------------------------------------------------------------

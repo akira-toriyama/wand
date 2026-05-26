@@ -25,6 +25,34 @@ import Foundation
 /// One row of the launcher menu. Same target / app-filter / action
 /// semantics as `Rule`, minus the gesture pattern, plus presentation
 /// hints (`group`, `separatorBefore`).
+/// Template for the rows a `dynamic` item expands to at menu-open
+/// time. Each field can carry the `{line}` placeholder; the adapter
+/// substitutes it with each stdout line from the dynamic shell
+/// command. Kept as raw strings (not pre-parsed `Action`) so the
+/// `{line}` placeholder survives until expansion.
+public struct LauncherTemplate: Sendable, Equatable {
+    public enum Kind: String, Sendable, Equatable {
+        case key, ax, shell, url
+    }
+    public let kind: Kind
+    /// Body string (action-keys / action-verb / action-cmd /
+    /// action-url depending on `kind`). `{line}` placeholders here
+    /// are filled per row.
+    public let payload: String
+    /// Display label template — defaults to `"{line}"` when the
+    /// user doesn't override.
+    public let name: String
+    /// Optional icon template — same syntax as `LauncherItem.icon`,
+    /// {line}-substituted.
+    public let icon: String
+    public init(kind: Kind, payload: String, name: String, icon: String) {
+        self.kind = kind
+        self.payload = payload
+        self.name = name
+        self.icon = icon
+    }
+}
+
 public struct LauncherItem: Sendable, Equatable {
     public let name: String
     /// Path of parent submenus (top-down). Empty = top level. Adapter
@@ -52,18 +80,32 @@ public struct LauncherItem: Sendable, Equatable {
     ///     is typical: `"🌐"`, `"⚡"`, `"AI"`)
     /// Unresolvable specs log once and fall through to no-icon.
     public let icon: String
+    /// Dynamic-row producer. Non-empty marks the item as a
+    /// submenu-with-shell-children: at every menu-open the adapter
+    /// runs `dynamic` under `/bin/sh -c`, splits stdout by newline,
+    /// and emits one child per line built from `template`. The
+    /// item's own `action` is unused in that case (the parent only
+    /// holds the submenu).
+    public let dynamic: String
+    /// Template for children of a dynamic item. Required when
+    /// `dynamic` is non-empty; otherwise unused.
+    public let template: LauncherTemplate?
     public let action: Action
 
     public init(name: String, group: [String] = [],
                 separatorBefore: Bool = false,
                 apps: [String] = ["*"],
                 icon: String = "",
+                dynamic: String = "",
+                template: LauncherTemplate? = nil,
                 action: Action) {
         self.name = name
         self.group = group
         self.separatorBefore = separatorBefore
         self.apps = apps
         self.icon = icon
+        self.dynamic = dynamic
+        self.template = template
         self.action = action
     }
 }

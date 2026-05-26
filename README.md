@@ -95,6 +95,26 @@ Item `icon` syntax: `"🌐"` (emoji / 1-2 char text glyph), `"SF:globe"`
 (path; relative paths resolve against `~/.config/wand/`), or
 `"/abs/path.png"`. Unrecognised values fall back to no icon.
 
+Items can also produce **dynamic submenus**. Set `dynamic` to a
+shell command and provide `template-*` fields; each stdout line
+becomes one child item with `{line}` substituted in the template:
+
+```toml
+[[item]]
+name = "ブランチ切替"
+icon = "SF:point.3.connected.trianglepath.dotted"
+dynamic = 'cd ~/repo && git branch --format="%(refname:short)"'
+template-name = "{line}"
+template-icon = "SF:arrow.triangle.branch"
+template-action-type = "shell"
+template-action-cmd  = 'cd ~/repo && git switch "{line}"'
+```
+
+The shell is killed after 500 ms if it hangs; empty stdout / non-
+zero exit / timeout show a disabled placeholder (`(no items)` /
+`(error: exit N)` / `(timeout)`). Quote `{line}` substitutions in
+shell commands — the line content is untrusted.
+
 ## Install
 
 ```sh

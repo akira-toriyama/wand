@@ -94,6 +94,26 @@ action-cmd = "echo name"
 `"/abs/path.png"`(絶対パス)。解決できない値はアイコンなしに
 フォールバック(`/tmp/wand.log` にログ)。
 
+アイテムは **動的サブメニュー** にもできる。`dynamic` にシェル
+コマンドを指定し、`template-*` を埋めると、stdout の各行が `{line}`
+置換された子アイテムになる:
+
+```toml
+[[item]]
+name = "ブランチ切替"
+icon = "SF:point.3.connected.trianglepath.dotted"
+dynamic = 'cd ~/repo && git branch --format="%(refname:short)"'
+template-name = "{line}"
+template-icon = "SF:arrow.triangle.branch"
+template-action-type = "shell"
+template-action-cmd  = 'cd ~/repo && git switch "{line}"'
+```
+
+シェルは 500ms でタイムアウト kill、空 / エラー / タイムアウト時は
+disabled プレースホルダ(`(no items)` / `(error: exit N)` /
+`(timeout)`)。`{line}` 内容は untrusted なのでシェルコマンド側で
+必ずクオート(`"{line}"`)。
+
 ## インストール
 
 ```sh
