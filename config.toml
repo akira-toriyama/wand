@@ -270,6 +270,10 @@ modifiers = []                 # e.g. ["ctrl"] to require ctrl + middle
 #   "*chrome*"          — glob (`*`, `?`)
 #   "!com.apple.dt.Xcode" — exclusion (any matching exclusion wins)
 #
+# Truly global items (`apps = ["*"]` or `apps` omitted) ALSO fire on
+# Dock / menu bar / Desktop — places where no AX target resolves
+# under the cursor. App-specific items there are filtered out.
+#
 # Action shapes (decomposed across keys to keep the TOML parser
 # minimal — no inline tables):
 #

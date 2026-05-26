@@ -92,6 +92,16 @@ ws-tabs.
   middle-click. `Controller` holds it optionally (`nil` unless
   `cfg.launcher.enabled` at startup), so the second tap isn't even
   allocated when the user hasn't opted in.
+  When AX target resolution fails (Dock / menu bar / Desktop —
+  cursor is over a non-AX surface) the tap falls back to a
+  `Target(bundleID: "", pid: 0, …)` sentinel instead of suppressing
+  the menu. `Matcher.appsAllow` then keeps `apps = ["*"]` items
+  (truly global ones — Spotlight, lock screen, open Terminal,
+  etc.) and prunes app-specific items. The app-icon header
+  collapses because no `NSRunningApplication` resolves under the
+  empty bundle id. This carves out a "menu still works on
+  Desktop" path without breaking the cursor-anchored spine for
+  app-specific items.
 - **`LauncherMenu` lives in `WandAdapterMacOS` too**
   ([Sources/WandAdapterMacOS/LauncherMenu.swift](Sources/WandAdapterMacOS/LauncherMenu.swift)) —
   it builds a native `NSMenu` from `[LauncherItem]` filtered by the

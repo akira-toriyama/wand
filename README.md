@@ -129,6 +129,12 @@ action-cmd  = "..."
 or `"shell:<cmd>"` to evaluate live at menu-open (exit 0 → ✓,
 100 ms timeout).
 
+Items with `apps = ["*"]` (or `apps` omitted) **also fire on the
+Dock, menu bar, and Desktop** — places where no AX target resolves
+under the cursor. App-specific items there are filtered out
+automatically. Good fit for Spotlight, lock screen, "open
+Terminal", etc.
+
 ## Install
 
 ```sh

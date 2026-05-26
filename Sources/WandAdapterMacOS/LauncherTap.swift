@@ -135,13 +135,25 @@ public final class MacOSLauncherSource: LauncherSource, @unchecked Sendable {
             // closes before the user can move to another window, so
             // by the time an action dispatches focus may have moved;
             // we still act on the original target.
-            guard let target = AXTarget.resolveAt(point: point) else {
-                Log.line("launcher-tap: down at \(point) → target=nil "
-                         + "(cursor on Dock / menu bar / desktop) — "
-                         + "menu suppressed")
-                return nil  // still consume so app doesn't see middle-click
-            }
-            Log.line("launcher-tap: down at \(point) → \(target.bundleID)")
+            //
+            // When AX resolution fails (Dock / menu bar / Desktop
+            // background — no window beneath the cursor), fall back
+            // to a `bundleID = ""` sentinel target. The Matcher's
+            // glob still passes `apps = ["*"]` items (truly global
+            // entries like Spotlight / Lock / Open Terminal) and
+            // filters out app-specific ones. The app-icon header
+            // collapses to nothing because no NSRunningApplication
+            // resolves under the empty bundle id. Result: middle-
+            // click on Desktop shows the global subset of the menu
+            // instead of being silently suppressed.
+            let target = AXTarget.resolveAt(point: point)
+                ?? Target(pid: 0, bundleID: "",
+                          title: "", frame: .zero, windowID: 0)
+            Log.line("launcher-tap: down at \(point) → "
+                     + (target.bundleID.isEmpty
+                        ? "no AX target (Dock / menu bar / desktop) "
+                          + "— global items only"
+                        : target.bundleID))
             handler?(LauncherEvent(point: point, target: target))
             return nil  // consume — don't let the foreground app see it
         }
