@@ -12,12 +12,14 @@ for event-driven daemons to share the same launcher UI:
   draw a shape with the cursor; the recogniser turns it into a
   `LURD` string; rules fire actions.
 - **launcher** (middle-click, opt-in via `[launcher].enabled`):
-  pops a native `NSMenu` near the cursor; each `[[launcher.item]]` is one
-  row with the same action-type vocabulary.
+  pops a **non-activating NSPanel** near the cursor (PopClip parity
+  — does NOT take keyboard focus); each `[[launcher.item]]` is one
+  row with the same action-type vocabulary. Submenus
+  (`group = ["..."]`) open as adjacent child panels on hover.
 - **`wand --show-menu`** (external trigger CLI): other daemons
   (`eventfx` text-selection / focus observers, …) post a
   Distributed Notification carrying items + cursor + selection;
-  the daemon pops the same `LauncherMenu` against the frontmost
+  the daemon pops the same `LauncherPanel` against the frontmost
   app. **Spine exception** — no button-down moment, see the
   cursor-anchored section.
 
@@ -102,44 +104,55 @@ ws-tabs.
   empty bundle id. This carves out a "menu still works on
   Desktop" path without breaking the cursor-anchored spine for
   app-specific items.
-- **`LauncherMenu` lives in `WandAdapterMacOS` too**
-  ([Sources/WandAdapterMacOS/LauncherMenu.swift](Sources/WandAdapterMacOS/LauncherMenu.swift)) —
-  it builds a native `NSMenu` from `[LauncherItem]` filtered by the
-  cursor-anchored target. `group = [...]` paths drive nesting;
-  folders are created on first reference, then memoised so repeats
-  of the same path append into the same submenu. Don't promote
-  this to a separate module — same reasoning as `GestureOverlay`.
-  `resolveItemIcon` is the per-item icon resolver — recognises
-  `SF:<name>` (NSImage.systemSymbolName), file paths (absolute /
-  tilde / config-dir-relative), or falls back to drawing the string
-  as a glyph (emoji / 1-2 char text). Unresolvable specs log once
-  and collapse to no-icon; never throws.
-- **Dynamic items expand via `DynamicItems.expand`**
-  ([Sources/WandAdapterMacOS/DynamicItems.swift](Sources/WandAdapterMacOS/DynamicItems.swift)).
-  An item with non-empty `dynamic` becomes a submenu populated at
-  every menu-open by running the shell under `/bin/sh -c`, killing
-  it after 500 ms if it hangs, and emitting one synthetic
-  `LauncherItem` per non-empty stdout line with `{line}` substituted
-  in the `LauncherTemplate` payload. `{line}` content is untrusted
-  — same caveat as `WAND_TARGET_TITLE`; template authors must quote
-  it when it reaches a shell command. Empty / non-zero exit /
-  timeout cases each surface as a disabled placeholder NSMenuItem
-  so the user always sees something.
-- **Checkmark / radio state** is decoded by
-  `LauncherMenu.resolveItemState`: `"on"` / `"off"` / `"mixed"`
-  for static markers, `"shell:<cmd>"` for live eval at menu-open
-  via `BoundedShell.run` with a tight 100 ms budget — same
-  main-thread contract as dynamic items but cheaper (no stdout
-  parsing, just exit code). Sets `NSMenuItem.state` so wand uses
-  AppKit's native ✓ / dash rendering. Unknown spec logs and
-  falls through to `.off`.
+- **`LauncherPanel` lives in `WandAdapterMacOS` too**
+  ([Sources/WandAdapterMacOS/LauncherPanel.swift](Sources/WandAdapterMacOS/LauncherPanel.swift)) —
+  it builds a tree of `NSPanel`s from `[LauncherItem]` filtered by
+  the cursor-anchored target. The root panel is a
+  `NonActivatingPanel` (subclass of `NSPanel`, `canBecomeKey = false`
+  + `.nonactivatingPanel` style mask) so it never steals keyboard
+  focus from the underlying app — the user keeps typing in their
+  editor while picking a row. `group = [...]` paths drive nesting:
+  `PanelTree.build` walks each item's group, creating folders on
+  first reference and appending into them on subsequent ones. A
+  folder row shows a `chevron.right` SF Symbol; hovering it spawns
+  an adjacent child panel via `PanelController.openChild`. The
+  hand-off gap between panels is zero so cursor traversal works
+  straight-right; native NSMenu's diagonal-cursor tolerance is NOT
+  reproduced — hovering a non-folder row in the parent closes the
+  child. Don't promote this to a separate module — same reasoning
+  as `GestureOverlay`. `PanelLayout.resolveItemIcon` is the per-item
+  icon resolver — recognises `SF:<name>` (NSImage.systemSymbolName,
+  rendered with `.medium` weight + `.large` scale so whitespace-
+  heavy glyphs read the same optical size as tight ones), file
+  paths (absolute / tilde / config-dir-relative), or falls back to
+  drawing the string as a glyph (emoji / 1-2 char text).
+  Unresolvable specs log once and collapse to no-icon; never throws.
+- **`NSTrackingArea` MUST use `.activeAlways`** in `ItemRow`. wand
+  is `LSUIElement` and the panel is non-activating, so
+  `.activeInActiveApp` resolves to "never" and `mouseEntered` never
+  fires — silently breaks hover highlight AND hover-to-expand. Cost
+  us a debugging cycle once; the regression test is: open a folder
+  row by hovering it (don't click — there's no click handler on
+  folder rows).
+- **Dynamic items** (`dynamic = "..."`) with `LauncherTemplate`
+  children are PARSED but currently render as a disabled
+  placeholder row labelled `(dynamic — N/A)`. Wiring them as
+  hover-spawned child panels populated by `BoundedShell.run` is
+  pending — same expand-at-popup contract the old NSMenu path used.
+- **Checkmark / radio state** is decoded inline in
+  `PanelLayout.renderItemLabel`: `"on"` / `"off"` / `"mixed"` for
+  static markers, `"shell:<cmd>"` for live eval at panel-open via
+  `BoundedShell.run` with a tight 100 ms budget. The resolved glyph
+  (`✓` / `–`) is prefixed to the row title; no native
+  `NSMenuItem.state` to lean on once we left NSMenu behind. Unknown
+  spec logs and falls through to no-marker.
 - **`BoundedShell` is the shared synchronous-with-timeout shell
   runner** ([Sources/WandAdapterMacOS/BoundedShell.swift](Sources/WandAdapterMacOS/BoundedShell.swift)).
-  Used by `DynamicItems`, the state resolver, and the
+  Used by the state resolver in `PanelLayout` and the
   `filter-shell` evaluator the Controller wires into `Matcher`.
   Returns `.exited(stdout, exitCode)` / `.timeout` / `.spawnFailed`.
   All main-thread callers pass a budget short enough that the
-  blocked `NSMenu.popUp` doesn't feel laggy.
+  caller doesn't feel laggy.
 - **Filter chain in `Matcher.passesFilter`** — three predicates,
   ordered cheapest first: `apps` glob → `filter-title` glob →
   `filter-shell` predicate. The shell predicate is injected from
