@@ -51,7 +51,7 @@ jobs:
       # Same SPM cache as build.yml — the release flow runs the same
       # `swift build` underneath `package.sh`, so the warm artefacts
       # help here too.
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         with:
           path: |
             .build
