@@ -181,10 +181,12 @@ intensity = "normal"
 # Off by default. Set `enabled = true` to install the launcher tap
 # alongside the gesture tap; both coexist on the same daemon.
 #
-# The menu is a native macOS context menu (NSMenu) — submenus open
-# on hover, keyboard nav works (↑↓→← Enter Escape), click-outside
-# dismisses. Each `[[launcher.item]]` is one menu row with the same
-# action-type vocabulary as `[[gesture.rule]]`.
+# The launcher renders as a non-activating panel (PopClip parity) —
+# it does NOT take keyboard focus, so the user keeps typing in the
+# underlying app while picking a row with the mouse. Submenus
+# (`group = ["..."]`) open on hover as adjacent child panels. Click
+# outside or press Esc to dismiss. Each `[[launcher.item]]` is one
+# row with the same action-type vocabulary as `[[gesture.rule]]`.
 #
 # The cursor-anchored target is captured at button-down, exactly
 # like the gesture path, so the chosen item dispatches against the
