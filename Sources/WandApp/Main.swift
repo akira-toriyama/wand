@@ -154,10 +154,11 @@ enum WandApp {
                     ).utf8))
                     exit(2)
                 }
-                let items = WandConfig.parseItems(text)
+                let parsed = WandConfig.parseItems(text)
                 FileHandle.standardError.write(Data((
                     "wand: items file \(path) — "
-                    + "\(items.count) item(s)\n"
+                    + "\(parsed.items.count) item(s), "
+                    + "layout=\(parsed.layout.rawValue)\n"
                 ).utf8))
             }
             exit(0)
@@ -672,8 +673,8 @@ enum WandApp {
         }
         // Local validation so a malformed file is rejected at the
         // client (exit 2) instead of silently dropping at the daemon.
-        let items = WandConfig.parseItems(text)
-        guard !items.isEmpty else {
+        let parsed = WandConfig.parseItems(text)
+        guard !parsed.items.isEmpty else {
             FileHandle.standardError.write(Data((
                 "wand: --show-menu: items file \(absPath) yielded "
                 + "0 items (no `[[item]]` rows, or all dropped — see "

@@ -179,7 +179,8 @@ public final class Controller: @unchecked Sendable {
         LauncherPanel.present(
             filteredItems: visibleItems,
             target: event.target,
-            cocoaPoint: ScreenCoords.cocoaPoint(fromCG: event.point)
+            cocoaPoint: ScreenCoords.cocoaPoint(fromCG: event.point),
+            layout: cfg.launcher.layout
         ) { [weak self] item, target in
             self?.counterLauncherDispatched += 1
             Log.line("controller: → launcher item \"\(item.name)\"")
@@ -207,8 +208,8 @@ public final class Controller: @unchecked Sendable {
                      + "at \(itemsPath) — request dropped")
             return
         }
-        let items = WandConfig.parseItems(text)
-        guard !items.isEmpty else {
+        let parsed = WandConfig.parseItems(text)
+        guard !parsed.items.isEmpty else {
             Log.line("controller: --show-menu: items file at \(itemsPath) "
                      + "yielded 0 items — request dropped")
             return
@@ -223,12 +224,13 @@ public final class Controller: @unchecked Sendable {
                             bundleID: bid, title: "",
                             frame: .zero, windowID: 0)
         let evalShell = shellEvaluator(for: target)
-        let visible = Matcher.itemsFor(target: target, items: items,
+        let visible = Matcher.itemsFor(target: target, items: parsed.items,
                                         excludes: cfg.excludeApps,
                                         evalShell: evalShell)
         Log.line("controller: --show-menu (external trigger) on "
                  + "\(bid) at \(cocoaPoint) — "
-                 + "\(visible.count)/\(items.count) item(s) visible"
+                 + "\(visible.count)/\(parsed.items.count) item(s) visible"
+                 + ", layout=\(parsed.layout.rawValue)"
                  + (selection == nil ? ""
                     : ", $SELECTION=\(selection!.count) char(s)"))
         record("show-menu on \(bid) (\(visible.count) item(s))")
@@ -242,7 +244,8 @@ public final class Controller: @unchecked Sendable {
         LauncherPanel.present(
             filteredItems: visible,
             target: target,
-            cocoaPoint: cocoaPoint
+            cocoaPoint: cocoaPoint,
+            layout: parsed.layout
         ) { [weak self] item, target in
             self?.counterShowMenuDispatched += 1
             Log.line("controller: → show-menu item \"\(item.name)\"")

@@ -102,16 +102,26 @@ public struct WandConfig: Sendable {
         return parse(text)
     }
 
-    /// Parse a TOML document containing only `[[launcher.item]]`
-    /// entries — the schema `wand --show-menu --items <PATH>`
-    /// expects. Same
-    /// row-level validation as `[launcher]` items in the main config
-    /// (drop on missing name / invalid action, with a loud log line),
-    /// so a client that screws up the file gets a diagnostic.
-    public static func parseItems(_ text: String) -> [LauncherItem] {
+    /// Parse a TOML document containing `[[launcher.item]]` entries
+    /// (and optionally `[launcher].layout`) — the schema `wand
+    /// --show-menu --items <PATH>` expects. Same row-level
+    /// validation as `[launcher]` items in the main config (drop on
+    /// missing name / invalid action, with a loud log line), so a
+    /// client that screws up the file gets a diagnostic.
+    ///
+    /// The items file's `[launcher].layout` declaration is what
+    /// controls the visual orientation for this particular show-menu
+    /// call — independent of `~/.config/wand/config.toml`'s
+    /// `[launcher].layout` (which only applies to the native middle-
+    /// click trigger). Default `.list` when missing or unknown.
+    public static func parseItems(_ text: String) -> LauncherItemsFile {
         let doc = parseTOMLSubset(text)
-        return (doc.arrays["launcher.item"] ?? []).enumerated()
+        let lr = doc.tables["launcher"] ?? [:]
+        let layout: LauncherLayout = parseEnum(
+            lr, key: "layout", section: "launcher", default: .list)
+        let items: [LauncherItem] = (doc.arrays["launcher.item"] ?? []).enumerated()
             .compactMap { idx, row in parseItem(row, idx: idx) }
+        return LauncherItemsFile(layout: layout, items: items)
     }
 
     static func parse(_ text: String) -> WandConfig {
@@ -189,6 +199,11 @@ public struct WandConfig: Sendable {
             ?? .middle
         let launcherMods = Set(lr.strings("modifiers")
             .compactMap { Modifier(rawValue: $0.lowercased()) })
+        // `[launcher].layout` — orientation of the native-trigger
+        // launcher panel. `--show-menu` items files override this
+        // per-call via their own `[launcher].layout`. Default `.list`.
+        let launcherLayout: LauncherLayout = parseEnum(
+            lr, key: "layout", section: "launcher", default: .list)
 
         // [[launcher.item]] — launcher rows. Same drop-on-typo
         // policy as [[gesture.rule]]: bad rows surface in the log
@@ -198,6 +213,7 @@ public struct WandConfig: Sendable {
         let launcher = LauncherSpec(
             enabled: launcherEnabled,
             trigger: Trigger(button: launcherButton, modifiers: launcherMods),
+            layout: launcherLayout,
             items: items)
 
         // [[gesture.rule]] — gesture pattern → action mappings.
