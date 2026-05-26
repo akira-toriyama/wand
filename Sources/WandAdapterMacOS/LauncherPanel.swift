@@ -204,6 +204,13 @@ private enum PanelLayout {
             stack.alignment = .centerY
             stack.spacing = 2
             stack.edgeInsets = NSEdgeInsets(top: 4, left: 4, bottom: 4, right: 4)
+        case .labeledToolbar:
+            // Same horizontal orientation as toolbar; slightly more
+            // spacing between pills since each button is wider.
+            stack.orientation = .horizontal
+            stack.alignment = .centerY
+            stack.spacing = 3
+            stack.edgeInsets = NSEdgeInsets(top: 4, left: 5, bottom: 4, right: 5)
         }
 
         var rows: [ItemRow] = []
@@ -294,20 +301,19 @@ private enum PanelLayout {
     }
 
     /// Frame for a CHILD panel anchored to a row in the parent panel.
-    /// Placement direction depends on the parent panel's layout:
-    /// `.list` opens the child to the RIGHT (top-aligned with the
-    /// hovered row); `.toolbar` opens it BELOW (left-aligned with
-    /// the hovered button). In both cases we flip to the opposite
-    /// side if the preferred side would clip the screen.
+    /// Placement direction depends on the parent panel's orientation:
+    /// list parent opens the child to the RIGHT (top-aligned with the
+    /// hovered row); any horizontal-toolbar variant opens it BELOW
+    /// (left-aligned with the hovered button). In both cases we flip
+    /// to the opposite side if the preferred side would clip.
     static func placeChild(rowFrameOnScreen rowFrame: NSRect,
                             parentPanelFrame parent: NSRect,
                             parentLayout: LauncherLayout,
                             contentSize size: NSSize) -> NSRect {
         let visible = visibleFrame(for: NSPoint(x: rowFrame.midX,
                                                   y: rowFrame.midY))
-        switch parentLayout {
-        case .list:
-            // Default: right of parent panel, child top = row top.
+        if !parentLayout.isHorizontal {
+            // List parent: right of parent panel, child top = row top.
             var originX = rowFrame.maxX
             if originX + size.width > visible.maxX {
                 // Flip to the left of the parent panel (NOT just
@@ -322,27 +328,27 @@ private enum PanelLayout {
                 originY = visible.maxY - size.height
             }
             return NSRect(origin: NSPoint(x: originX, y: originY), size: size)
-        case .toolbar:
-            // Toolbar parent opens child below the hovered button.
-            // Child top edge at button's bottom (no gap, so cursor
-            // moves smoothly down into the child); left-aligned with
-            // the button, clamped horizontally if it would clip.
-            var originX = rowFrame.minX
-            if originX + size.width > visible.maxX {
-                originX = visible.maxX - size.width
-            }
-            if originX < visible.minX { originX = visible.minX }
-            var originY = rowFrame.minY - size.height
-            if originY < visible.minY {
-                // No room below the toolbar — flip above the panel
-                // (child bottom = panel top).
-                originY = parent.maxY
-                if originY + size.height > visible.maxY {
-                    originY = visible.maxY - size.height
-                }
-            }
-            return NSRect(origin: NSPoint(x: originX, y: originY), size: size)
         }
+        // Horizontal parent (toolbar or labeled-toolbar) → child
+        // opens below the hovered button. Child top edge at button's
+        // bottom (no gap, so cursor moves smoothly down into the
+        // child); left-aligned with the button, clamped horizontally
+        // if it would clip.
+        var originX = rowFrame.minX
+        if originX + size.width > visible.maxX {
+            originX = visible.maxX - size.width
+        }
+        if originX < visible.minX { originX = visible.minX }
+        var originY = rowFrame.minY - size.height
+        if originY < visible.minY {
+            // No room below the toolbar — flip above the panel
+            // (child bottom = panel top).
+            originY = parent.maxY
+            if originY + size.height > visible.maxY {
+                originY = visible.maxY - size.height
+            }
+        }
+        return NSRect(origin: NSPoint(x: originX, y: originY), size: size)
     }
 
     private static func visibleFrame(for point: NSPoint) -> NSRect {
@@ -359,22 +365,41 @@ private enum PanelLayout {
             // Dynamic item — render as a folder-style row that
             // hover-expands into a child panel populated by running
             // `item.dynamic` (see `PanelController.openDynamicChild`).
-            let icon = item.icon.isEmpty
-                ? nil
-                : resolveItemIcon(item.icon)
+            let icon = resolveItemIconWithFallback(item: item, layout: layout)
             let r = ItemRow(kind: .dynamic(item),
                             label: item.name, icon: icon, layout: layout)
             rows.append(r)
             return r
         }
         let label = renderItemLabel(item, layout: layout)
-        let icon = item.icon.isEmpty
-            ? nil
-            : resolveItemIcon(item.icon)
+        let icon = resolveItemIconWithFallback(item: item, layout: layout)
         let r = ItemRow(kind: .leaf(item), label: label, icon: icon,
                          layout: layout)
         rows.append(r)
         return r
+    }
+
+    /// Icon for an item, with a layout-specific fallback when the
+    /// item didn't declare one. In list mode an empty icon is fine
+    /// (the row's label carries the meaning), so we return nil and
+    /// let the icon column collapse. In toolbar mode the button
+    /// would otherwise be a blank square, indistinguishable from
+    /// other unlabelled buttons — so we draw the first 1-2 chars of
+    /// the item's `name` as a text glyph. Same trick the existing
+    /// `resolveItemIcon` uses for emoji / short-text icon specs.
+    private static func resolveItemIconWithFallback(
+        item: LauncherItem, layout: LauncherLayout
+    ) -> NSImage? {
+        if !item.icon.isEmpty {
+            return resolveItemIcon(item.icon)
+        }
+        switch layout {
+        case .list:
+            return nil
+        case .toolbar, .labeledToolbar:
+            let glyph = String(item.name.prefix(2))
+            return textIcon(glyph, pointSize: ItemRow.iconRenderPt)
+        }
     }
 
     private static func makeFolderRow(name: String,
@@ -463,12 +488,13 @@ private enum PanelLayout {
     }
 
     /// Build the row title from the item, folding in state marker.
-    /// In toolbar mode the title is used as a tooltip (no on-screen
-    /// label), so we keep it short — no state prefix glyphs which
-    /// would clutter a hover tooltip.
+    /// Applied in every layout: list (visible prefix), labeled-toolbar
+    /// (visible prefix), toolbar (tooltip content). The state glyph
+    /// is useful even in the tooltip path — "✓ Dark Mode" tells the
+    /// user the option is currently active without taking up
+    /// on-screen space.
     private static func renderItemLabel(_ item: LauncherItem,
                                          layout: LauncherLayout) -> String {
-        guard layout == .list else { return item.name }
         var parts: [String] = []
         switch item.state {
         case "on":    parts.append("✓")
@@ -871,6 +897,10 @@ private final class ItemRow: NSView {
     static let iconRenderPt: CGFloat = 17
     private static let listRowHeight: CGFloat = 26
     private static let toolbarButtonSide: CGFloat = 34
+    /// Height of the labeled-toolbar "pill" button. Tall enough to
+    /// breathe with the 17pt icon + menu font, short enough to read
+    /// as a chip rather than a row.
+    private static let labeledPillHeight: CGFloat = 28
     private static let idleCornerRadius: CGFloat = 4
     private static let hoverCornerRadius: CGFloat = 5
 
@@ -897,8 +927,9 @@ private final class ItemRow: NSView {
         addSubview(iconView)
 
         switch layout {
-        case .list:    installListLayout(label: label)
-        case .toolbar: installToolbarLayout(label: label)
+        case .list:           installListLayout(label: label)
+        case .toolbar:        installToolbarLayout(label: label)
+        case .labeledToolbar: installLabeledToolbarLayout(label: label)
         }
 
         applyIdleStyle()
@@ -976,6 +1007,37 @@ private final class ItemRow: NSView {
         ])
     }
 
+    private func installLabeledToolbarLayout(label: String) {
+        // Horizontal "pill" button: icon left, label right. Same
+        // tooltip as icon-only toolbar so a user hovering still gets
+        // the full name on accessibility readers. Width is intrinsic
+        // — the stack lets each pill size to its label.
+        toolTip = label
+
+        titleField.translatesAutoresizingMaskIntoConstraints = false
+        titleField.stringValue = label
+        titleField.font = .menuFont(ofSize: 0)
+        titleField.lineBreakMode = .byTruncatingTail
+        titleField.maximumNumberOfLines = 1
+        titleField.cell?.usesSingleLineMode = true
+        addSubview(titleField)
+
+        NSLayoutConstraint.activate([
+            heightAnchor.constraint(equalToConstant: Self.labeledPillHeight),
+
+            iconView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
+            iconView.centerYAnchor.constraint(equalTo: centerYAnchor),
+            iconView.widthAnchor.constraint(equalToConstant: Self.iconSize),
+            iconView.heightAnchor.constraint(equalToConstant: Self.iconSize),
+
+            titleField.leadingAnchor.constraint(
+                equalTo: iconView.trailingAnchor, constant: 6),
+            titleField.trailingAnchor.constraint(
+                equalTo: trailingAnchor, constant: -10),
+            titleField.centerYAnchor.constraint(equalTo: centerYAnchor),
+        ])
+    }
+
     required init?(coder: NSCoder) { fatalError("not used") }
 
     private var isInteractive: Bool {
@@ -997,10 +1059,10 @@ private final class ItemRow: NSView {
             titleField.textColor = .labelColor
         }
         chevronView?.contentTintColor = .secondaryLabelColor
-        // Toolbar mode: tint SF Symbol icons in `.labelColor` so
-        // they read as text-level contrast rather than the default
-        // grey. No effect on .icns / emoji rendered icons.
-        if layout == .toolbar {
+        // Toolbar variants: tint SF Symbol icons in `.labelColor`
+        // so they read as text-level contrast rather than the
+        // default grey. No effect on .icns / emoji rendered icons.
+        if layout != .list {
             iconView.contentTintColor = isInteractive
                 ? .labelColor : .tertiaryLabelColor
         }
@@ -1014,7 +1076,7 @@ private final class ItemRow: NSView {
         layer?.cornerRadius = Self.hoverCornerRadius
         titleField.textColor = .white
         chevronView?.contentTintColor = .white
-        if layout == .toolbar {
+        if layout != .list {
             iconView.contentTintColor = .white
         }
     }

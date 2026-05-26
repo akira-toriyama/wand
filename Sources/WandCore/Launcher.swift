@@ -138,18 +138,37 @@ public struct LauncherItem: Sendable, Equatable {
 }
 
 /// Visual orientation of the launcher panel.
-/// - `.list`    — vertical list of rows (icon + label). The default,
-///                fits up to ~30 items, supports submenus and dynamic
-///                items, scales naturally for menu-like usage.
-/// - `.toolbar` — horizontal row of icon-only buttons (PopClip
-///                style). The item's `name` becomes a tooltip. Best
-///                for short, focused command sets (text-selection
-///                actions, ~6-8 items). Folder / dynamic items still
-///                open a child panel below, which uses `.list`
-///                regardless of the parent's layout.
+/// - `.list`            — vertical list of rows (icon + label). The
+///                        default, fits up to ~30 items, supports
+///                        submenus and dynamic items, scales
+///                        naturally for menu-like usage.
+/// - `.toolbar`         — horizontal row of icon-only buttons
+///                        (PopClip style). The item's `name` becomes
+///                        a tooltip. Best for short, focused command
+///                        sets (text-selection actions, ~6-8 items).
+/// - `.labeledToolbar`  — horizontal row of icon + label "pill"
+///                        buttons. Same use case as `.toolbar` but
+///                        labels are always visible, so each button
+///                        is wider and item count budget is smaller
+///                        (~4-6 items). Best when actions need
+///                        their names to read at a glance.
+/// In all toolbar variants, folder / dynamic items open a child
+/// panel BELOW the hovered button, and the child panel itself uses
+/// `.list` regardless of the parent's layout.
 public enum LauncherLayout: String, Sendable, Hashable, CaseIterable {
     case list
     case toolbar
+    case labeledToolbar = "labeled-toolbar"
+
+    /// True for layouts whose root panel renders as a horizontal
+    /// stack (toolbar variants). Children always open below in this
+    /// case; for `.list` they open to the right.
+    public var isHorizontal: Bool {
+        switch self {
+        case .list:                       return false
+        case .toolbar, .labeledToolbar:   return true
+        }
+    }
 }
 
 /// The whole `[launcher]` block. `trigger` lives here (not the top-
