@@ -1,121 +1,128 @@
-# Glossary — wand's ubiquitous language
+# 用語集 — wand のユビキタス言語
 
-A short, normative list of names for the moving parts of wand. **Code,
-docs, commit messages, PR titles, and Claude Code prompts all use these
-names** — and only these names. Synonyms drift; pick one and stick.
+wand を構成する各パーツの **正規の呼び名** をまとめた規範ドキュメント。
+**コード・ドキュメント・コミットメッセージ・PR タイトル・Claude Code への
+プロンプト、すべてここに載っている名前のみを使う**。同義語は揺らぎを生む。
+1 つに決めて、それで通す。
 
-If a term is missing, add it here in the same PR that introduces it. If
-a term changes name, rename it across code + docs + this file in one PR.
+なお **正規名は英語のまま** 保持する。コード識別子・設定キー
+（`[gesture.overlay]`, `PanelController` など）と一対一に対応させるため。
+日本語化するのは説明文だけ。
 
-> Format per entry: **canonical name**, one-line definition, where it
-> lives in the config or code, and a `Don't call it:` line listing the
-> wrong names this entry replaces.
+用語が足りなければ、その用語を導入する PR で同時にこのファイルへ追記する。
+用語名を変える場合は、コード・ドキュメント・このファイルを **同一 PR で**
+書き換える。
+
+> 各エントリの形式: **正規名**, 1〜2 行の定義, 設定 / コードでの所在,
+> そして `Don't call it:` 行 — このエントリが置き換える誤った呼び名のリスト。
 
 ---
 
-## Gesture surface
+## ジェスチャー面
 
 ### assist card
-The small card laid out around the cursor showing **what's reachable
-from here** — one per direction the in-progress shape could still
-extend into. The card whose rule fires right now is tinted in the match
-color.
-- Config: `[gesture.overlay]`
-- Code: `WandAdapterMacOS` overlay
-- **Don't call it:** tooltip, popup, hint, chip, balloon, label.
+カーソル周囲に配置される小さなカード。**今この瞬間ここから到達可能な方向**
+を 1 方向 = 1 カードで提示する。現在マッチしているルールに対応する
+カードは match color で強調される。
+- 設定: `[gesture.overlay]`
+- コード: `WandAdapterMacOS` overlay
+- **Don't call it:** tooltip, popup, hint, chip, balloon, label, ツールチップ, ポップアップ, ヒント
 
 ### badge
-The small marker pinned at the gesture's **start point** that shows the
-target app's icon, so the user can see which window wand will act on
-even when keyboard focus sits elsewhere.
-- Config: `[gesture.overlay]` (`badge` toggle)
-- **Don't call it:** icon, indicator, marker, anchor.
+ジェスチャー開始点に固定表示される小さなマーカー。**ターゲットアプリの
+アイコン** を表示し、キーボードフォーカスが別ウィンドウにあっても
+「wand がどのウィンドウに作用するのか」を一目で示す。
+- 設定: `[gesture.overlay]` の `badge` トグル
+- **Don't call it:** icon, indicator, marker, anchor, アイコン, インジケータ
 
 ### trail
-The translucent line that follows the cursor while a gesture is being
-drawn. Match color while the shape so far fires a rule, no-match color
-once it doesn't.
-- Config: `[gesture.overlay]`
-- **Don't call it:** path, stroke, line, ink.
+ジェスチャー描画中にカーソルを追従する半透明の軌跡。これまでに描いた
+形がルールにマッチしていれば match color、マッチしなければ no-match color。
+- 設定: `[gesture.overlay]`
+- **Don't call it:** path, stroke, line, ink, パス, 軌跡（説明文中の比喩を除く）
 
 ### gesture rule
-One `[[gesture.rule]]` entry: a `pattern` (e.g. `DR`) plus an action,
-optionally narrowed by `apps` / `filter-title` / `filter-shell`.
-- Config: `[[gesture.rule]]`
-- **Don't call it:** gesture, binding, mapping, shortcut.
+1 つの `[[gesture.rule]]` エントリ。`pattern`（例: `DR`）と
+アクションのペアで、必要に応じて `apps` / `filter-title` / `filter-shell`
+で適用範囲を絞る。
+- 設定: `[[gesture.rule]]`
+- **Don't call it:** gesture, binding, mapping, shortcut, バインド, ショートカット
 
 ### wand pattern
-The cardinal-direction string a `gesture rule` matches against —
-alphabet `L U R D`, no consecutive duplicates (the recogniser coalesces
-same-direction motion).
-- Examples: `DR`, `URD`, `L`
-- **Don't call it:** shape, sequence, path, motion.
+`gesture rule` がマッチ対象とする方向文字列。アルファベットは `L U R D`
+のみ、連続同方向は不可（認識器が同方向の動きを 1 セグメントに集約する
+ため）。
+- 例: `DR`, `URD`, `L`
+- **Don't call it:** shape, sequence, path, motion, 形, 軌跡
 
 ---
 
-## Launcher surface
+## ランチャー面
 
 ### non-activating panel
-The launcher's main menu — a floating panel that appears at button-down
-**without stealing keyboard focus** (PopClip parity). Anchored to the
-window under the cursor at the moment the trigger fires.
-- Config: `[launcher]`
-- Code: `PanelController`
-- **Don't call it:** modal, popup, window, menu, dialog.
+ランチャーのメインメニュー。トリガーボタンを押した瞬間に出現する
+**キーボードフォーカスを奪わない浮遊パネル**（PopClip パリティ）。
+ボタン押下時にカーソル下にあったウィンドウにアンカーされる。
+- 設定: `[launcher]`
+- コード: `PanelController`
+- **Don't call it:** modal, popup, window, menu, dialog, モーダル, ポップアップ, ダイアログ, ウィンドウ
 
 ### child panel
-A submenu that opens **adjacent** to the non-activating panel on hover
-over a row with `group = [...]`. Same non-activating semantics as its
-parent.
-- Code: `PanelController.openChild`
-- **Don't call it:** submenu, dropdown, flyout, nested menu.
+`group = [...]` を持つ行にホバーした時、non-activating panel の **隣** に
+開くサブメニュー。non-activating の性質は親パネルから引き継ぐ。
+- コード: `PanelController.openChild`
+- **Don't call it:** submenu, dropdown, flyout, nested menu, サブメニュー, ドロップダウン
 
 ### launcher item
-One `[[launcher.item]]` entry — a row in the non-activating panel or a
-child panel. May be static, or expand into a child panel via `group`,
-or generate its rows at open-time via `dynamic`.
-- Config: `[[launcher.item]]`
-- **Don't call it:** entry, row, button, command, action.
+1 つの `[[launcher.item]]` エントリ。non-activating panel もしくは
+child panel に並ぶ 1 行を指す。静的なもの、`group` で child panel に
+展開されるもの、`dynamic` でメニュー展開時に行を生成するものがある。
+- 設定: `[[launcher.item]]`
+- **Don't call it:** entry, row, button, command, action, 項目, ボタン, アクション
 
 ### dynamic submenu
-A `launcher item` whose child rows are produced at menu-open time by
-running its `dynamic = "<shell>"` command and applying its
-`template-*` fields to each stdout line. 500 ms hard timeout.
-- Config: `[[launcher.item]]` with `dynamic` set
-- **Don't call it:** generated submenu, shell submenu, computed menu.
+`dynamic = "<shell>"` を持つ `launcher item` が、メニュー展開時に
+シェルコマンドを実行し、その標準出力 1 行 = 1 子行として
+`template-*` フィールドを適用して生成する child panel。500ms の
+ハードタイムアウトあり。
+- 設定: `[[launcher.item]]` で `dynamic` 指定時
+- **Don't call it:** generated submenu, shell submenu, computed menu, 動的メニュー
 
 ---
 
-## Targeting
+## ターゲティング
 
 ### AX target
-The window the cursor was over at button-down — the window every action
-runs against, regardless of keyboard focus. Resolved by AX walk first,
-with a `CGWindowListCopyWindowInfo` fallback for renderer processes
-(Chrome content area, etc.).
-- Log line: `AX: resolved … via ax-walk` / `via cg-window`
-- Env vars exposed to shell actions: `WAND_TARGET_BUNDLE_ID`,
+**ボタンを押した瞬間にカーソルが乗っていたウィンドウ**。キーボード
+フォーカスが別ウィンドウにあっても、すべてのアクションはこの
+ウィンドウに対して実行される。AX ウォークで解決を試み、失敗時は
+`CGWindowListCopyWindowInfo` にフォールバック（Chrome のレンダラ
+プロセスなどが対象）。
+- ログ行: `AX: resolved … via ax-walk` / `via cg-window`
+- shell アクションに渡される環境変数: `WAND_TARGET_BUNDLE_ID`,
   `WAND_TARGET_PID`, `WAND_TARGET_TITLE`, `WAND_TARGET_FRAME`
 - **Don't call it:** focused window, active window, frontmost window,
-  target app. (The frontmost / focused window may be different.)
+  target app, フォーカスウィンドウ, アクティブウィンドウ
+  （frontmost / focused は AX target と一致しないことがある）
 
 ### `$SELECTION`
-The text selected in the focused element at the moment the launcher
-trigger fired, exposed to `shell` launcher items as an env var. Empty
-if nothing is selected or the focused app doesn't expose AX selection.
-**Untrusted** — quote it in shell commands.
-- **Don't call it:** clipboard, highlighted text, current selection
-  (which collides with code-side AX terminology).
+ランチャートリガー発火の瞬間に、フォーカスされている要素で選択
+されていたテキスト。`shell` 系 launcher item に環境変数として
+渡される。何も選択されていない場合、もしくはフォーカス先のアプリ
+が AX selection を公開していない場合は空文字列。**信頼できない値**
+としてシェル内では必ずクォートすること。
+- **Don't call it:** clipboard, highlighted text, current selection,
+  クリップボード, 選択範囲（コード側 AX の "current selection" と衝突するため）
 
 ---
 
-## Conventions for adding entries
+## エントリ追加時のルール
 
-- One canonical name per concept. If two names are circulating, this
-  file picks the winner and the loser goes in `Don't call it:`.
-- Lowercase the name unless it's a literal config key or type
-  (`[[gesture.rule]]`, `PanelController`).
-- Keep definitions to **one or two sentences**. Link to the config
-  section or source file rather than re-explaining behavior.
-- When a term gets a screenshot, drop it in `docs/images/` and embed
-  with `![](images/<name>.png)`.
+- 1 つの概念につき正規名は 1 つ。複数の呼び方が流通しているなら、
+  このファイルで勝者を選び、敗者は `Don't call it:` 行に並べる。
+- 正規名は **英語のまま小文字で書く**。コード識別子・設定キー
+  （`[[gesture.rule]]`, `PanelController`）はその表記を維持する。
+- 定義は **1〜2 文** に収める。動作の詳細は設定セクションやソース
+  ファイルへリンクし、ここで説明し直さない。
+- 用語にスクリーンショットを付ける場合は `docs/images/` に置き、
+  `![](images/<name>.png)` の形で埋め込む。
