@@ -28,6 +28,13 @@ wand を構成する各パーツの **正規の呼び名** をまとめた規範
 - コード: `WandAdapterMacOS` overlay
 - **Don't call it:** tooltip, popup, hint, chip, balloon, label, ツールチップ, ポップアップ, ヒント
 
+![assist card と badge — Chrome 上で D を描いた瞬間の overlay](images/assist-card.png)
+
+> 上のキャプチャは Chrome 上で D（下）方向に描いた瞬間。中央の Chrome
+> アイコン＋赤枠が `badge`、それを取り囲む `→↑ ウィンドウを閉じる`
+> などの黒いカードが `assist card`。再生成するには
+> `swift scripts/capture-overlays.swift docs/images`。
+
 ### badge
 ジェスチャー開始点に固定表示される小さなマーカー。**ターゲットアプリの
 アイコン** を表示し、キーボードフォーカスが別ウィンドウにあっても
