@@ -189,6 +189,21 @@ public enum AXTarget {
     /// Current trust state, without prompting — for `wand --doctor`.
     public static func isTrusted() -> Bool { AXIsProcessTrusted() }
 
+    /// Focused-window title of the app owning `pid`. Empty string
+    /// when the app exposes no focused window, no title attribute,
+    /// or AX denies the read. Used by `--show-menu` to fill in
+    /// `Target.title` (= `$WAND_TARGET_TITLE`) on external triggers
+    /// where the calling shell can't know the window title itself.
+    public static func focusedWindowTitle(pid: pid_t) -> String {
+        let app = AXUIElementCreateApplication(pid)
+        AXUIElementSetMessagingTimeout(app, axTimeout)
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(app,
+                kAXFocusedWindowAttribute as CFString, &value) == .success,
+              let v = value else { return "" }
+        return string(v as! AXUIElement, kAXTitleAttribute) ?? ""
+    }
+
     /// Text selected in the system-focused element, or nil if none
     /// (or AX not granted, or focused element doesn't expose
     /// selected-text). Cheap synchronous AX lookup — safe to call

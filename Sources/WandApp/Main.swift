@@ -42,9 +42,13 @@ enum WandApp {
             --items <PATH>             menu at a screen point with the
             --at <X> <Y>               given [[item]] file. Cocoa coords
             [--selection <TEXT>]       (Y-up). For event-driven triggers
-                                       (eventfx text-selection etc).
+            [--title <TEXT>]           (eventfx text-selection etc).
                                        $SELECTION is exported to shell
                                        actions if --selection given.
+                                       --title overrides AX-fetched
+                                       focused-window title for
+                                       $WAND_TARGET_TITLE (default:
+                                       AX-fetch from frontmost app).
 
         STANDALONE COMMANDS — no daemon required (--record refuses if one runs)
           wand --validate            parse config.toml; exit 0 if valid
@@ -105,14 +109,14 @@ enum WandApp {
             "--help", "--debug", "--validate", "--record",
             "--reload", "--quit", "--status", "--doctor",
             "--resign", "--show-menu",
-            "--items", "--at", "--selection",
+            "--items", "--at", "--selection", "--title",
         ]
         // Value-bearing flags' operand counts — scan skips that many
         // tokens after seeing the flag. Without this, `stroke
         // --show-menu --items /tmp/foo.toml` would reject the path
         // as an "unknown flag".
         let valueArities: [String: Int] = [
-            "--items": 1, "--selection": 1, "--at": 2,
+            "--items": 1, "--selection": 1, "--at": 2, "--title": 1,
         ]
         var ai = 0
         while ai < argv.count {
@@ -694,6 +698,12 @@ enum WandApp {
             exit(2)
         }
         let selection = valueAfter("--selection", in: argv) ?? ""
+        // --title: caller-supplied window title to override the
+        // daemon's AX fetch. Used by event triggers (eventfx) that
+        // already know the source window at fire time and want it
+        // surfaced verbatim — avoids racing the daemon's AX lookup
+        // against window-switch latency.
+        let title = valueAfter("--title", in: argv) ?? ""
 
         guard isServerRunning() else {
             FileHandle.standardError.write(Data((
@@ -710,6 +720,7 @@ enum WandApp {
                 "x": x,
                 "y": y,
                 "selection": selection,
+                "title": title,
             ],
             deliverImmediately: true
         )

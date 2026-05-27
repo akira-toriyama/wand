@@ -201,7 +201,8 @@ public final class Controller: @unchecked Sendable {
     @MainActor
     func handleShowMenu(itemsPath: String,
                         cocoaPoint: NSPoint,
-                        selection: String?) {
+                        selection: String?,
+                        title: String? = nil) {
         let cfg = config
         guard let text = try? String(contentsOfFile: itemsPath, encoding: .utf8) else {
             Log.line("controller: --show-menu: items file unreadable "
@@ -220,8 +221,15 @@ public final class Controller: @unchecked Sendable {
                      + "request dropped")
             return
         }
+        // CLI --title が来てればそれを使い、無ければ AX で frontmost
+        // app の focused window title を取る。action-cmd 側に
+        // $WAND_TARGET_TITLE として届く。AX-fetch は menu 表示時点の
+        // スナップショット — 重い AX 応答の app では空文字に倒れる
+        // ことがあるので、確実性が要る trigger 側は --title を渡す。
+        let resolvedTitle = title
+            ?? AXTarget.focusedWindowTitle(pid: app.processIdentifier)
         let target = Target(pid: app.processIdentifier,
-                            bundleID: bid, title: "",
+                            bundleID: bid, title: resolvedTitle,
                             frame: .zero, windowID: 0)
         let evalShell = shellEvaluator(for: target)
         let visible = Matcher.itemsFor(target: target, items: parsed.items,
@@ -411,6 +419,7 @@ public final class Controller: @unchecked Sendable {
             let x = ui?["x"] as? Double
             let y = ui?["y"] as? Double
             let selection = ui?["selection"] as? String
+            let title = ui?["title"] as? String
             // queue:.main delivers on the main thread but Swift 6
             // doesn't infer @MainActor on the closure — `NSApp` is
             // main-isolated, so wrap explicitly. Same workaround
@@ -429,7 +438,8 @@ public final class Controller: @unchecked Sendable {
                     self?.handleShowMenu(
                         itemsPath: items,
                         cocoaPoint: NSPoint(x: x, y: y),
-                        selection: (selection?.isEmpty ?? true) ? nil : selection)
+                        selection: (selection?.isEmpty ?? true) ? nil : selection,
+                        title: (title?.isEmpty ?? true) ? nil : title)
                 default:
                     Log.line("ipc: unknown command \"\(cmd)\" — ignored")
                 }
