@@ -20,6 +20,16 @@ wand を構成する各パーツの **正規の呼び名** をまとめた規範
 
 ## ジェスチャー面
 
+下の GIF は Chrome 上で `DU`（下→上）を描いて `新しいタブ` ルールを
+発火させた様子。中央の Chrome アイコンが `badge`、カーソルを追う青線が
+`trail`、それを取り囲む各カードが `assist card`（マッチした `新しいタブ`
+だけ match color で強調）。3 つの正規名がひとつの操作の中でどう同居するかを示す。
+
+![DU ジェスチャーで 新しいタブ ルールが発火する様子 — badge / trail / assist card](images/gesture-demo.gif)
+
+> 再生成: `swift scripts/capture-demo.swift <x> <y>` で録画し、ヘッダ記載の
+> ffmpeg + gifski でクロップ → `docs/images/gesture-demo.gif` 化。
+
 ### assist card
 カーソル周囲に配置される小さなカード。**今この瞬間ここから到達可能な方向**
 を 1 方向 = 1 カードで提示する。現在マッチしているルールに対応する
