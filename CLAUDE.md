@@ -2,6 +2,14 @@
 
 Guidance for working in this repository.
 
+## Terminology
+
+All UI / config terminology follows [`docs/glossary.md`](docs/glossary.md) —
+use the canonical names (assist card, badge, trail, non-activating
+panel, child panel, launcher item, AX target, …), **not** the
+`Don't call it:` synonyms. Adding or renaming a term lands in the
+same PR as the code change.
+
 ## What this is
 
 `wand` — macOS daemon for **cursor-anchored mouse automation**. Two
