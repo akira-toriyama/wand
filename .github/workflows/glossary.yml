@@ -1,0 +1,26 @@
+name: Deploy glossary site
+
+# 本リポの docs/glossary.md から専用 SPA を生成し、
+# https://akira-toriyama.github.io/wand/ に公開する。
+# 実体 (builder + viewer) は akira-toriyama/glossary-site の reusable workflow に委譲。
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - docs/glossary.md
+      - .github/workflows/glossary.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    uses: akira-toriyama/glossary-site/.github/workflows/deploy.yml@main
