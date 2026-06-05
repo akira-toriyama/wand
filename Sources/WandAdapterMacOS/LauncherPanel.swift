@@ -619,6 +619,23 @@ private enum PanelLayout {
                                  iconChip: Bool = false) -> NSImage? {
         let pt: CGFloat = ItemRow.iconRenderPt
 
+        // `app:<bundle-id>` — resolve to an installed app's icon via
+        // the same AppIconCache the panel header uses. Works for
+        // running and non-running apps (LaunchServices fallback). The
+        // cache resizes the icon to `iconSize`, so callers always get
+        // a row-sized NSImage. Unknown bundle ids return nil → row
+        // collapses its icon column (same as a typo'd file path).
+        if spec.hasPrefix("app:") {
+            let bid = String(spec.dropFirst(4))
+            let (_, img) = AppIconCache.shared.lookup(
+                bundleID: bid, iconSize: pt)
+            if img == nil {
+                Log.line("launcher-panel: no installed app for "
+                         + "\"\(bid)\" — falling back to no icon")
+            }
+            return img
+        }
+
         // SF Symbol prefix.
         if spec.hasPrefix("SF:") {
             let name = String(spec.dropFirst(3))
