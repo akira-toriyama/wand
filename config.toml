@@ -426,6 +426,16 @@ action-verb = "minimize"
 # action-type = "shell"
 # action-cmd  = "echo $SELECTION | translate --to ja"
 #
+# # App icon — `icon = "app:<bundle-id>"` pulls the actual icon of an
+# # installed app (running OR installed-but-inactive). Works for any
+# # app LaunchServices knows about. Falls back to no icon if the
+# # bundle id isn't installed.
+# [[launcher.item]]
+# name = "Open Chrome"
+# icon = "app:com.google.Chrome"
+# action-type = "shell"
+# action-cmd  = "open -na 'Google Chrome'"
+#
 # # Tint — palette-colour an SF Symbol icon so the row reads in its
 # # category at a glance (red for destructive, accent for the active
 # # toggle, etc). Same colour grammar as the overlay's `color`:
