@@ -302,6 +302,32 @@ enum WandApp {
                 MainActor.assumeIsolated { overlay?.applyConfig(new) }
             }
         }
+
+        // Post-fire decal — Splatoon-style splatter / blob / scorch /
+        // star left at the cursor when a rule fires. Held for the
+        // process lifetime; reads the live config per-fire so the
+        // `decal` / `decal-duration-ms` / `decal-size` knobs take
+        // effect on the next stroke.
+        let decalManager = DecalManager()
+        controller.onGestureFire = { [weak controller] cgPoint in
+            MainActor.assumeIsolated {
+                guard let cfg = controller?.config,
+                      cfg.effectDecal != .off,
+                      cfg.effectDecalDurationMs > 0
+                else { return }
+                let cocoaPoint = ScreenCoords.cocoaPoint(fromCG: cgPoint)
+                let color = NSColorParse.nsColor(cfg.overlayColor)
+                    ?? .systemBlue
+                decalManager.emit(
+                    at: cocoaPoint, color: color,
+                    kind: cfg.effectDecal,
+                    durationSec: TimeInterval(cfg.effectDecalDurationMs)
+                        / 1000.0,
+                    size: CGFloat(cfg.effectDecalSize))
+            }
+        }
+        _ = decalManager   // hold a reference for the process lifetime
+
         controller.start()
 
         // Live-reload on config edits (no `--reload` needed). Held for

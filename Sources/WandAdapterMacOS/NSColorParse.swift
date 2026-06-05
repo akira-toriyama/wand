@@ -13,9 +13,9 @@
 
 import AppKit
 
-enum NSColorParse {
+public enum NSColorParse {
 
-    static func nsColor(_ s: String) -> NSColor? {
+    public static func nsColor(_ s: String) -> NSColor? {
         let t = s.trimmingCharacters(in: .whitespaces).lowercased()
         switch t {
         case "blue":   return .systemBlue
