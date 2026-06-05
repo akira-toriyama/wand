@@ -226,16 +226,24 @@ public struct LauncherSpec: Sendable, Equatable {
     /// (rows still fire normally — the badge is purely cosmetic
     /// documentation of the underlying shortcut). Default `true`.
     public let shortcutBadge: Bool
+    /// Draw a soft rounded "chip" behind emoji / text-glyph icons so
+    /// they sit on the same visual footprint as SF Symbol icons.
+    /// `false` falls back to the bare glyph (no background). Has no
+    /// effect on SF Symbol or file-path icons — those already render
+    /// at a consistent baseline. Default `true`.
+    public let iconChip: Bool
 
     public init(enabled: Bool, trigger: Trigger,
                 layout: LauncherLayout = .list,
                 items: [LauncherItem],
-                shortcutBadge: Bool = true) {
+                shortcutBadge: Bool = true,
+                iconChip: Bool = true) {
         self.enabled = enabled
         self.trigger = trigger
         self.layout = layout
         self.items = items
         self.shortcutBadge = shortcutBadge
+        self.iconChip = iconChip
     }
 
     public static let `default` = LauncherSpec(
@@ -243,7 +251,8 @@ public struct LauncherSpec: Sendable, Equatable {
         trigger: Trigger(button: .middle, modifiers: []),
         layout: .list,
         items: [],
-        shortcutBadge: true
+        shortcutBadge: true,
+        iconChip: true
     )
 }
 

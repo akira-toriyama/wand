@@ -51,6 +51,7 @@ public enum LauncherPanel {
                                 cocoaPoint: NSPoint,
                                 layout: LauncherLayout = .list,
                                 shortcutBadge: Bool = true,
+                                iconChip: Bool = true,
                                 onSelect: @escaping (LauncherItem, Target) -> Void) {
         current?.dismiss()
         guard !items.isEmpty else {
@@ -67,7 +68,7 @@ public enum LauncherPanel {
             : nil
         let (content, rows) = PanelLayout.buildContent(
             nodes: nodes, header: header, layout: layout,
-            shortcutBadge: shortcutBadge)
+            shortcutBadge: shortcutBadge, iconChip: iconChip)
         let frame = PanelLayout.placeRoot(
             atCursor: cocoaPoint, contentSize: content.fittingSize)
         let controller = PanelController(
@@ -183,7 +184,8 @@ private enum PanelLayout {
     static func buildContent(nodes: [PanelNode],
                               header: HeaderSpec?,
                               layout: LauncherLayout,
-                              shortcutBadge: Bool = true)
+                              shortcutBadge: Bool = true,
+                              iconChip: Bool = true)
         -> (view: NSView, rows: [ItemRow]) {
         let bg = NSVisualEffectView()
         bg.material = .menu
@@ -259,6 +261,7 @@ private enum PanelLayout {
                 }
                 views.append(makeItemRow(item, layout: layout,
                                           shortcutBadge: shortcutBadge,
+                                          iconChip: iconChip,
                                           sink: &rows))
             case .folder(let name, let children):
                 views.append(makeFolderRow(name: name, children: children,
@@ -386,19 +389,22 @@ private enum PanelLayout {
     private static func makeItemRow(_ item: LauncherItem,
                                      layout: LauncherLayout,
                                      shortcutBadge: Bool,
+                                     iconChip: Bool,
                                      sink rows: inout [ItemRow]) -> NSView {
         if !item.dynamic.isEmpty {
             // Dynamic item — render as a folder-style row that
             // hover-expands into a child panel populated by running
             // `item.dynamic` (see `PanelController.openDynamicChild`).
-            let icon = resolveItemIconWithFallback(item: item, layout: layout)
+            let icon = resolveItemIconWithFallback(item: item, layout: layout,
+                                                    iconChip: iconChip)
             let r = ItemRow(kind: .dynamic(item),
                             label: item.name, icon: icon, layout: layout)
             rows.append(r)
             return r
         }
         let label = renderItemLabel(item, layout: layout)
-        let icon = resolveItemIconWithFallback(item: item, layout: layout)
+        let icon = resolveItemIconWithFallback(item: item, layout: layout,
+                                                iconChip: iconChip)
         // Auto-derive a shortcut glyph for `.key(...)` actions so list
         // rows can show the underlying ⌘W next to the label — pure
         // documentation, never intercepts the actual key. Other action
@@ -427,17 +433,22 @@ private enum PanelLayout {
     /// the item's `name` as a text glyph. Same trick the existing
     /// `resolveItemIcon` uses for emoji / short-text icon specs.
     private static func resolveItemIconWithFallback(
-        item: LauncherItem, layout: LauncherLayout
+        item: LauncherItem, layout: LauncherLayout, iconChip: Bool
     ) -> NSImage? {
         if !item.icon.isEmpty {
-            return resolveItemIcon(item.icon, tint: item.tint)
+            return resolveItemIcon(item.icon, tint: item.tint,
+                                    iconChip: iconChip)
         }
         switch layout {
         case .list:
             return nil
         case .toolbar, .labeledToolbar:
+            // Synthesised text-glyph fallback for unlabelled toolbar
+            // buttons — these are always rendered as text, so they
+            // benefit from the chip the same way an emoji icon would.
             let glyph = String(item.name.prefix(2))
-            return textIcon(glyph, pointSize: ItemRow.iconRenderPt)
+            return textIcon(glyph, pointSize: ItemRow.iconRenderPt,
+                             chip: iconChip)
         }
     }
 
@@ -604,7 +615,8 @@ private enum PanelLayout {
     /// the row) on miss; logs once so a typo is visible in
     /// `/tmp/wand.log` without spamming every popup.
     static func resolveItemIcon(_ spec: String,
-                                 tint: String = "") -> NSImage? {
+                                 tint: String = "",
+                                 iconChip: Bool = false) -> NSImage? {
         let pt: CGFloat = ItemRow.iconRenderPt
 
         // SF Symbol prefix.
@@ -663,8 +675,10 @@ private enum PanelLayout {
             return img
         }
 
-        // Text / emoji — draw the glyph into an NSImage.
-        return textIcon(spec, pointSize: pt)
+        // Text / emoji — draw the glyph into an NSImage, optionally
+        // backed by a rounded chip so it sits on the same visual
+        // footprint as the SF Symbol / file-path branches.
+        return textIcon(spec, pointSize: pt, chip: iconChip)
     }
 
     private static func resolveIconPath(_ spec: String) -> String {
@@ -679,9 +693,14 @@ private enum PanelLayout {
     }
 
     private static func textIcon(_ text: String,
-                                  pointSize pt: CGFloat) -> NSImage? {
+                                  pointSize pt: CGFloat,
+                                  chip: Bool = false) -> NSImage? {
+        // Shrink the glyph slightly when sitting on a chip so the
+        // padding reads as deliberate rather than cramped. Without a
+        // chip, the bare glyph keeps the historical `pt * 0.85` size.
+        let fontSize: CGFloat = chip ? pt * 0.72 : pt * 0.85
         let attrs: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: pt * 0.85),
+            .font: NSFont.systemFont(ofSize: fontSize),
         ]
         let attributed = NSAttributedString(string: text, attributes: attrs)
         let measured = attributed.size()
@@ -689,6 +708,16 @@ private enum PanelLayout {
         let size = NSSize(width: pt, height: pt)
         let img = NSImage(size: size)
         img.lockFocus()
+        if chip {
+            // `quaternaryLabelColor` is the muted-grey "filled chip"
+            // baseline macOS uses for things like badge backgrounds —
+            // visible against the panel's vibrant blur but soft enough
+            // not to compete with the row's title.
+            let chipRect = NSRect(origin: .zero, size: size).insetBy(dx: 0, dy: 0)
+            NSColor.quaternaryLabelColor.setFill()
+            NSBezierPath(roundedRect: chipRect,
+                          xRadius: pt * 0.28, yRadius: pt * 0.28).fill()
+        }
         let origin = NSPoint(
             x: (size.width - measured.width) / 2,
             y: (size.height - measured.height) / 2)
