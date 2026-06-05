@@ -35,6 +35,13 @@ public struct WandConfig: Sendable {
     public var overlayColor: String
     public var overlayColorNoMatch: String
     public var overlayWidth: Int
+    /// Named preset that determines how the trail line is rendered —
+    /// width, glow, dash pattern, per-segment color. `.normal` is the
+    /// existing single-color stroke; other cases swap in dashed,
+    /// rainbow hue rotation, comet tapering, etc. Sourced from
+    /// `[gesture.overlay].trail-style`; unknown values log + clamp to
+    /// `.normal`. Hot-reloadable.
+    public var overlayTrailStyle: TrailStyle
     /// Show the target-app icon badge at the gesture origin?
     /// Independent of `overlayEnabled` so a user can keep the trail
     /// + assist tooltips but hide the badge alone.
@@ -83,6 +90,7 @@ public struct WandConfig: Sendable {
         overlayColor: "#3b82f6",
         overlayColorNoMatch: "#ef4444",
         overlayWidth: 3,
+        overlayTrailStyle: .normal,
         overlayBadgeEnabled: true,
         overlayBlurEnabled: true,
         overlayBadgeSize: 56,
@@ -179,6 +187,9 @@ public struct WandConfig: Sendable {
         let overlayColorNoMatch = { let c = ov.string("color-no-match"); return c.isEmpty ? "#ef4444" : c }()
         let overlayWidth = clampInt(ov, key: "width",
                                     default: 3, lo: 1, hi: 40)
+        let overlayTrailStyle: TrailStyle = parseEnum(
+            ov, key: "trail-style", section: "gesture.overlay",
+            default: .normal)
         let overlayBadgeEnabled = ov.bool("badge-enabled", true)
         let overlayBlurEnabled = ov.bool("blur-enabled", true)
         let overlayBadgeSize = clampInt(ov, key: "badge-size",
@@ -268,6 +279,7 @@ public struct WandConfig: Sendable {
             overlayColor: overlayColor,
             overlayColorNoMatch: overlayColorNoMatch,
             overlayWidth: overlayWidth,
+            overlayTrailStyle: overlayTrailStyle,
             overlayBadgeEnabled: overlayBadgeEnabled,
             overlayBlurEnabled: overlayBlurEnabled,
             overlayBadgeSize: overlayBadgeSize,

@@ -169,6 +169,28 @@ public enum Intensity: String, Sendable, Hashable, CaseIterable {
     }
 }
 
+/// Named preset that bundles `width × glow × dash × color-mapping` for the
+/// gesture trail. The adapter dispatches on this when rendering the
+/// hybrid `corners → freehand` polyline so a single TOML key can shift
+/// the trail's whole personality (`thin` for minimal, `comet` for
+/// directional emphasis, `rainbow` for the playful end).
+///
+/// Heavier styles — `brush`, `splatoon`, `lightning`, `pencil`, `laser`,
+/// `vapor` — are reserved for follow-up phases of #63 and not part of
+/// this enum until they ship.
+///
+/// Unknown values clamp to `.normal` (wand's typo-tolerant policy).
+public enum TrailStyle: String, Sendable, Hashable, CaseIterable {
+    case normal
+    case thin
+    case thick
+    case glow
+    case dashed
+    case dotted
+    case rainbow
+    case comet
+}
+
 /// The window the stroke acts on. Resolved at *button-down* time —
 /// actions dispatch to **this** window, never to whichever has focus
 /// at button-up. Plain data so Core stays free of AX types.
