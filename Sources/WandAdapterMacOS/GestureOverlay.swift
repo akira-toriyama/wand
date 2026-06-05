@@ -112,7 +112,7 @@ public final class GestureOverlay {
         view.setBlurEnabled(cfg.overlayBlurEnabled)
         view.effectUnmatch = cfg.overlayCardUnmatch
         view.effectMatch = cfg.overlayCardMatch
-        view.effectIntensity = cfg.fireIntensity.multiplier
+        view.effectIntensity = cfg.gestureIntensity.multiplier
         view.minStrokePx = CGFloat(cfg.minStrokePx)
         view.finalHoldDuration = TimeInterval(cfg.overlayFinalHoldMs) / 1000.0
         if cfg.overlayEnabled {

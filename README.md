@@ -297,15 +297,23 @@ their own block:
 
 ```toml
 [gesture.fire]
-trail-end = "burst"     # omnidirectional particle burst at the cursor
+trail-end = "burst"          # omnidirectional particle burst at the cursor
 decal     = "ink-splatter"   # Splatoon-style splatter that lingers
-intensity = "normal"    # also scales the overlay card animations above
 ```
 
 Both the burst and the decal live in their own click-through windows,
-so they fire even when `[gesture.overlay].enabled = false`. `intensity`
-is a single `subtle | normal | bold | wild` knob that scales every
-gesture-related effect (cards + burst).
+so they fire even when `[gesture.overlay].enabled = false`.
+
+A single `intensity` knob at the top level of `[gesture]` scales
+every visual effect produced by a gesture firing — overlay card
+animations AND the trail-end burst (decal has its own size /
+duration knobs and is not affected):
+
+```toml
+[gesture]
+button = "right"
+intensity = "wild"          # subtle | normal | bold | wild
+```
 
 ## CLI
 

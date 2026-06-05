@@ -331,7 +331,7 @@ enum WandApp {
                     burstManager.emit(
                         at: cocoaPoint, color: color,
                         kind: cfg.fireTrailEnd,
-                        intensity: cfg.fireIntensity.multiplier)
+                        intensity: cfg.gestureIntensity.multiplier)
                 }
             }
         }
