@@ -226,6 +226,7 @@ public struct WandConfig: Sendable {
         let launcherLayout: LauncherLayout = parseEnum(
             lr, key: "layout", section: "launcher", default: .list)
         let launcherShortcutBadge = lr.bool("shortcut-badge", true)
+        let launcherIconChip = lr.bool("icon-chip", true)
 
         // [[launcher.item]] — launcher rows. Same drop-on-typo
         // policy as [[gesture.rule]]: bad rows surface in the log
@@ -237,7 +238,8 @@ public struct WandConfig: Sendable {
             trigger: Trigger(button: launcherButton, modifiers: launcherMods),
             layout: launcherLayout,
             items: items,
-            shortcutBadge: launcherShortcutBadge)
+            shortcutBadge: launcherShortcutBadge,
+            iconChip: launcherIconChip)
 
         // [[gesture.rule]] — gesture pattern → action mappings.
         // Log every dropped rule with its position + reason so
