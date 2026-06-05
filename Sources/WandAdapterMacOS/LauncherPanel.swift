@@ -419,7 +419,7 @@ private enum PanelLayout {
         let subtitle = layout == .list ? item.subtitle : ""
         let r = ItemRow(kind: .leaf(item), label: label, icon: icon,
                          layout: layout, shortcut: shortcut,
-                         subtitle: subtitle)
+                         subtitle: subtitle, iconAnim: item.iconAnim)
         rows.append(r)
         return r
     }
@@ -1041,6 +1041,10 @@ private final class ItemRow: NSView {
     /// passes a non-empty value when `layout == .list`.
     private let subtitleText: String
     private var subtitleField: NSTextField?
+    /// SF Symbol animation kind ("bounce" / "pulse" / empty), fired on
+    /// `mouseEntered`. macOS 14+ only; older OS silently ignores.
+    /// Empty (default) means static icon.
+    private let iconAnim: String
     /// Bounding box in points for the icon view. The actual rendered
     /// SF Symbol is sized to `iconRenderPt` and scaled `.large`, so it
     /// fills the box optically.
@@ -1074,12 +1078,13 @@ private final class ItemRow: NSView {
 
     init(kind: RowKind, label: String, icon: NSImage?,
          layout: LauncherLayout, shortcut: String = "",
-         subtitle: String = "") {
+         subtitle: String = "", iconAnim: String = "") {
         self.kind = kind
         self.layout = layout
         self.rawLabel = label
         self.shortcutText = shortcut
         self.subtitleText = subtitle
+        self.iconAnim = iconAnim
         super.init(frame: .zero)
 
         translatesAutoresizingMaskIntoConstraints = false
@@ -1367,7 +1372,29 @@ private final class ItemRow: NSView {
     override func mouseEntered(with event: NSEvent) {
         guard isInteractive else { return }
         applyHoverStyle()
+        playIconAnim()
         onHover?()
+    }
+
+    /// Fire the configured SF Symbol effect on the icon. macOS 14+ only —
+    /// older OS silently no-ops via the @available guard, so a config
+    /// that opts in on a 13.x host still loads and the icon just stays
+    /// static. Unknown effect strings log + skip.
+    private func playIconAnim() {
+        guard !iconAnim.isEmpty, iconView.image != nil else { return }
+        if #available(macOS 14, *) {
+            switch iconAnim.lowercased() {
+            case "bounce":
+                iconView.addSymbolEffect(.bounce, options: .nonRepeating,
+                                          animated: true)
+            case "pulse":
+                iconView.addSymbolEffect(.pulse, options: .nonRepeating,
+                                          animated: true)
+            default:
+                Log.line("launcher-panel: unknown icon-anim \"\(iconAnim)\" "
+                         + "(supported: bounce, pulse) — skipped")
+            }
+        }
     }
 
     override func mouseExited(with event: NSEvent) {

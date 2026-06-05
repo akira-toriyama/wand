@@ -116,6 +116,13 @@ public struct LauncherItem: Sendable, Equatable {
     /// variant still render the first palette colour. File / emoji /
     /// text icons ignore this entirely.
     public let tintColors: [String]
+    /// Optional **SF Symbol icon animation**, fired on row hover.
+    /// Recognised values: `"bounce"` / `"pulse"` (macOS 14+). Empty
+    /// (default) = static icon. Unknown values log + fall back to
+    /// no animation. macOS 13 ignores the field entirely. Only
+    /// affects SF Symbol icons (file / emoji / text icons have no
+    /// SymbolEffect path).
+    public let iconAnim: String
     /// Title-glob filter on top of `apps`. Empty = no filter.
     /// Matched against the cursor-anchored target's window title at
     /// menu-open time. Same `*` / `?` glob as `apps`.
@@ -157,6 +164,7 @@ public struct LauncherItem: Sendable, Equatable {
                 icon: String = "",
                 tint: String = "",
                 tintColors: [String] = [],
+                iconAnim: String = "",
                 filterTitle: String = "",
                 filterShell: String = "",
                 state: String = "",
@@ -172,6 +180,7 @@ public struct LauncherItem: Sendable, Equatable {
         self.icon = icon
         self.tint = tint
         self.tintColors = tintColors
+        self.iconAnim = iconAnim
         self.filterTitle = filterTitle
         self.filterShell = filterShell
         self.state = state

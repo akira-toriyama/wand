@@ -457,6 +457,7 @@ public struct WandConfig: Sendable {
         let icon = row.string("icon")
         let tint = row.string("tint")
         let tintColors = row.strings("tint-colors")
+        let iconAnim = row.string("icon-anim")
         let filterTitle = row.string("filter-title")
         let filterShell = row.string("filter-shell")
         let state = row.string("state")
@@ -468,6 +469,7 @@ public struct WandConfig: Sendable {
             icon: icon,
             tint: tint,
             tintColors: tintColors,
+            iconAnim: iconAnim,
             filterTitle: filterTitle, filterShell: filterShell,
             state: state,
             dynamic: dynamic, template: template,

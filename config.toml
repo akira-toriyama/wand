@@ -461,6 +461,17 @@ action-verb = "minimize"
 # action-type = "shell"
 # action-cmd  = "open 'x-apple.systempreferences:com.apple.preference.battery'"
 #
+# # Icon animation (macOS 14+) — `icon-anim` fires an SF Symbol effect
+# # on the icon when the row is hovered. Older macOS silently ignores
+# # the field. Supported effects: "bounce" / "pulse". Only affects
+# # SF Symbol icons.
+# [[launcher.item]]
+# name = "Notifications"
+# icon = "SF:bell.fill"
+# icon-anim = "bounce"
+# action-type = "url"
+# action-url  = "x-apple.systempreferences:com.apple.preference.notifications"
+#
 # # Nested submenu — `group = ["..."]` is the path to the parent
 # # submenu. The folder is created on first reference; subsequent
 # # items with the same group land inside it.
