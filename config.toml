@@ -40,9 +40,11 @@
 #
 # v4 retired (still warned in /tmp/wand.log): `[gesture.effect]`
 # was split — `match`/`unmatch` moved to `[gesture.overlay].card-*`,
-# `trail-end`/`decal*`/`intensity` to `[gesture.fire].*`, and
-# `launcher-open`/`launcher-close` to `[launcher.effect].open/close`.
-# `[launcher].border` moved to `[launcher.effect].border`.
+# `trail-end`/`decal*` to `[gesture.fire].*`, `intensity` to
+# `[gesture].intensity` (top-level, since it scales both overlay
+# cards and fire burst), and `launcher-open`/`launcher-close` to
+# `[launcher.effect].open/close`. `[launcher].border` moved to
+# `[launcher.effect].border`.
 #
 # v3.x config still has the old keys ([trigger] / [recognition] /
 # [overlay] / [effect] / [[rules]] / [[item]]) — those are no
@@ -106,6 +108,21 @@ cancel-reversals = 2
 # cancels but a slow deliberate one doesn't. 0 = any speed (count
 # alone cancels). Clamped 100..5000 when set.
 cancel-window-ms = 500
+
+# Overall multiplier applied to every visual effect produced by a
+# gesture firing — overlay card animations (fireworks / confetti)
+# AND the trail-end burst. Decal has its own size / duration knobs
+# and is not affected.
+#
+# Lives at the top level (not inside a sub-block) because its
+# scope spans both [gesture.overlay] and [gesture.fire] — putting
+# it inside either would mislead about which effects it scales.
+#
+#   subtle  ≈ 0.6× (calm)
+#   normal  ≈ 1.0× (default, the calibrated baseline)
+#   bold    ≈ 1.6× (more attention-grabbing)
+#   wild    ≈ 2.5× (over-the-top)
+intensity = "normal"
 
 
 # -----------------------------------------------------------------
@@ -248,15 +265,10 @@ decal-duration-ms = 3000
 # Decal footprint in points (width = height). Clamped 10..200.
 decal-size = 60
 
-# Overall multiplier applied to every gesture-related effect — the
-# trail-end burst above, plus the overlay's card-match / card-unmatch
-# animations (a single knob for the whole "how loud should this feel"
-# axis).
-#   subtle  ≈ 0.6× (calm)
-#   normal  ≈ 1.0× (default, the calibrated baseline)
-#   bold    ≈ 1.6× (more attention-grabbing)
-#   wild    ≈ 2.5× (over-the-top)
-intensity = "normal"
+# Note: `intensity` (the overall effect multiplier) moved up to
+# `[gesture].intensity` (top-level) in v5.1, because it also scales
+# overlay card animations — keeping it inside [gesture.fire] would
+# have implied a narrower scope than it actually has.
 
 
 # -----------------------------------------------------------------

@@ -288,13 +288,20 @@ overlay を off にしても効くカーソル位置のエフェクトは別軸:
 [gesture.fire]
 trail-end = "burst"          # 発火瞬間にカーソル位置でパーティクル放射
 decal     = "ink-splatter"   # Splatoon 風の痕跡が残る
-intensity = "normal"         # 上記 card-* も含めて全エフェクトの倍率
 ```
 
 burst も decal も click-through な独立ウィンドウに描画されるので、
-`[gesture.overlay].enabled = false` でも発火する。`intensity` は
-`subtle | normal | bold | wild` の単一ノブで、カードアニメと
-fire-moment エフェクトを同じ倍率でスケールする。
+`[gesture.overlay].enabled = false` でも発火する。
+
+エフェクト全体の倍率は `[gesture]` 直下の `intensity` 1 つで指定する
+— overlay カードアニメと trail-end burst の両方をスケールする
+(decal は独自の size / duration ノブを持つので非対象):
+
+```toml
+[gesture]
+button = "right"
+intensity = "wild"           # subtle | normal | bold | wild
+```
 
 ## CLI
 

@@ -89,12 +89,17 @@ public struct WandConfig: Sendable {
     /// Decal footprint in points (width = height). Clamped 10..200,
     /// default 60.
     public var fireDecalSize: Int
-    /// Overall multiplier applied to fire-moment effects (trail-end
-    /// burst, the launcher / overlay particle animations). Lives
-    /// under `[gesture.fire]`. Unknown values clamp to `.normal`.
-    /// Also scales overlay card animations so a single "intensity"
-    /// knob covers every gesture-related effect.
-    public var fireIntensity: Intensity
+    /// Overall multiplier for every visual effect produced by a
+    /// gesture firing — overlay card animations (fireworks /
+    /// confetti) AND the trail-end burst. Decal has its own
+    /// size / duration knobs and is not affected.
+    ///
+    /// Lives at the top level of `[gesture]` (not under any sub-
+    /// block) because its scope spans both `[gesture.overlay]` and
+    /// `[gesture.fire]` — putting it inside either sub-block would
+    /// mislead readers about which effects it actually scales.
+    /// Unknown values clamp to `.normal`.
+    public var gestureIntensity: Intensity
     /// Launcher trigger family — middle-click (or other configured
     /// button) pops a contextual menu near the cursor. Trigger lives
     /// inside the spec so each family owns its own button; the
@@ -125,7 +130,7 @@ public struct WandConfig: Sendable {
         fireDecal: .off,
         fireDecalDurationMs: 3000,
         fireDecalSize: 60,
-        fireIntensity: .normal,
+        gestureIntensity: .normal,
         launcher: .default
     )
 
@@ -203,6 +208,15 @@ public struct WandConfig: Sendable {
                                 default: 2, lo: 1, hi: 20)
         let cancelWin = clampMs(g, key: "cancel-window-ms",
                                 default: 500, lo: 100, hi: 5000)
+        // Top-level `intensity` covers every visual effect produced
+        // by a gesture firing — overlay card animations AND the
+        // trail-end burst. Placed here (not inside a sub-block)
+        // because the scope spans both [gesture.overlay] and
+        // [gesture.fire]; living in either would mislead readers.
+        // Decal has its own size / duration knobs and is not
+        // affected by this multiplier.
+        let gestureIntensity: Intensity = parseEnum(
+            g, key: "intensity", section: "gesture", default: .normal)
 
         // [gesture.overlay] — gesture-trail HUD (badge / cards /
         // trail color / blur). Renamed from bare [overlay] to make
@@ -239,9 +253,7 @@ public struct WandConfig: Sendable {
         // [gesture.fire] — effects emitted at the moment a gesture
         // rule fires. Both the trail-end burst and the decal live in
         // their own click-through windows, so they fire even when
-        // [gesture.overlay].enabled = false. `intensity` is a global
-        // multiplier — also scales overlay card animations, so a
-        // single knob covers every gesture-effect amplitude.
+        // [gesture.overlay].enabled = false.
         let fi = doc.tables["gesture.fire"] ?? [:]
         let fireTrailEnd: TrailEndKind = parseEnum(
             fi, key: "trail-end", section: "gesture.fire", default: .off)
@@ -252,8 +264,6 @@ public struct WandConfig: Sendable {
             default: 3000, lo: 0, hi: 10000)
         let fireDecalSize = clampInt(
             fi, key: "decal-size", default: 60, lo: 10, hi: 200)
-        let fireIntensity: Intensity = parseEnum(
-            fi, key: "intensity", section: "gesture.fire", default: .normal)
 
         // ── [launcher.*] ──────────────────────────────────────
         // Middle-click (or other configured button) contextual
@@ -418,7 +428,7 @@ public struct WandConfig: Sendable {
             fireDecal: fireDecal,
             fireDecalDurationMs: fireDecalDurationMs,
             fireDecalSize: fireDecalSize,
-            fireIntensity: fireIntensity,
+            gestureIntensity: gestureIntensity,
             launcher: launcher
         )
     }
@@ -458,7 +468,8 @@ public struct WandConfig: Sendable {
             // v4 → v5
             ("gesture.effect",
              "[gesture.overlay] (card-match / card-unmatch), "
-                + "[gesture.fire] (trail-end / decal* / intensity), and "
+                + "[gesture.fire] (trail-end / decal*), "
+                + "[gesture].intensity (top-level), and "
                 + "[launcher.effect] (open / close)"),
         ]
         for r in renames where doc.tables[r.old] != nil {
@@ -477,7 +488,7 @@ public struct WandConfig: Sendable {
                 ("decal",          "[gesture.fire].decal"),
                 ("decal-duration-ms", "[gesture.fire].decal-duration-ms"),
                 ("decal-size",     "[gesture.fire].decal-size"),
-                ("intensity",      "[gesture.fire].intensity"),
+                ("intensity",      "[gesture].intensity (top-level — scope spans both [gesture.overlay] cards and [gesture.fire] burst)"),
                 ("launcher-open",  "[launcher.effect].open"),
                 ("launcher-close", "[launcher.effect].close"),
             ]
@@ -485,6 +496,17 @@ public struct WandConfig: Sendable {
                 Log.line("config: [gesture.effect].\(r.old) was renamed "
                          + "in v5 — move it to \(r.new).")
             }
+        }
+        // v5.0 → v5.1: [gesture.fire].intensity moved up to
+        // [gesture].intensity (top-level) since its scope spans both
+        // [gesture.overlay] cards and [gesture.fire] burst — keeping
+        // it inside [gesture.fire] misled readers about what it scales.
+        if let fi = doc.tables["gesture.fire"], fi["intensity"] != nil {
+            Log.line("config: [gesture.fire].intensity was moved to "
+                     + "[gesture].intensity (top-level) — its scope "
+                     + "spans both [gesture.overlay] card animations "
+                     + "and [gesture.fire] burst, so the sub-block "
+                     + "location was misleading. Move the line up.")
         }
         // v4 → v5: [launcher].border moved to [launcher.effect].border.
         if let lr = doc.tables["launcher"], lr["border"] != nil {
