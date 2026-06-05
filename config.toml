@@ -232,6 +232,14 @@ enabled = false                # opt-in
 button = "middle"              # "middle" | "side1" | "side2" | "right"
 modifiers = []                 # e.g. ["ctrl"] to require ctrl + middle
 
+# Auto-display a right-aligned ⌘W-style glyph badge on `.list` rows
+# whose action is `action-type = "key"`. The badge is derived from
+# `action-keys` (`"cmd+shift+t"` → `"⌘⇧T"`) — purely documentation,
+# the row still fires on click as usual. Other action types (ax /
+# shell / url) and toolbar layouts have no badge. Set false to hide
+# every badge globally.
+shortcut-badge = true
+
 
 # -----------------------------------------------------------------
 # Items (launcher) and rules (gesture) — shared field reference
