@@ -87,6 +87,10 @@ public struct WandConfig: Sendable {
     /// `.fade` eases the panel's alpha in; `.pop` adds a brief
     /// scale-in on top. Applies to root + child panels uniformly.
     public var effectLauncherOpen: LauncherOpenAnim
+    /// Launcher panel close animation — the symmetric pair to
+    /// `effectLauncherOpen`. `.fade` eases alpha out; `.pop` adds a
+    /// scale-down on top. Default `.off`.
+    public var effectLauncherClose: LauncherCloseAnim
     /// Particle burst emitted at the cursor position when a gesture
     /// rule fires. Independent of `effectMatch` (animates the HUD
     /// card) and `effectDecal` (lingers as a static splatter). Off
@@ -123,6 +127,7 @@ public struct WandConfig: Sendable {
         effectDecalDurationMs: 3000,
         effectDecalSize: 60,
         effectLauncherOpen: .off,
+        effectLauncherClose: .off,
         effectTrailEnd: .off,
         launcher: .default
     )
@@ -243,6 +248,9 @@ public struct WandConfig: Sendable {
         let effectLauncherOpen: LauncherOpenAnim = parseEnum(
             ef, key: "launcher-open",
             section: "gesture.effect", default: .off)
+        let effectLauncherClose: LauncherCloseAnim = parseEnum(
+            ef, key: "launcher-close",
+            section: "gesture.effect", default: .off)
         let effectTrailEnd: TrailEndKind = parseEnum(
             ef, key: "trail-end",
             section: "gesture.effect", default: .off)
@@ -334,6 +342,7 @@ public struct WandConfig: Sendable {
             effectDecalDurationMs: effectDecalDurationMs,
             effectDecalSize: effectDecalSize,
             effectLauncherOpen: effectLauncherOpen,
+            effectLauncherClose: effectLauncherClose,
             effectTrailEnd: effectTrailEnd,
             launcher: launcher
         )
