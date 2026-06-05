@@ -209,7 +209,7 @@ public enum LauncherCloseAnim: String, Sendable, Hashable, CaseIterable {
 
 /// Post-fire "ink decal" left at the cursor position when a gesture
 /// fires — a Splatoon-style splatter / blob / scorch / star that
-/// lingers for `effectDecalDurationMs` and fades out. Default `.off`
+/// lingers for `fireDecalDurationMs` and fades out. Default `.off`
 /// (no decal). The decal lives in its own click-through NSWindow so
 /// it sits on top of every app without interfering with input.
 public enum DecalKind: String, Sendable, Hashable, CaseIterable {

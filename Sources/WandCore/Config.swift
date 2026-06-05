@@ -62,40 +62,39 @@ public struct WandConfig: Sendable {
     /// no-match path). Hot-reloadable.
     public var overlayFinalHoldMs: Int
     /// Exit animation when an assist card becomes unreachable mid-
-    /// gesture (the user picked a different direction). Unknown
-    /// config values clamp to `.none`.
-    public var effectUnmatch: Effect
+    /// gesture (the user picked a different direction). Lives under
+    /// `[gesture.overlay].card-unmatch` — these effects animate the
+    /// overlay's HUD cards, so they're intrinsically tied to the
+    /// overlay being visible. Unknown values clamp to `.none`.
+    public var overlayCardUnmatch: Effect
     /// Exit animation when the firing card actually fires at button-
     /// up. Particle effects (`fireworks`, `confetti`) read more
-    /// naturally here.
-    public var effectMatch: Effect
-    /// Overall size of the chosen effects. Applied uniformly to both
-    /// `unmatch` and `match`. Unknown config values clamp to `.normal`.
-    public var effectIntensity: Intensity
+    /// naturally here. Lives under `[gesture.overlay].card-match`
+    /// (see `overlayCardUnmatch`).
+    public var overlayCardMatch: Effect
+    /// Particle burst emitted at the cursor position when a gesture
+    /// rule fires. Lives in its own click-through window (independent
+    /// of `[gesture.overlay].enabled`), so the burst still fires when
+    /// the trail overlay is disabled. Default `.off`.
+    public var fireTrailEnd: TrailEndKind
     /// Post-fire "ink decal" left at the cursor position when a
     /// gesture fires — a Splatoon-style splatter / blob / scorch /
-    /// star that lingers and fades. Default `.off`.
-    public var effectDecal: DecalKind
+    /// star that lingers and fades. Independent of overlay enabled.
+    /// Default `.off`.
+    public var fireDecal: DecalKind
     /// How long (ms) a decal stays visible before being released.
     /// Clamped 0..10000; `0` collapses to `.off` regardless of the
-    /// `effectDecal` value.
-    public var effectDecalDurationMs: Int
+    /// `fireDecal` value.
+    public var fireDecalDurationMs: Int
     /// Decal footprint in points (width = height). Clamped 10..200,
     /// default 60.
-    public var effectDecalSize: Int
-    /// Launcher panel open animation. Default `.off` (instant pop).
-    /// `.fade` eases the panel's alpha in; `.pop` adds a brief
-    /// scale-in on top. Applies to root + child panels uniformly.
-    public var effectLauncherOpen: LauncherOpenAnim
-    /// Launcher panel close animation — the symmetric pair to
-    /// `effectLauncherOpen`. `.fade` eases alpha out; `.pop` adds a
-    /// scale-down on top. Default `.off`.
-    public var effectLauncherClose: LauncherCloseAnim
-    /// Particle burst emitted at the cursor position when a gesture
-    /// rule fires. Independent of `effectMatch` (animates the HUD
-    /// card) and `effectDecal` (lingers as a static splatter). Off
-    /// by default.
-    public var effectTrailEnd: TrailEndKind
+    public var fireDecalSize: Int
+    /// Overall multiplier applied to fire-moment effects (trail-end
+    /// burst, the launcher / overlay particle animations). Lives
+    /// under `[gesture.fire]`. Unknown values clamp to `.normal`.
+    /// Also scales overlay card animations so a single "intensity"
+    /// knob covers every gesture-related effect.
+    public var fireIntensity: Intensity
     /// Launcher trigger family — middle-click (or other configured
     /// button) pops a contextual menu near the cursor. Trigger lives
     /// inside the spec so each family owns its own button; the
@@ -120,15 +119,13 @@ public struct WandConfig: Sendable {
         overlayBadgeSize: 56,
         overlayAnimEnabled: true,
         overlayFinalHoldMs: 400,
-        effectUnmatch: .none,
-        effectMatch: .none,
-        effectIntensity: .normal,
-        effectDecal: .off,
-        effectDecalDurationMs: 3000,
-        effectDecalSize: 60,
-        effectLauncherOpen: .off,
-        effectLauncherClose: .off,
-        effectTrailEnd: .off,
+        overlayCardUnmatch: .none,
+        overlayCardMatch: .none,
+        fireTrailEnd: .off,
+        fireDecal: .off,
+        fireDecalDurationMs: 3000,
+        fireDecalSize: 60,
+        fireIntensity: .normal,
         launcher: .default
     )
 
@@ -211,6 +208,11 @@ public struct WandConfig: Sendable {
         // trail color / blur). Renamed from bare [overlay] to make
         // the scope obvious next to a future [launcher.overlay]
         // (when ring/panel mode lands).
+        //
+        // Card-match / card-unmatch animate the assist cards inside
+        // the overlay, so they live under [gesture.overlay] (not
+        // [gesture.fire]) — the dependency is now visible in the
+        // section name.
         let ov = doc.tables["gesture.overlay"] ?? [:]
         let overlayEnabled = ov.bool("enabled", true)
         let overlayColor = { let c = ov.string("color"); return c.isEmpty ? "#3b82f6" : c }()
@@ -227,33 +229,31 @@ public struct WandConfig: Sendable {
         let overlayAnimEnabled = ov.bool("anim-enabled", true)
         let overlayFinalHoldMs = clampInt(ov, key: "final-hold-ms",
                                           default: 400, lo: 0, hi: 2000)
+        let overlayCardUnmatch: Effect = parseEnum(
+            ov, key: "card-unmatch", section: "gesture.overlay",
+            default: .none)
+        let overlayCardMatch: Effect = parseEnum(
+            ov, key: "card-match", section: "gesture.overlay",
+            default: .none)
 
-        // [gesture.effect] — gesture-HUD exit animations on the
-        // assist cards. Unknown enum names log + clamp to default,
-        // never throw (typo-tolerant policy).
-        let ef = doc.tables["gesture.effect"] ?? [:]
-        let effectUnmatch: Effect = parseEnum(
-            ef, key: "unmatch", section: "gesture.effect", default: .none)
-        let effectMatch: Effect = parseEnum(
-            ef, key: "match", section: "gesture.effect", default: .none)
-        let effectIntensity: Intensity = parseEnum(
-            ef, key: "intensity", section: "gesture.effect", default: .normal)
-        let effectDecal: DecalKind = parseEnum(
-            ef, key: "decal", section: "gesture.effect", default: .off)
-        let effectDecalDurationMs = clampInt(
-            ef, key: "decal-duration-ms",
+        // [gesture.fire] — effects emitted at the moment a gesture
+        // rule fires. Both the trail-end burst and the decal live in
+        // their own click-through windows, so they fire even when
+        // [gesture.overlay].enabled = false. `intensity` is a global
+        // multiplier — also scales overlay card animations, so a
+        // single knob covers every gesture-effect amplitude.
+        let fi = doc.tables["gesture.fire"] ?? [:]
+        let fireTrailEnd: TrailEndKind = parseEnum(
+            fi, key: "trail-end", section: "gesture.fire", default: .off)
+        let fireDecal: DecalKind = parseEnum(
+            fi, key: "decal", section: "gesture.fire", default: .off)
+        let fireDecalDurationMs = clampInt(
+            fi, key: "decal-duration-ms",
             default: 3000, lo: 0, hi: 10000)
-        let effectDecalSize = clampInt(
-            ef, key: "decal-size", default: 60, lo: 10, hi: 200)
-        let effectLauncherOpen: LauncherOpenAnim = parseEnum(
-            ef, key: "launcher-open",
-            section: "gesture.effect", default: .off)
-        let effectLauncherClose: LauncherCloseAnim = parseEnum(
-            ef, key: "launcher-close",
-            section: "gesture.effect", default: .off)
-        let effectTrailEnd: TrailEndKind = parseEnum(
-            ef, key: "trail-end",
-            section: "gesture.effect", default: .off)
+        let fireDecalSize = clampInt(
+            fi, key: "decal-size", default: 60, lo: 10, hi: 200)
+        let fireIntensity: Intensity = parseEnum(
+            fi, key: "intensity", section: "gesture.fire", default: .normal)
 
         // ── [launcher.*] ──────────────────────────────────────
         // Middle-click (or other configured button) contextual
@@ -273,8 +273,21 @@ public struct WandConfig: Sendable {
             lr, key: "layout", section: "launcher", default: .list)
         let launcherShortcutBadge = lr.bool("shortcut-badge", true)
         let launcherIconChip = lr.bool("icon-chip", true)
-        let launcherBorder: LauncherBorder = parseEnum(
-            lr, key: "border", section: "launcher", default: .off)
+
+        // [launcher.effect] — launcher panel open/close animations
+        // + decorative border. Lives under launcher (not the gesture
+        // tree) so the trigger-family scoping stays clean.
+        let le = doc.tables["launcher.effect"] ?? [:]
+        let launcherEffectOpen: LauncherOpenAnim = parseEnum(
+            le, key: "open", section: "launcher.effect", default: .off)
+        let launcherEffectClose: LauncherCloseAnim = parseEnum(
+            le, key: "close", section: "launcher.effect", default: .off)
+        let launcherEffectBorder: LauncherBorder = parseEnum(
+            le, key: "border", section: "launcher.effect", default: .off)
+        let launcherEffect = LauncherEffectSpec(
+            open: launcherEffectOpen,
+            close: launcherEffectClose,
+            border: launcherEffectBorder)
 
         // [[launcher.item]] — launcher rows. Same drop-on-typo
         // policy as [[gesture.rule]]: bad rows surface in the log
@@ -288,7 +301,7 @@ public struct WandConfig: Sendable {
             items: items,
             shortcutBadge: launcherShortcutBadge,
             iconChip: launcherIconChip,
-            border: launcherBorder)
+            effect: launcherEffect)
 
         // [[gesture.rule]] — gesture pattern → action mappings.
         // Log every dropped rule with its position + reason so
@@ -338,15 +351,13 @@ public struct WandConfig: Sendable {
             overlayBadgeSize: overlayBadgeSize,
             overlayAnimEnabled: overlayAnimEnabled,
             overlayFinalHoldMs: overlayFinalHoldMs,
-            effectUnmatch: effectUnmatch,
-            effectMatch: effectMatch,
-            effectIntensity: effectIntensity,
-            effectDecal: effectDecal,
-            effectDecalDurationMs: effectDecalDurationMs,
-            effectDecalSize: effectDecalSize,
-            effectLauncherOpen: effectLauncherOpen,
-            effectLauncherClose: effectLauncherClose,
-            effectTrailEnd: effectTrailEnd,
+            overlayCardUnmatch: overlayCardUnmatch,
+            overlayCardMatch: overlayCardMatch,
+            fireTrailEnd: fireTrailEnd,
+            fireDecal: fireDecal,
+            fireDecalDurationMs: fireDecalDurationMs,
+            fireDecalSize: fireDecalSize,
+            fireIntensity: fireIntensity,
             launcher: launcher
         )
     }
@@ -359,29 +370,72 @@ public struct WandConfig: Sendable {
     ///     action-keys = "cmd+w"         # for type=key
     ///     action-verb = "close"         # for type=ax
     ///     action-cmd  = "open ..."      # for type=shell
-    /// Scan a parsed TOML doc for v3.x section / array names that
-    /// were retired in v4.0, and log one line per occurrence with
-    /// the new location. The parser already ignored unknown
-    /// sections; this just turns the silent ignore into a loud
-    /// "your config still has the old shape" pointer.
+    /// Scan a parsed TOML doc for retired section / array names and
+    /// log one line per occurrence with the new location. The parser
+    /// already ignored unknown sections; this just turns the silent
+    /// ignore into a loud "your config still has the old shape"
+    /// pointer.
+    ///
+    /// v4 retired (still warned about): bare `[trigger]` / `[recognition]`
+    /// / `[overlay]` / `[effect]` and `[[rules]]` / `[[item]]`.
+    ///
+    /// v5 retired: `[gesture.effect]` was split — card animations
+    /// (match/unmatch) moved into `[gesture.overlay]` to make the
+    /// overlay dependency explicit; trail-end burst / decal / intensity
+    /// moved into the new `[gesture.fire]`; launcher-open / launcher-close
+    /// moved into `[launcher.effect]`. `[launcher].border` moved into
+    /// the same new `[launcher.effect]` block. We also surface key-level
+    /// renames (`match`/`unmatch`/`launcher-open`/`launcher-close`) for
+    /// users who only edit individual lines.
     private static func logMigrationWarnings(_ doc: TOMLDocument) {
         let renames: [(old: String, new: String)] = [
-            ("trigger",     "gesture (button / modifiers folded in)"),
-            ("recognition", "gesture (timing knobs folded in) + [exclude].apps"),
-            ("overlay",     "gesture.overlay"),
-            ("effect",      "gesture.effect"),
+            // v3 → v4
+            ("trigger",     "[gesture] (button / modifiers folded in)"),
+            ("recognition", "[gesture] (timing knobs folded in) + [exclude].apps"),
+            ("overlay",     "[gesture.overlay]"),
+            ("effect",      "[gesture.effect] (then split again in v5)"),
+            // v4 → v5
+            ("gesture.effect",
+             "[gesture.overlay] (card-match / card-unmatch), "
+                + "[gesture.fire] (trail-end / decal* / intensity), and "
+                + "[launcher.effect] (open / close)"),
         ]
         for r in renames where doc.tables[r.old] != nil {
-            Log.line("config: [\(r.old)] section was retired in v4.0 — "
-                     + "move keys to [\(r.new)]. Until renamed, the "
+            Log.line("config: [\(r.old)] section was retired — "
+                     + "move keys to \(r.new). Until renamed, the "
                      + "values from this section are ignored.")
+        }
+        // v5 individual-key renames inside the old [gesture.effect]
+        // — surfaced even if the user already split the section, in
+        // case they only renamed *some* keys.
+        if let ef = doc.tables["gesture.effect"] {
+            let keyRenames: [(old: String, new: String)] = [
+                ("match",          "[gesture.overlay].card-match"),
+                ("unmatch",        "[gesture.overlay].card-unmatch"),
+                ("trail-end",      "[gesture.fire].trail-end"),
+                ("decal",          "[gesture.fire].decal"),
+                ("decal-duration-ms", "[gesture.fire].decal-duration-ms"),
+                ("decal-size",     "[gesture.fire].decal-size"),
+                ("intensity",      "[gesture.fire].intensity"),
+                ("launcher-open",  "[launcher.effect].open"),
+                ("launcher-close", "[launcher.effect].close"),
+            ]
+            for r in keyRenames where ef[r.old] != nil {
+                Log.line("config: [gesture.effect].\(r.old) was renamed "
+                         + "in v5 — move it to \(r.new).")
+            }
+        }
+        // v4 → v5: [launcher].border moved to [launcher.effect].border.
+        if let lr = doc.tables["launcher"], lr["border"] != nil {
+            Log.line("config: [launcher].border was moved in v5 — "
+                     + "place it under [launcher.effect].border instead.")
         }
         let arrayRenames: [(old: String, new: String)] = [
             ("rules", "[[gesture.rule]]"),
             ("item",  "[[launcher.item]]"),
         ]
         for r in arrayRenames where doc.arrays[r.old] != nil {
-            Log.line("config: [[\(r.old)]] array was retired in v4.0 — "
+            Log.line("config: [[\(r.old)]] array was retired — "
                      + "rename each block to \(r.new). Until renamed, "
                      + "the rows in this array are ignored.")
         }

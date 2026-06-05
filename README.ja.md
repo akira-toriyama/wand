@@ -48,9 +48,11 @@ L = 左    U = 上    R = 右    D = 下
 
 ヒントカードには退場アニメーションも付けられる — drop / slide /
 explode / vibrate / fireworks / confetti(花火・紙吹雪)。
-ジェスチャー途中にカードが到達不能になった瞬間(`unmatch`)と、
-ボタンを離してルールが発動した瞬間(`match`)それぞれに別の効果を
-`[gesture.effect]` で割り当てられる。既定はどちらも無し(静かに消える)。
+ジェスチャー途中にカードが到達不能になった瞬間(`card-unmatch`)と、
+ボタンを離してルールが発動した瞬間(`card-match`)それぞれに別の
+効果を `[gesture.overlay]` で割り当てられる。既定はどちらも無し
+(静かに消える)。overlay を off にしても効くカーソル位置のエフェクト
+(trail-end burst と post-fire decal)は別軸の `[gesture.fire]` 配下。
 
 アクションは **カーソル直下のウィンドウ** を対象にする(キーボード
 フォーカスを持つウィンドウではない): `ax` はそのウィンドウを直接
@@ -264,24 +266,35 @@ action-keys = "cmd+w"
 窓内に収まったときだけキャンセルするので、素早い往復は効くがゆっくりした
 往復は効かない。`0` = 速度不問。
 
-`[gesture.effect]` でヒントカードの退場アニメを設定。各カードは普段だと、現在
-の形から到達できなくなった瞬間にパッと消えるだけだが、効果を設定すると
-ふわっと退場する。フックは 2 つ:
+`[gesture.overlay]` の中でヒントカードの退場アニメも設定する。各
+カードは普段だと、現在の形から到達できなくなった瞬間にパッと消える
+だけだが、効果を設定するとふわっと退場する。フックは 2 つ:
 
 ```toml
-[gesture.effect]
-unmatch = "drop"        # ジェスチャー途中で到達不能になったカード
-match   = "fireworks"   # ボタン離しで発動したカード
+[gesture.overlay]
+card-unmatch = "drop"        # ジェスチャー途中で到達不能になったカード
+card-match   = "fireworks"   # ボタン離しで発動したカード
 ```
 
 種類: `none`(既定)、`drop`、`rise`、`slide-left`、`slide-right`、
 `explode`、`vibrate`、`fade`、`fireworks`、`confetti`、
 `random`(カードが消えるたびに毎回別の効果を選ぶ)。
-パーティクル系(`fireworks` / `confetti`)は `match` に置くと一番映える。
+パーティクル系(`fireworks` / `confetti`)は `card-match` に置くと
+一番映える。
 
-同じブロックで `intensity = "subtle" | "normal" | "bold" | "wild"` を
-指定すると効果の大きさを調整できる(投げ距離・パーティクル量に作用)。
-既定は `normal`。
+overlay を off にしても効くカーソル位置のエフェクトは別軸:
+
+```toml
+[gesture.fire]
+trail-end = "burst"          # 発火瞬間にカーソル位置でパーティクル放射
+decal     = "ink-splatter"   # Splatoon 風の痕跡が残る
+intensity = "normal"         # 上記 card-* も含めて全エフェクトの倍率
+```
+
+burst も decal も click-through な独立ウィンドウに描画されるので、
+`[gesture.overlay].enabled = false` でも発火する。`intensity` は
+`subtle | normal | bold | wild` の単一ノブで、カードアニメと
+fire-moment エフェクトを同じ倍率でスケールする。
 
 ## CLI
 

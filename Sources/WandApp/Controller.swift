@@ -197,9 +197,9 @@ public final class Controller: @unchecked Sendable {
             layout: cfg.launcher.layout,
             shortcutBadge: cfg.launcher.shortcutBadge,
             iconChip: cfg.launcher.iconChip,
-            openAnim: cfg.effectLauncherOpen,
-            closeAnim: cfg.effectLauncherClose,
-            border: cfg.launcher.border
+            openAnim: cfg.launcher.effect.open,
+            closeAnim: cfg.launcher.effect.close,
+            border: cfg.launcher.effect.border
         ) { [weak self] item, target in
             self?.counterLauncherDispatched += 1
             Log.line("controller: → launcher item \"\(item.name)\"")
@@ -275,9 +275,9 @@ public final class Controller: @unchecked Sendable {
             layout: parsed.layout,
             shortcutBadge: cfg.launcher.shortcutBadge,
             iconChip: cfg.launcher.iconChip,
-            openAnim: cfg.effectLauncherOpen,
-            closeAnim: cfg.effectLauncherClose,
-            border: cfg.launcher.border
+            openAnim: cfg.launcher.effect.open,
+            closeAnim: cfg.launcher.effect.close,
+            border: cfg.launcher.effect.border
         ) { [weak self] item, target in
             self?.counterShowMenuDispatched += 1
             Log.line("controller: → show-menu item \"\(item.name)\"")
