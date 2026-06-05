@@ -187,6 +187,15 @@ public enum LauncherOpenAnim: String, Sendable, Hashable, CaseIterable {
     case pop
 }
 
+/// Launcher panel close-animation. Default `.off` (panel disappears
+/// instantly). `.fade` eases alpha 1 → 0; `.pop` adds a scale-down
+/// (1.0 → 0.92) on top.
+public enum LauncherCloseAnim: String, Sendable, Hashable, CaseIterable {
+    case off
+    case fade
+    case pop
+}
+
 /// Post-fire "ink decal" left at the cursor position when a gesture
 /// fires — a Splatoon-style splatter / blob / scorch / star that
 /// lingers for `effectDecalDurationMs` and fades out. Default `.off`

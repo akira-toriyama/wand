@@ -240,6 +240,12 @@ decal-size = 60
 #   "pop"   — alpha + scale 0.92 → 1.0 ease-out cubic (~180 ms)
 launcher-open = "off"
 
+# Symmetric close animation. Mirrors `launcher-open` but on the way
+# out — `fade` eases alpha to 0, `pop` adds a scale-down. Default
+# "off". Root + child panels animate in parallel so the cascade
+# unwinds together.
+launcher-close = "off"
+
 # Trail-end burst — particle effect emitted at the cursor position
 # the moment a gesture rule fires. Independent of `match` above
 # (which animates the HUD card) and `decal` (which leaves a static

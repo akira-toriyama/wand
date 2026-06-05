@@ -53,6 +53,7 @@ public enum LauncherPanel {
                                 shortcutBadge: Bool = true,
                                 iconChip: Bool = true,
                                 openAnim: LauncherOpenAnim = .off,
+                                closeAnim: LauncherCloseAnim = .off,
                                 onSelect: @escaping (LauncherItem, Target) -> Void) {
         current?.dismiss()
         guard !items.isEmpty else {
@@ -78,6 +79,7 @@ public enum LauncherPanel {
             target: target, onSelect: onSelect,
             isRoot: true,
             openAnim: openAnim,
+            closeAnim: closeAnim,
             onDismissRoot: { current = nil })
         current = controller
         controller.show()
@@ -791,6 +793,15 @@ private final class PanelController {
     /// panels when they're spawned (so the whole cascade feels
     /// consistent). `.off` keeps the historical instant pop.
     private let openAnim: LauncherOpenAnim
+    /// Symmetric close-time animation applied in `tearDown()`. Same
+    /// inheritance rule as `openAnim` — child panels pick up the
+    /// root's value so the cascade unwinds visually together.
+    private let closeAnim: LauncherCloseAnim
+    /// Re-entry guard: a fade-out can dispatch async, and a global
+    /// click or follow-up `dismiss()` could land mid-fade. Once `true`
+    /// the panel is committed to its current teardown path and any
+    /// further `tearDown()` call is a no-op.
+    private var isClosing = false
     /// Root-only: cleared in `tearDown()`, called once when the entire
     /// tree is gone. Non-root controllers leave this nil.
     private let onDismissRoot: (() -> Void)?
@@ -813,12 +824,14 @@ private final class PanelController {
          onSelect: @escaping (LauncherItem, Target) -> Void,
          isRoot: Bool,
          openAnim: LauncherOpenAnim = .off,
+         closeAnim: LauncherCloseAnim = .off,
          onDismissRoot: (() -> Void)? = nil) {
         self.layout = layout
         self.target = target
         self.onSelect = onSelect
         self.isRoot = isRoot
         self.openAnim = openAnim
+        self.closeAnim = closeAnim
         self.onDismissRoot = isRoot ? onDismissRoot : nil
 
         self.panel = NonActivatingPanel(
@@ -906,6 +919,14 @@ private final class PanelController {
     }
 
     private func tearDown() {
+        // A teardown that's already in-flight (mid-fade) shouldn't
+        // restart its own animation if a follow-up `dismiss()` lands.
+        if isClosing { return }
+        isClosing = true
+
+        // Recursively tear down children first so the whole cascade
+        // fades together — each child schedules its own close-anim,
+        // running in parallel with this panel's.
         child?.tearDown()
         child = nil
         childAnchor = nil
@@ -917,8 +938,41 @@ private final class PanelController {
             NSEvent.removeMonitor(k)
             globalKeyMonitor = nil
         }
-        panel.orderOut(nil)
+        // Clear the root tracking ASAP so a new middle-click during
+        // the fade starts a fresh panel cleanly. The animation
+        // closures below capture `self` strongly so the controller
+        // survives until `orderOut` runs.
         onDismissRoot?()
+
+        switch closeAnim {
+        case .off:
+            panel.orderOut(nil)
+        case .fade:
+            NSAnimationContext.runAnimationGroup({ [self] ctx in
+                ctx.duration = 0.12
+                ctx.allowsImplicitAnimation = true
+                self.panel.animator().alphaValue = 0
+            }, completionHandler: { [self] in
+                self.panel.orderOut(nil)
+            })
+        case .pop:
+            NSAnimationContext.runAnimationGroup({ [self] ctx in
+                ctx.duration = 0.14
+                ctx.timingFunction = CAMediaTimingFunction(name: .easeIn)
+                ctx.allowsImplicitAnimation = true
+                self.panel.animator().alphaValue = 0
+                if let layer = self.panel.contentView?.layer {
+                    let size = self.panel.contentView?.bounds.size
+                        ?? .zero
+                    layer.anchorPoint = CGPoint(x: 0.5, y: 0.5)
+                    layer.position = CGPoint(x: size.width / 2,
+                                              y: size.height / 2)
+                    layer.transform = CATransform3DMakeScale(0.92, 0.92, 1)
+                }
+            }, completionHandler: { [self] in
+                self.panel.orderOut(nil)
+            })
+        }
     }
 
     // MARK: Row callbacks
@@ -983,7 +1037,8 @@ private final class PanelController {
             layout: .list,
             target: target, onSelect: onSelect,
             isRoot: false,
-            openAnim: openAnim)
+            openAnim: openAnim,
+            closeAnim: closeAnim)
         c.parent = self
         child = c
         childAnchor = row
