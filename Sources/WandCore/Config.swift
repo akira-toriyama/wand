@@ -289,6 +289,36 @@ public struct WandConfig: Sendable {
             close: launcherEffectClose,
             border: launcherEffectBorder)
 
+        // Warn when the user opted out of the launcher but still
+        // configured non-default panel effects — those knobs only
+        // fire when a panel actually opens, so they're dead config
+        // until `[launcher].enabled = true`. Default values stay
+        // silent (no one needs a warning for `open = "off"`); the
+        // log only mentions the fields they actually set, so the
+        // fix is obvious. Skipped when the launcher was enabled by
+        // the user — the collision check below handles the demotion
+        // case separately.
+        if !launcherEnabled {
+            var nonDefault: [String] = []
+            if launcherEffectOpen != .off {
+                nonDefault.append("open = \"\(launcherEffectOpen.rawValue)\"")
+            }
+            if launcherEffectClose != .off {
+                nonDefault.append("close = \"\(launcherEffectClose.rawValue)\"")
+            }
+            if launcherEffectBorder != .off {
+                nonDefault.append("border = \"\(launcherEffectBorder.rawValue)\"")
+            }
+            if !nonDefault.isEmpty {
+                Log.line("config: [launcher.effect] has "
+                    + "\(nonDefault.joined(separator: ", ")) but "
+                    + "[launcher].enabled = false — these knobs"
+                    + " only fire when a launcher panel actually"
+                    + " opens. Either set [launcher].enabled = true,"
+                    + " or remove the [launcher.effect] block.")
+            }
+        }
+
         // [[launcher.item]] — launcher rows. Same drop-on-typo
         // policy as [[gesture.rule]]: bad rows surface in the log
         // with their position.
