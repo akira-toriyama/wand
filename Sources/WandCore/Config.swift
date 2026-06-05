@@ -47,6 +47,13 @@ public struct WandConfig: Sendable {
     public var overlayBadgeSize: Int
     /// Scale-in pop on the origin badge.
     public var overlayAnimEnabled: Bool
+    /// How long (ms) the trail stays on screen after a gesture fires —
+    /// the in-progress segment is first snapped onto the lastDir axis
+    /// so the whole path reads as a clean orthogonal polyline, then
+    /// held at full alpha and faded out across this window. Clamped
+    /// 0..2000; `0` disables hold (immediate clear, like the
+    /// no-match path). Hot-reloadable.
+    public var overlayFinalHoldMs: Int
     /// Exit animation when an assist card becomes unreachable mid-
     /// gesture (the user picked a different direction). Unknown
     /// config values clamp to `.none`.
@@ -80,6 +87,7 @@ public struct WandConfig: Sendable {
         overlayBlurEnabled: true,
         overlayBadgeSize: 56,
         overlayAnimEnabled: true,
+        overlayFinalHoldMs: 400,
         effectUnmatch: .none,
         effectMatch: .none,
         effectIntensity: .normal,
@@ -176,6 +184,8 @@ public struct WandConfig: Sendable {
         let overlayBadgeSize = clampInt(ov, key: "badge-size",
                                         default: 56, lo: 32, hi: 96)
         let overlayAnimEnabled = ov.bool("anim-enabled", true)
+        let overlayFinalHoldMs = clampInt(ov, key: "final-hold-ms",
+                                          default: 400, lo: 0, hi: 2000)
 
         // [gesture.effect] — gesture-HUD exit animations on the
         // assist cards. Unknown enum names log + clamp to default,
@@ -262,6 +272,7 @@ public struct WandConfig: Sendable {
             overlayBlurEnabled: overlayBlurEnabled,
             overlayBadgeSize: overlayBadgeSize,
             overlayAnimEnabled: overlayAnimEnabled,
+            overlayFinalHoldMs: overlayFinalHoldMs,
             effectUnmatch: effectUnmatch,
             effectMatch: effectMatch,
             effectIntensity: effectIntensity,
