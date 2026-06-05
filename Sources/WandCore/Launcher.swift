@@ -210,21 +210,30 @@ public struct LauncherSpec: Sendable, Equatable {
     public let trigger: Trigger
     public let layout: LauncherLayout
     public let items: [LauncherItem]
+    /// Auto-derive a `⌘W`-style glyph badge from an item's
+    /// `action-keys` and render it right-aligned on `.list` rows whose
+    /// action is `.key(...)`. `false` suppresses every badge globally
+    /// (rows still fire normally — the badge is purely cosmetic
+    /// documentation of the underlying shortcut). Default `true`.
+    public let shortcutBadge: Bool
 
     public init(enabled: Bool, trigger: Trigger,
                 layout: LauncherLayout = .list,
-                items: [LauncherItem]) {
+                items: [LauncherItem],
+                shortcutBadge: Bool = true) {
         self.enabled = enabled
         self.trigger = trigger
         self.layout = layout
         self.items = items
+        self.shortcutBadge = shortcutBadge
     }
 
     public static let `default` = LauncherSpec(
         enabled: false,
         trigger: Trigger(button: .middle, modifiers: []),
         layout: .list,
-        items: []
+        items: [],
+        shortcutBadge: true
     )
 }
 

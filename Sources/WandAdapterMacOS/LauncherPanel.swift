@@ -50,6 +50,7 @@ public enum LauncherPanel {
                                 target: Target,
                                 cocoaPoint: NSPoint,
                                 layout: LauncherLayout = .list,
+                                shortcutBadge: Bool = true,
                                 onSelect: @escaping (LauncherItem, Target) -> Void) {
         current?.dismiss()
         guard !items.isEmpty else {
@@ -65,7 +66,8 @@ public enum LauncherPanel {
             ? PanelLayout.makeHeaderSpec(for: target)
             : nil
         let (content, rows) = PanelLayout.buildContent(
-            nodes: nodes, header: header, layout: layout)
+            nodes: nodes, header: header, layout: layout,
+            shortcutBadge: shortcutBadge)
         let frame = PanelLayout.placeRoot(
             atCursor: cocoaPoint, contentSize: content.fittingSize)
         let controller = PanelController(
@@ -180,7 +182,8 @@ private enum PanelLayout {
     /// builds a horizontal stack of icon-only buttons.
     static func buildContent(nodes: [PanelNode],
                               header: HeaderSpec?,
-                              layout: LauncherLayout)
+                              layout: LauncherLayout,
+                              shortcutBadge: Bool = true)
         -> (view: NSView, rows: [ItemRow]) {
         let bg = NSVisualEffectView()
         bg.material = .menu
@@ -254,7 +257,9 @@ private enum PanelLayout {
                 if layout == .list && item.separatorBefore && !views.isEmpty {
                     views.append(makeSeparator(layout: layout))
                 }
-                views.append(makeItemRow(item, layout: layout, sink: &rows))
+                views.append(makeItemRow(item, layout: layout,
+                                          shortcutBadge: shortcutBadge,
+                                          sink: &rows))
             case .folder(let name, let children):
                 views.append(makeFolderRow(name: name, children: children,
                                             layout: layout, sink: &rows))
@@ -380,6 +385,7 @@ private enum PanelLayout {
 
     private static func makeItemRow(_ item: LauncherItem,
                                      layout: LauncherLayout,
+                                     shortcutBadge: Bool,
                                      sink rows: inout [ItemRow]) -> NSView {
         if !item.dynamic.isEmpty {
             // Dynamic item — render as a folder-style row that
@@ -393,8 +399,18 @@ private enum PanelLayout {
         }
         let label = renderItemLabel(item, layout: layout)
         let icon = resolveItemIconWithFallback(item: item, layout: layout)
+        // Auto-derive a shortcut glyph for `.key(...)` actions so list
+        // rows can show the underlying ⌘W next to the label — pure
+        // documentation, never intercepts the actual key. Other action
+        // types (ax / shell / url) have no shortcut to display, and
+        // toolbar variants have no room for it.
+        let shortcut: String = {
+            guard shortcutBadge, layout == .list else { return "" }
+            guard case .key(let keys) = item.action else { return "" }
+            return KeyCombo.format(keys) ?? ""
+        }()
         let r = ItemRow(kind: .leaf(item), label: label, icon: icon,
-                         layout: layout)
+                         layout: layout, shortcut: shortcut)
         rows.append(r)
         return r
     }
@@ -942,6 +958,13 @@ private final class ItemRow: NSView {
     private let iconView = NSImageView()
     private let titleField = NSTextField(labelWithString: "")
     private var chevronView: NSImageView?
+    /// Right-edge "⌘W"-style display string, derived from the item's
+    /// `action-keys` by `KeyCombo.format` when this row was built.
+    /// Empty for non-`.key` actions, toolbar layouts, or when the
+    /// global `[launcher].shortcut-badge = false`. Rendered as a
+    /// muted-grey label inside `installListLayout` only.
+    private let shortcutText: String
+    private var shortcutField: NSTextField?
     /// Bounding box in points for the icon view. The actual rendered
     /// SF Symbol is sized to `iconRenderPt` and scaled `.large`, so it
     /// fills the box optically.
@@ -969,10 +992,11 @@ private final class ItemRow: NSView {
     var titleForLog: String { rawLabel }
 
     init(kind: RowKind, label: String, icon: NSImage?,
-         layout: LauncherLayout) {
+         layout: LauncherLayout, shortcut: String = "") {
         self.kind = kind
         self.layout = layout
         self.rawLabel = label
+        self.shortcutText = shortcut
         super.init(frame: .zero)
 
         translatesAutoresizingMaskIntoConstraints = false
@@ -1067,6 +1091,28 @@ private final class ItemRow: NSView {
             chevronView = cv
             titleTrailingAnchor = cv.leadingAnchor
             titleTrailingConst = -6
+        } else if !shortcutText.isEmpty {
+            // Shortcut glyph badge — purely cosmetic, mirrors native
+            // NSMenu's right-aligned ⌘W next to a row. Sits where the
+            // chevron would, with a muted colour so the row title
+            // still reads as the primary content.
+            let sf = NSTextField(labelWithString: shortcutText)
+            sf.translatesAutoresizingMaskIntoConstraints = false
+            sf.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
+            sf.textColor = .tertiaryLabelColor
+            sf.alignment = .right
+            sf.lineBreakMode = .byTruncatingTail
+            sf.maximumNumberOfLines = 1
+            sf.cell?.usesSingleLineMode = true
+            addSubview(sf)
+            NSLayoutConstraint.activate([
+                sf.trailingAnchor.constraint(equalTo: trailingAnchor,
+                                              constant: -10),
+                sf.centerYAnchor.constraint(equalTo: centerYAnchor),
+            ])
+            shortcutField = sf
+            titleTrailingAnchor = sf.leadingAnchor
+            titleTrailingConst = -8
         }
 
         NSLayoutConstraint.activate([

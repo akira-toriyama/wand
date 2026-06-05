@@ -180,7 +180,8 @@ public final class Controller: @unchecked Sendable {
             filteredItems: visibleItems,
             target: event.target,
             cocoaPoint: ScreenCoords.cocoaPoint(fromCG: event.point),
-            layout: cfg.launcher.layout
+            layout: cfg.launcher.layout,
+            shortcutBadge: cfg.launcher.shortcutBadge
         ) { [weak self] item, target in
             self?.counterLauncherDispatched += 1
             Log.line("controller: → launcher item \"\(item.name)\"")
@@ -253,7 +254,8 @@ public final class Controller: @unchecked Sendable {
             filteredItems: visible,
             target: target,
             cocoaPoint: cocoaPoint,
-            layout: parsed.layout
+            layout: parsed.layout,
+            shortcutBadge: cfg.launcher.shortcutBadge
         ) { [weak self] item, target in
             self?.counterShowMenuDispatched += 1
             Log.line("controller: → show-menu item \"\(item.name)\"")
