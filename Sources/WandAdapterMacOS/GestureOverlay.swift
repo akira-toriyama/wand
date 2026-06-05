@@ -105,6 +105,7 @@ public final class GestureOverlay {
         view.matchColor = Self.nsColor(cfg.overlayColor) ?? .systemBlue
         view.noMatchColor = Self.nsColor(cfg.overlayColorNoMatch) ?? .systemRed
         view.strokeWidth = CGFloat(cfg.overlayWidth)
+        view.trailStyle = cfg.overlayTrailStyle
         view.badgeEnabled = cfg.overlayBadgeEnabled
         view.badgeSize = CGFloat(cfg.overlayBadgeSize)
         view.animEnabled = cfg.overlayAnimEnabled
@@ -183,6 +184,13 @@ private final class TrailView: NSView {
     var matchColor: NSColor = .systemBlue
     var noMatchColor: NSColor = .systemRed
     var strokeWidth: CGFloat = 3
+    /// Named preset that swaps the trail's whole personality (width,
+    /// glow, dash, per-segment color). Resolved from
+    /// `[gesture.overlay].trail-style` and reflected live via
+    /// `GestureOverlay.applyConfig(_:)`. Heavier styles
+    /// (`brush` / `splatoon` / …) are reserved for follow-up PRs of #63
+    /// and not represented in this enum yet.
+    var trailStyle: TrailStyle = .normal
     /// Cocoa-global origin of the window; subtracted to get view-local
     /// coords from a global point.
     var originOffset: CGPoint = .zero
@@ -565,52 +573,6 @@ private final class TrailView: NSView {
         else { return }
         let color = valid ? matchColor : noMatchColor
 
-        // Hybrid polyline: confirmed segments draw as orthogonal
-        // straight lines with each interior corner softened by a
-        // quadratic-style bezier (radius capped to half each adjacent
-        // segment so back-to-back tight corners never overshoot);
-        // the in-progress segment trails the raw `freehandPoints`
-        // through to the cursor. Sits beneath the blurView + HUD.
-        let path = NSBezierPath()
-        path.lineWidth = strokeWidth
-        path.lineCapStyle = .round
-        path.lineJoinStyle = .round
-
-        // Straight part: origin → corners.
-        let straight = [origin] + corners
-        path.move(to: straight[0])
-        if straight.count == 2 {
-            path.line(to: straight[1])
-        } else if straight.count > 2 {
-            let desiredR = strokeWidth * 4
-            for i in 1..<straight.count - 1 {
-                let A = straight[i - 1]
-                let B = straight[i]
-                let C = straight[i + 1]
-                let inLen = hypot(B.x - A.x, B.y - A.y)
-                let outLen = hypot(C.x - B.x, C.y - B.y)
-                let r = min(desiredR, inLen / 2, outLen / 2)
-                let inU = CGPoint(x: (B.x - A.x) / max(inLen, 1),
-                                  y: (B.y - A.y) / max(inLen, 1))
-                let outU = CGPoint(x: (C.x - B.x) / max(outLen, 1),
-                                   y: (C.y - B.y) / max(outLen, 1))
-                let P = CGPoint(x: B.x - inU.x * r, y: B.y - inU.y * r)
-                let Q = CGPoint(x: B.x + outU.x * r, y: B.y + outU.y * r)
-                path.line(to: P)
-                // Cubic with both control points at B = quadratic
-                // approximation through the corner.
-                path.curve(to: Q, controlPoint1: B, controlPoint2: B)
-            }
-            path.line(to: straight.last!)
-        }
-
-        // Freehand tail: `freehandPoints[0]` equals the last straight
-        // point (= corners.last ?? origin), so skip it to avoid a
-        // zero-length segment, then trace through to the cursor.
-        for fp in freehandPoints.dropFirst() {
-            path.line(to: fp)
-        }
-
         // While holding the post-fire snapped polyline, fade the trail
         // out over the last third of the hold so it doesn't pop off.
         var alpha: CGFloat = 1.0
@@ -627,12 +589,21 @@ private final class TrailView: NSView {
         if alpha < 1.0 {
             NSGraphicsContext.current?.cgContext.setAlpha(alpha)
         }
-        let glow = NSShadow()
-        glow.shadowColor = color.withAlphaComponent(0.5)
-        glow.shadowBlurRadius = 7
-        glow.set()
-        color.withAlphaComponent(0.9).setStroke()
-        path.stroke()
+
+        // Per-style dispatch. Most styles share the hybrid corner +
+        // freehand polyline and only swap width / glow / dash / color;
+        // `rainbow` and `comet` need per-segment work so they walk the
+        // polyline themselves (and sacrifice the corner-smoothing bezier
+        // — small visual concession for a much simpler implementation).
+        switch trailStyle {
+        case .rainbow:
+            drawRainbow(origin: origin, cursor: cursor)
+        case .comet:
+            drawComet(origin: origin, cursor: cursor, color: color)
+        case .normal, .thin, .thick, .glow, .dashed, .dotted:
+            drawSinglePath(origin: origin, cursor: cursor, color: color)
+        }
+
         // Arrowhead at the raw cursor in the last-committed direction.
         // Skipped until a direction has been committed (no axis to
         // point along yet).
@@ -640,6 +611,181 @@ private final class TrailView: NSView {
             drawArrowhead(at: cursor, direction: dir, color: color)
         }
         NSGraphicsContext.restoreGraphicsState()
+    }
+
+    /// Build the standard hybrid corner-smoothed + freehand polyline
+    /// path used by every single-color style. Centralised so dashed /
+    /// dotted / glow / thin / thick all share the same geometry and
+    /// only differ in stroke parameters.
+    private func buildHybridPath(origin: CGPoint,
+                                  lineWidth: CGFloat) -> NSBezierPath {
+        let path = NSBezierPath()
+        path.lineWidth = lineWidth
+        path.lineCapStyle = .round
+        path.lineJoinStyle = .round
+
+        // Straight part: origin → corners, with each interior corner
+        // softened by a quadratic-style bezier (radius capped to half
+        // each adjacent segment so tight corners never overshoot).
+        let straight = [origin] + corners
+        path.move(to: straight[0])
+        if straight.count == 2 {
+            path.line(to: straight[1])
+        } else if straight.count > 2 {
+            let desiredR = lineWidth * 4
+            for i in 1..<straight.count - 1 {
+                let A = straight[i - 1]
+                let B = straight[i]
+                let C = straight[i + 1]
+                let inLen = hypot(B.x - A.x, B.y - A.y)
+                let outLen = hypot(C.x - B.x, C.y - B.y)
+                let r = min(desiredR, inLen / 2, outLen / 2)
+                let inU = CGPoint(x: (B.x - A.x) / max(inLen, 1),
+                                  y: (B.y - A.y) / max(inLen, 1))
+                let outU = CGPoint(x: (C.x - B.x) / max(outLen, 1),
+                                   y: (C.y - B.y) / max(outLen, 1))
+                let P = CGPoint(x: B.x - inU.x * r, y: B.y - inU.y * r)
+                let Q = CGPoint(x: B.x + outU.x * r, y: B.y + outU.y * r)
+                path.line(to: P)
+                path.curve(to: Q, controlPoint1: B, controlPoint2: B)
+            }
+            path.line(to: straight.last!)
+        }
+
+        // Freehand tail: `freehandPoints[0]` equals the last straight
+        // point (= corners.last ?? origin), so skip it to avoid a
+        // zero-length segment, then trace through to the cursor.
+        for fp in freehandPoints.dropFirst() {
+            path.line(to: fp)
+        }
+        return path
+    }
+
+    /// Render a single-color trail. `normal` / `thin` / `thick` / `glow`
+    /// / `dashed` / `dotted` all funnel through here — they only differ
+    /// in lineWidth, glow radius, and dash pattern.
+    private func drawSinglePath(origin: CGPoint, cursor: CGPoint,
+                                 color: NSColor) {
+        let p = styleParams(base: strokeWidth)
+        let path = buildHybridPath(origin: origin, lineWidth: p.width)
+        if !p.lineDash.isEmpty {
+            path.setLineDash(p.lineDash, count: p.lineDash.count, phase: 0)
+        }
+        let glow = NSShadow()
+        glow.shadowColor = color.withAlphaComponent(0.5)
+        glow.shadowBlurRadius = p.glowRadius
+        glow.set()
+        color.withAlphaComponent(0.9).setStroke()
+        path.stroke()
+    }
+
+    /// Rainbow: walk the polyline as straight segments and stroke each
+    /// with its own hue rotated by segment index. Confirmed corners are
+    /// not smoothed in this mode — the hue switch needs a hard break to
+    /// register visually anyway, and skipping the bezier sample keeps
+    /// the code small enough to justify the visual concession.
+    private func drawRainbow(origin: CGPoint, cursor: CGPoint) {
+        let points = polylinePoints(origin: origin)
+        guard points.count >= 2 else { return }
+        let p = styleParams(base: strokeWidth)
+        let glow = NSShadow()
+        glow.shadowBlurRadius = p.glowRadius
+        // Each segment gets a hue offset of (i / N) * 0.85 around the
+        // wheel — stops just short of a full revolution so the start
+        // and end colors don't accidentally collide on the same hue.
+        let n = points.count - 1
+        for i in 0..<n {
+            let hue = CGFloat(i) / CGFloat(max(n, 1)) * 0.85
+            let segColor = NSColor(hue: hue,
+                                    saturation: 0.85,
+                                    brightness: 1.0,
+                                    alpha: 0.9)
+            glow.shadowColor = segColor.withAlphaComponent(0.5)
+            glow.set()
+            segColor.setStroke()
+            let seg = NSBezierPath()
+            seg.lineWidth = p.width
+            seg.lineCapStyle = .round
+            seg.move(to: points[i])
+            seg.line(to: points[i + 1])
+            seg.stroke()
+        }
+    }
+
+    /// Comet: width tapers from origin (thin) to cursor (thick) so the
+    /// trail reads like a meteor's tail. Like `rainbow` this gives up
+    /// corner smoothing — we stroke each segment with a per-segment
+    /// lineWidth, which a smoothed bezier can't carry cleanly.
+    private func drawComet(origin: CGPoint, cursor: CGPoint,
+                            color: NSColor) {
+        let points = polylinePoints(origin: origin)
+        guard points.count >= 2 else { return }
+        let p = styleParams(base: strokeWidth)
+        let glow = NSShadow()
+        glow.shadowColor = color.withAlphaComponent(0.5)
+        glow.shadowBlurRadius = p.glowRadius
+        glow.set()
+        color.withAlphaComponent(0.95).setStroke()
+        let n = points.count - 1
+        for i in 0..<n {
+            // 0.3× at origin → 1.6× at cursor. Smooth-ish ramp.
+            let t = CGFloat(i + 1) / CGFloat(max(n, 1))
+            let w = p.width * (0.3 + 1.3 * t)
+            let seg = NSBezierPath()
+            seg.lineWidth = w
+            seg.lineCapStyle = .round
+            seg.move(to: points[i])
+            seg.line(to: points[i + 1])
+            seg.stroke()
+        }
+    }
+
+    /// Flatten the hybrid polyline into a straight sequence of points
+    /// for per-segment styles (`rainbow`, `comet`). Skips the corner
+    /// smoothing — interior corners come through as their raw `B` point.
+    private func polylinePoints(origin: CGPoint) -> [CGPoint] {
+        var out: [CGPoint] = [origin]
+        out.append(contentsOf: corners)
+        // Freehand[0] duplicates `corners.last ?? origin`, so drop it.
+        out.append(contentsOf: freehandPoints.dropFirst())
+        return out
+    }
+
+    /// Per-style stroke parameters. Centralised so the dispatcher in
+    /// `draw(_:)` and the helpers in `drawSinglePath` / `drawRainbow`
+    /// / `drawComet` agree on width / glow / dash.
+    private struct TrailStyleParams {
+        let width: CGFloat
+        let glowRadius: CGFloat
+        let lineDash: [CGFloat]
+    }
+
+    private func styleParams(base: CGFloat) -> TrailStyleParams {
+        switch trailStyle {
+        case .normal:
+            return TrailStyleParams(width: base, glowRadius: 7,
+                                     lineDash: [])
+        case .thin:
+            return TrailStyleParams(width: max(1.5, base * 0.5),
+                                     glowRadius: 3, lineDash: [])
+        case .thick:
+            return TrailStyleParams(width: base * 2.0, glowRadius: 12,
+                                     lineDash: [])
+        case .glow:
+            return TrailStyleParams(width: base, glowRadius: 18,
+                                     lineDash: [])
+        case .dashed:
+            return TrailStyleParams(width: base, glowRadius: 7,
+                                     lineDash: [base * 3, base * 2])
+        case .dotted:
+            return TrailStyleParams(width: base, glowRadius: 7,
+                                     lineDash: [base * 0.6, base * 2])
+        case .rainbow, .comet:
+            // The per-segment drawers manage their own colour, but
+            // they still read `width` and `glowRadius` from here.
+            return TrailStyleParams(width: base, glowRadius: 7,
+                                     lineDash: [])
+        }
     }
 
     /// Snap `p` onto the axis defined by `dir` and the point `from` —

@@ -114,8 +114,32 @@ enabled = true
 color = "#3b82f6"
 color-no-match = "#ef4444"
 
-# Stroke width in points. Clamped 1..40.
+# Stroke width in points. Clamped 1..40. Style presets below may
+# override this — `thin` halves it (with a 1.5pt floor), `thick`
+# doubles it, `dashed`/`dotted` use it as the dash unit.
 width = 3
+
+# Trail style preset — bundles width × glow × dash × color so a
+# single key swaps the trail's whole personality. Unknown values
+# log + fall back to "normal".
+#
+#   "normal"  — single-color stroke at `width` with a soft glow
+#               (the default; same look as before this key existed)
+#   "thin"    — `width * 0.5` (1.5pt floor) + reduced glow
+#   "thick"   — `width * 2` + amplified glow
+#   "glow"    — `width` with an exaggerated 18pt bloom; neon vibe
+#   "dashed"  — broken line (3:2 dash:gap, sized off `width`)
+#   "dotted"  — short-dash dotted line (0.6:2 dash:gap)
+#   "rainbow" — each polyline segment gets its own hue; corner
+#               smoothing is skipped (the hue switch needs a hard
+#               break to register)
+#   "comet"   — width tapers from origin (thin) to cursor (thick),
+#               like a meteor's tail. Corner smoothing skipped.
+#
+# Heavier styles — "brush", "splatoon", "laser", "lightning",
+# "vapor", "pencil" — are planned in follow-up phases of #63 and
+# not available yet.
+trail-style = "normal"
 
 # Show the target-app icon as a small "badge" at the gesture's
 # start point (where the right button went down). Confirms which
