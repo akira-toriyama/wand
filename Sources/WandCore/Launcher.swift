@@ -66,6 +66,17 @@ public struct LauncherItem: Sendable, Equatable {
     /// anchored target. Items whose filter excludes the current
     /// target are pruned from the menu before it is shown.
     public let apps: [String]
+    /// Optional section header — a short label drawn above this item
+    /// when its value differs from the previous item's. Lets a long
+    /// `[[launcher.item]]` list split into labelled bands ("Editing",
+    /// "Window", "Tools") without nesting into submenus. Empty value
+    /// (the default) inherits whatever the previous item used, so a
+    /// run of items can share one header without repeating it on each
+    /// row. Section headers only render in `.list` layout; toolbar
+    /// variants ignore the field. After filter (apps / title / shell)
+    /// drops every item in a section, the section's header is
+    /// suppressed automatically — no orphan labels.
+    public let header: String
     /// Optional icon spec. Resolved by the adapter at menu-build
     /// time. Recognised forms:
     ///   - `""` (empty) — no icon
@@ -116,6 +127,7 @@ public struct LauncherItem: Sendable, Equatable {
     public init(name: String, group: [String] = [],
                 separatorBefore: Bool = false,
                 apps: [String] = ["*"],
+                header: String = "",
                 icon: String = "",
                 filterTitle: String = "",
                 filterShell: String = "",
@@ -127,6 +139,7 @@ public struct LauncherItem: Sendable, Equatable {
         self.group = group
         self.separatorBefore = separatorBefore
         self.apps = apps
+        self.header = header
         self.icon = icon
         self.filterTitle = filterTitle
         self.filterShell = filterShell

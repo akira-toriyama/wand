@@ -384,6 +384,33 @@ action-verb = "minimize"
 # action-type = "shell"
 # action-cmd = "echo name"
 #
+# # Inline section header — `header = "..."` draws a small-caps band
+# # above any item whose `header` value differs from the previous
+# # one's. Items with empty `header` inherit the current section, so
+# # a run can share one label without repeating it. After filters
+# # drop every item in a section, the header is omitted automatically
+# # — no orphan band. List layout only; toolbar variants ignore it.
+# [[launcher.item]]
+# header = "Editing"
+# name = "Copy"
+# icon = "SF:doc.on.doc"
+# action-type = "key"
+# action-keys = "cmd+c"
+#
+# [[launcher.item]]
+# header = "Editing"
+# name = "Paste"
+# icon = "SF:doc.on.clipboard"
+# action-type = "key"
+# action-keys = "cmd+v"
+#
+# [[launcher.item]]
+# header = "Window"
+# name = "Close"
+# icon = "SF:xmark"
+# action-type = "key"
+# action-keys = "cmd+w"
+#
 # # Dynamic items — the parent is a submenu populated at every menu
 # # open by running `dynamic` (shell) and emitting one child per
 # # stdout line. `{line}` in any `template-*` field is substituted

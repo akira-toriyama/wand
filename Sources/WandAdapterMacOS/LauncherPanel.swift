@@ -224,9 +224,29 @@ private enum PanelLayout {
             views.append(makeSeparator(layout: layout))
         }
 
+        // Track the current section as we walk nodes. Section headers
+        // only fire in list mode — toolbar variants are short horizontal
+        // strips where a header band would dominate the panel — and
+        // only on `.item` nodes (folders / placeholders pass through
+        // without disturbing the section).
+        //
+        // An empty `header` on an item inherits whatever the previous
+        // run used, so a config can carry one `header = "Editing"` on
+        // the first row of a run and leave it off the rest. After
+        // filtering (apps / title / shell), if every item in a section
+        // is excluded then that header's `.item` nodes never enter
+        // `nodes` and the band is silently omitted — no orphan labels.
+        var currentSection: String? = nil
         for node in nodes {
             switch node {
             case .item(let item):
+                if layout == .list && !item.header.isEmpty
+                    && item.header != currentSection {
+                    views.append(makeSectionHeaderRow(name: item.header,
+                                                       layout: layout,
+                                                       sink: &rows))
+                    currentSection = item.header
+                }
                 // separator-before only applies in list mode; in
                 // toolbar mode it would be a vertical bar between
                 // buttons, which adds visual noise without enough
@@ -417,6 +437,19 @@ private enum PanelLayout {
                                             sink rows: inout [ItemRow]) -> NSView {
         let r = ItemRow(kind: .placeholder, label: label, icon: nil,
                          layout: layout)
+        rows.append(r)
+        return r
+    }
+
+    /// Inline section-header band drawn above a run of items sharing a
+    /// `LauncherItem.header` value. Non-interactive (no hover / click)
+    /// — pure visual separation between groups of related items in
+    /// the same panel. Only emitted in `.list` layout.
+    private static func makeSectionHeaderRow(name: String,
+                                              layout: LauncherLayout,
+                                              sink rows: inout [ItemRow]) -> NSView {
+        let r = ItemRow(kind: .sectionHeader(name), label: name,
+                         icon: nil, layout: layout)
         rows.append(r)
         return r
     }
@@ -747,8 +780,9 @@ private final class PanelController {
         case .leaf(let item):
             onSelect(item, target)
             dismiss()
-        case .folder, .dynamic, .header, .placeholder:
-            break  // folders / dynamic open on hover, not click
+        case .folder, .dynamic, .header, .sectionHeader, .placeholder:
+            break  // folders / dynamic open on hover, not click;
+                   // headers / placeholders are non-interactive
         }
     }
 
@@ -768,8 +802,8 @@ private final class PanelController {
             // Moved to a non-folder row → close any open child. The
             // user's cursor is now committed to this level.
             closeChild()
-        case .header:
-            // Header is non-interactive, but if somehow hovered we
+        case .header, .sectionHeader:
+            // Headers are non-interactive, but if somehow hovered we
             // don't want to mess with the child state.
             break
         }
@@ -854,6 +888,12 @@ private final class PanelController {
 /// submenu).
 private enum RowKind {
     case header
+    /// Inline section header — a labelled band drawn above a run of
+    /// items whose `LauncherItem.header` shares a value. Distinct from
+    /// `.header` (which is the app-icon banner pinned at the top of
+    /// the root panel). Non-interactive, smaller height, only used in
+    /// `.list` layout.
+    case sectionHeader(String)
     case placeholder
     case leaf(LauncherItem)
     case folder(name: String, children: [PanelNode])
@@ -896,6 +936,9 @@ private final class ItemRow: NSView {
     /// with `.medium` weight + `.large` scale.
     static let iconRenderPt: CGFloat = 17
     private static let listRowHeight: CGFloat = 26
+    /// Section-header band height. Just enough to breathe a small-caps
+    /// 10pt label without the band dominating the panel.
+    private static let sectionHeaderHeight: CGFloat = 22
     private static let toolbarButtonSide: CGFloat = 34
     /// Height of the labeled-toolbar "pill" button. Tall enough to
     /// breathe with the 17pt icon + menu font, short enough to read
@@ -926,13 +969,48 @@ private final class ItemRow: NSView {
         iconView.image = icon
         addSubview(iconView)
 
-        switch layout {
-        case .list:           installListLayout(label: label)
-        case .toolbar:        installToolbarLayout(label: label)
-        case .labeledToolbar: installLabeledToolbarLayout(label: label)
+        // Section headers get their own compact layout (no icon, smaller
+        // font, shorter row). Everything else goes through the
+        // layout-specific installer.
+        if case .sectionHeader = kind {
+            iconView.isHidden = true
+            installSectionHeaderLayout(label: label)
+        } else {
+            switch layout {
+            case .list:           installListLayout(label: label)
+            case .toolbar:        installToolbarLayout(label: label)
+            case .labeledToolbar: installLabeledToolbarLayout(label: label)
+            }
         }
 
         applyIdleStyle()
+    }
+
+    /// Compact band: smaller height, no icon column, 10pt semibold
+    /// uppercased label hugging the left edge. Used by `.sectionHeader`
+    /// rows to split a long `.list` panel into labelled groups without
+    /// stealing space from the items themselves.
+    private func installSectionHeaderLayout(label: String) {
+        titleField.translatesAutoresizingMaskIntoConstraints = false
+        // Uppercase + small-cap weight reads as a band rather than a
+        // row title. Falls back gracefully on locales where uppercase
+        // is a no-op (Japanese / CJK section names still render as
+        // their original glyphs).
+        titleField.stringValue = label.uppercased()
+        titleField.font = .systemFont(ofSize: 10, weight: .semibold)
+        titleField.lineBreakMode = .byTruncatingTail
+        titleField.maximumNumberOfLines = 1
+        titleField.cell?.usesSingleLineMode = true
+        addSubview(titleField)
+
+        NSLayoutConstraint.activate([
+            heightAnchor.constraint(equalToConstant: Self.sectionHeaderHeight),
+            titleField.leadingAnchor.constraint(equalTo: leadingAnchor,
+                                                  constant: 10),
+            titleField.trailingAnchor.constraint(equalTo: trailingAnchor,
+                                                  constant: -10),
+            titleField.centerYAnchor.constraint(equalTo: centerYAnchor),
+        ])
     }
 
     private func installListLayout(label: String) {
@@ -950,7 +1028,7 @@ private final class ItemRow: NSView {
         let needsChevron: Bool = {
             switch kind {
             case .folder, .dynamic: return true
-            case .header, .placeholder, .leaf: return false
+            case .header, .sectionHeader, .placeholder, .leaf: return false
             }
         }()
 
@@ -1043,7 +1121,7 @@ private final class ItemRow: NSView {
     private var isInteractive: Bool {
         switch kind {
         case .leaf, .folder, .dynamic: return true
-        case .header, .placeholder: return false
+        case .header, .sectionHeader, .placeholder: return false
         }
     }
 
@@ -1053,6 +1131,11 @@ private final class ItemRow: NSView {
         switch kind {
         case .header:
             titleField.textColor = .secondaryLabelColor
+        case .sectionHeader:
+            // Section bands read as quieter labels than item rows —
+            // matched to placeholder weight so the band recedes and
+            // the items themselves remain the primary read.
+            titleField.textColor = .tertiaryLabelColor
         case .placeholder:
             titleField.textColor = .tertiaryLabelColor
         case .leaf, .folder, .dynamic:

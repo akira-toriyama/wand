@@ -424,6 +424,7 @@ public struct WandConfig: Sendable {
         let apps = row.strings("apps")
         let group = row.strings("group")
         let sep = row.bool("separator-before", false)
+        let header = row.string("header")
         let icon = row.string("icon")
         let filterTitle = row.string("filter-title")
         let filterShell = row.string("filter-shell")
@@ -431,6 +432,7 @@ public struct WandConfig: Sendable {
         return LauncherItem(
             name: name, group: group, separatorBefore: sep,
             apps: apps.isEmpty ? ["*"] : apps,
+            header: header,
             icon: icon,
             filterTitle: filterTitle, filterShell: filterShell,
             state: state,
