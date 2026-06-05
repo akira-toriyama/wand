@@ -61,6 +61,13 @@ public final class Controller: @unchecked Sendable {
     /// snapshot. Used by the overlay wiring to hot-apply `[overlay]`
     /// changes (colours, badge toggles, blur, …) without a restart.
     public var onConfigChanged: ((WandConfig) -> Void)?
+    /// Fires immediately after a gesture rule's action has been
+    /// dispatched, with the button-up point in CG global coords
+    /// (Y-down). Used by the decal manager wiring to drop a post-fire
+    /// splatter at the cursor — kept as an opt-in hook (rather than
+    /// hard-coded in `handle`) so a decal manager isn't required by
+    /// the type and so test builds can ignore it.
+    public var onGestureFire: (@Sendable (CGPoint) -> Void)?
 
     public init(source: MouseSource,
                 launcher: LauncherSource? = nil,
@@ -142,6 +149,13 @@ public final class Controller: @unchecked Sendable {
         Log.line("controller: → rule \"\(rule.name)\"")
         writeStatus()
         Dispatch.execute(rule.action, on: target)
+        // Notify the decal-manager wiring (if any). Button-up point is
+        // the last sample's location; cursor-anchored callers don't
+        // need the target since the decal lives in its own click-
+        // through window above all apps.
+        if let firePoint = event.samples.last?.p {
+            onGestureFire?(firePoint)
+        }
     }
 
     @MainActor

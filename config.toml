@@ -205,6 +205,31 @@ match = "none"
 #   wild    ≈ 2.5× (over-the-top)
 intensity = "normal"
 
+# Post-fire "ink decal" — a Splatoon-style splatter / blob / scorch
+# / star left at the cursor when a gesture fires, in its own click-
+# through window so it sits above every app and fades out
+# automatically. Independent of the assist-card `match` effect above
+# (those animate the HUD; this animates a separate decal at the
+# cursor). Off by default.
+#
+#   "off"           — no decal (default)
+#   "ink-splatter"  — main blob + 3-6 satellite spatters; vivid
+#   "paint-blob"    — single irregular paint stamp
+#   "scorch"        — radial gradient burn mark
+#   "star"          — 5-pointed sparkle
+#
+# Color comes from `[gesture.overlay].color` (the same accent the
+# trail uses), so the decal feels tied to the gesture that produced
+# it. Unknown values log + fall back to "off".
+decal = "off"
+
+# How long (ms) the decal stays visible before fading out.
+# Clamped 0..10000. 0 collapses to "off" regardless of `decal` above.
+decal-duration-ms = 3000
+
+# Decal footprint in points (width = height). Clamped 10..200.
+decal-size = 60
+
 
 # -----------------------------------------------------------------
 # Launcher — middle-click pops a contextual menu near the cursor

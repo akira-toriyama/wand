@@ -72,6 +72,17 @@ public struct WandConfig: Sendable {
     /// Overall size of the chosen effects. Applied uniformly to both
     /// `unmatch` and `match`. Unknown config values clamp to `.normal`.
     public var effectIntensity: Intensity
+    /// Post-fire "ink decal" left at the cursor position when a
+    /// gesture fires — a Splatoon-style splatter / blob / scorch /
+    /// star that lingers and fades. Default `.off`.
+    public var effectDecal: DecalKind
+    /// How long (ms) a decal stays visible before being released.
+    /// Clamped 0..10000; `0` collapses to `.off` regardless of the
+    /// `effectDecal` value.
+    public var effectDecalDurationMs: Int
+    /// Decal footprint in points (width = height). Clamped 10..200,
+    /// default 60.
+    public var effectDecalSize: Int
     /// Launcher trigger family — middle-click (or other configured
     /// button) pops a contextual menu near the cursor. Trigger lives
     /// inside the spec so each family owns its own button; the
@@ -99,6 +110,9 @@ public struct WandConfig: Sendable {
         effectUnmatch: .none,
         effectMatch: .none,
         effectIntensity: .normal,
+        effectDecal: .off,
+        effectDecalDurationMs: 3000,
+        effectDecalSize: 60,
         launcher: .default
     )
 
@@ -208,6 +222,13 @@ public struct WandConfig: Sendable {
             ef, key: "match", section: "gesture.effect", default: .none)
         let effectIntensity: Intensity = parseEnum(
             ef, key: "intensity", section: "gesture.effect", default: .normal)
+        let effectDecal: DecalKind = parseEnum(
+            ef, key: "decal", section: "gesture.effect", default: .off)
+        let effectDecalDurationMs = clampInt(
+            ef, key: "decal-duration-ms",
+            default: 3000, lo: 0, hi: 10000)
+        let effectDecalSize = clampInt(
+            ef, key: "decal-size", default: 60, lo: 10, hi: 200)
 
         // ── [launcher.*] ──────────────────────────────────────
         // Middle-click (or other configured button) contextual
@@ -292,6 +313,9 @@ public struct WandConfig: Sendable {
             effectUnmatch: effectUnmatch,
             effectMatch: effectMatch,
             effectIntensity: effectIntensity,
+            effectDecal: effectDecal,
+            effectDecalDurationMs: effectDecalDurationMs,
+            effectDecalSize: effectDecalSize,
             launcher: launcher
         )
     }
