@@ -113,6 +113,7 @@ public final class GestureOverlay {
         view.effectUnmatch = cfg.effectUnmatch
         view.effectMatch = cfg.effectMatch
         view.effectIntensity = cfg.effectIntensity.multiplier
+        view.trailEnd = cfg.effectTrailEnd
         view.minStrokePx = CGFloat(cfg.minStrokePx)
         view.finalHoldDuration = TimeInterval(cfg.overlayFinalHoldMs) / 1000.0
         if cfg.overlayEnabled {
@@ -174,6 +175,12 @@ private final class TrailView: NSView {
     /// translation distance, scale deltas, vibration amplitude, and
     /// particle birth-rate / velocity.
     var effectIntensity: CGFloat = 1.0
+    /// Trail-end burst kind from `[gesture.effect].trail-end`. Fires a
+    /// particle burst at the cursor when a gesture rule fires —
+    /// distinct from `effectMatch` (which animates the HUD card) and
+    /// from the standalone `DecalManager` (which leaves a lingering
+    /// splatter). Default `.off`.
+    var trailEnd: TrailEndKind = .off
     /// Per-segment displacement threshold used to commit a direction
     /// — the same value `Recognition.recognize` uses, so the visual
     /// polyline elbows match where rules actually break a segment.
@@ -435,6 +442,16 @@ private final class TrailView: NSView {
         let firedThisStroke = hint?.rows.contains { $0.suffix.isEmpty }
                               ?? false
         prevCardsByKind.removeAll()
+
+        // Fire-moment particle burst at the cursor position. Distinct
+        // from the card `effectMatch` (animates the HUD card) and
+        // from the standalone DecalManager (leaves a static splatter
+        // that lingers). The burst fires *before* the trail snaps to
+        // its final orthogonal polyline, so the particles appear to
+        // explode out of the cursor's actual location.
+        if firedThisStroke, trailEnd == .burst, let cursor {
+            scheduleTrailEndBurst(at: cursor)
+        }
 
         // Rule fired: snap the in-progress freehand onto the lastDir
         // axis so the completed gesture renders as a clean orthogonal
@@ -973,6 +990,72 @@ private final class TrailView: NSView {
         DispatchQueue.main.asyncAfter(deadline: .now() + effect.duration) {
             [weak layer] in layer?.removeFromSuperlayer()
         }
+    }
+
+    /// Omnidirectional particle burst at the cursor position, for the
+    /// `[gesture.effect].trail-end = "burst"` knob. Unlike the card
+    /// emitters (which emit upward from a line at the bottom of a
+    /// card), this one emits in all directions from a single point —
+    /// reads as an explosion at the gesture's end rather than a
+    /// fountain. Auto-removes after ~0.7s.
+    private func scheduleTrailEndBurst(at point: CGPoint) {
+        let emitter = makeOmniBurstEmitter(at: point)
+        hudContent.wantsLayer = true
+        hudContent.layer?.addSublayer(emitter)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+            [weak emitter] in emitter?.removeFromSuperlayer()
+        }
+    }
+
+    private func makeOmniBurstEmitter(at point: CGPoint) -> CAEmitterLayer {
+        let emitter = CAEmitterLayer()
+        emitter.emitterPosition = point
+        emitter.emitterShape = .point
+        emitter.emitterSize = .zero
+        let dot = Self.particleDot
+        // Trail-end uses the match-color palette so the burst feels
+        // tied to the gesture that produced it. Cycling across the
+        // accent + adjacent hues keeps the burst legible against any
+        // theme without going monochrome.
+        let palette: [NSColor] = [
+            matchColor,
+            .systemYellow, .systemOrange,
+            .systemPink, .systemPurple,
+        ]
+        let k = Float(effectIntensity)
+        let cells: [CAEmitterCell] = palette.map { c in
+            let cell = CAEmitterCell()
+            cell.contents = dot
+            cell.color = c.cgColor
+            cell.birthRate = 90 * k
+            cell.lifetime = 0.6
+            cell.lifetimeRange = 0.2
+            cell.velocity = 220 * effectIntensity
+            cell.velocityRange = 70 * effectIntensity
+            // Full circle emission so particles fly out in every
+            // direction. `emissionLongitude` is irrelevant when range
+            // covers 2π but set it to 0 for clarity.
+            cell.emissionLongitude = 0
+            cell.emissionRange = .pi * 2
+            cell.scale = 1.0
+            cell.scaleRange = 0.4
+            cell.scaleSpeed = -0.6
+            cell.alphaSpeed = -1.5
+            cell.spin = 1.0
+            cell.spinRange = 4.0
+            // Mild gravity gives the burst weight — particles drift
+            // down as they fade rather than holding their initial
+            // radius forever.
+            cell.yAcceleration = -80 * effectIntensity
+            return cell
+        }
+        emitter.emitterCells = cells
+        // Kill the birth rate after a brief flash so the burst feels
+        // like a single explosion rather than a continuous fountain.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+            [weak emitter] in emitter?.birthRate = 0
+        }
+        return emitter
     }
 
     /// Drive redraws while exit animations OR the post-fire hold are
