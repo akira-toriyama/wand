@@ -15,24 +15,39 @@
 
 
 # -----------------------------------------------------------------
-# Schema layout (v4.0)
+# Schema layout (v5.0)
 # -----------------------------------------------------------------
 # Sections cluster by trigger family:
 #
-#   [exclude]          — global: applies to every trigger
+#   [exclude]            — global: applies to every trigger
 #
-#   [gesture]          — gesture trigger (right-button + drag)
-#   [gesture.overlay]   — gesture HUD trail / cards / badge
-#   [gesture.effect]    — gesture HUD exit animations
-#   [[gesture.rule]]    — one gesture pattern → action mapping
+#   [gesture]            — gesture trigger (right-button + drag)
+#   [gesture.overlay]      — trail / cards / badge HUD. `card-match`
+#                            and `card-unmatch` animate cards in this
+#                            overlay, so they live here — the
+#                            dependency on `overlay.enabled` is visible
+#                            in the section name.
+#   [gesture.fire]         — fire-moment effects in their own
+#                            click-through windows (trail-end burst,
+#                            decal). Independent of overlay.enabled,
+#                            so disabling the trail still leaves these.
+#   [[gesture.rule]]       — one gesture pattern → action mapping
 #
-#   [launcher]         — launcher trigger (middle-click etc)
-#   [[launcher.item]]   — one menu row
+#   [launcher]           — launcher trigger (middle-click etc)
+#   [launcher.effect]      — panel open / close animation + border
+#                            decoration. All purely cosmetic.
+#   [[launcher.item]]      — one menu row
+#
+# v4 retired (still warned in /tmp/wand.log): `[gesture.effect]`
+# was split — `match`/`unmatch` moved to `[gesture.overlay].card-*`,
+# `trail-end`/`decal*`/`intensity` to `[gesture.fire].*`, and
+# `launcher-open`/`launcher-close` to `[launcher.effect].open/close`.
+# `[launcher].border` moved to `[launcher.effect].border`.
 #
 # v3.x config still has the old keys ([trigger] / [recognition] /
 # [overlay] / [effect] / [[rules]] / [[item]]) — those are no
-# longer read in v4.0. Daemon log warns once per old section
-# detected, with the new location.
+# longer read. Daemon log warns once per old section detected,
+# with the new location.
 
 
 # -----------------------------------------------------------------
@@ -166,15 +181,16 @@ anim-enabled = true
 # (matches the no-match behaviour). Clamped 0..2000.
 final-hold-ms = 400
 
-
-# -----------------------------------------------------------------
-# Gesture effects — animate assist cards as they leave the screen
-# -----------------------------------------------------------------
-# The overlay shows one assist card per reachable rule. Two moments
-# can make a card disappear:
+# Assist-card exit animations. The overlay shows one assist card per
+# reachable rule. Two moments can make a card disappear:
 #   - mid-gesture, when you turn in a direction that no longer
-#     reaches that card → driven by `unmatch`
-#   - at button-up, when a rule actually fires → driven by `match`
+#     reaches that card → `card-unmatch`
+#   - at button-up, when a rule actually fires → `card-match`
+#
+# These animate cards that live INSIDE the overlay, so they require
+# `enabled = true` above. (That's why they sit under
+# `[gesture.overlay]` — fire-moment effects that work without the
+# overlay live under `[gesture.fire]` below.)
 #
 # Default for both is "none" (cards just vanish). Pick a kind:
 #
@@ -191,35 +207,38 @@ final-hold-ms = 400
 #   random         — pick a random one each time a card disappears
 #
 # Particle effects (fireworks / confetti) are the most attention-
-# grabbing, so they're most natural on `match` — the moment a rule
-# actually fires.
-[gesture.effect]
-unmatch = "none"
-match = "none"
+# grabbing, so they read most naturally on `card-match` — the moment
+# a rule actually fires.
+card-unmatch = "none"
+card-match = "none"
 
-# Overall size of the effect — bigger throws / denser particles.
-#   subtle  ≈ 0.6× (calm)
-#   normal  ≈ 1.0× (default, the calibrated baseline)
-#   bold    ≈ 1.6× (more attention-grabbing)
-#   wild    ≈ 2.5× (over-the-top)
-intensity = "normal"
 
-# Post-fire "ink decal" — a Splatoon-style splatter / blob / scorch
-# / star left at the cursor when a gesture fires, in its own click-
-# through window so it sits above every app and fades out
-# automatically. Independent of the assist-card `match` effect above
-# (those animate the HUD; this animates a separate decal at the
-# cursor). Off by default.
+# -----------------------------------------------------------------
+# Gesture fire-moment effects — at the cursor when a rule fires
+# -----------------------------------------------------------------
+# These effects live in their own click-through windows, so they
+# fire regardless of `[gesture.overlay].enabled`. Disable the trail
+# but keep the burst, or vice versa.
+[gesture.fire]
+
+# Trail-end burst — omnidirectional particle explosion at the cursor
+# position the moment a gesture rule fires. Color rides the gesture's
+# match accent so the burst reads as tied to the action.
+#
+#   "off"    — no burst (default)
+#   "burst"  — omnidirectional particle explosion (~0.7s)
+trail-end = "off"
+
+# Post-fire "ink decal" — Splatoon-style splatter / blob / scorch /
+# star left at the cursor when a gesture fires. Color comes from
+# `[gesture.overlay].color` (the same accent the trail uses), so the
+# decal feels tied to the gesture that produced it.
 #
 #   "off"           — no decal (default)
 #   "ink-splatter"  — main blob + 3-6 satellite spatters; vivid
 #   "paint-blob"    — single irregular paint stamp
 #   "scorch"        — radial gradient burn mark
 #   "star"          — 5-pointed sparkle
-#
-# Color comes from `[gesture.overlay].color` (the same accent the
-# trail uses), so the decal feels tied to the gesture that produced
-# it. Unknown values log + fall back to "off".
 decal = "off"
 
 # How long (ms) the decal stays visible before fading out.
@@ -229,31 +248,15 @@ decal-duration-ms = 3000
 # Decal footprint in points (width = height). Clamped 10..200.
 decal-size = 60
 
-# Launcher panel open animation. Plays when a launcher panel pops up
-# (root panel on middle-click; child panels when a folder / dynamic
-# row is hovered open). Default "off" keeps the historical instant
-# pop. Unknown values log + clamp to "off".
-#
-#   "off"   — no animation (default)
-#   "fade"  — alpha 0 → 1 ease-out (~140 ms)
-#   "pop"   — alpha + scale 0.92 → 1.0 ease-out cubic (~180 ms)
-launcher-open = "off"
-
-# Symmetric close animation. Mirrors `launcher-open` but on the way
-# out — `fade` eases alpha to 0, `pop` adds a scale-down. Default
-# "off". Root + child panels animate in parallel so the cascade
-# unwinds together.
-launcher-close = "off"
-
-# Trail-end burst — particle effect emitted at the cursor position
-# the moment a gesture rule fires. Independent of `match` above
-# (which animates the HUD card) and `decal` (which leaves a static
-# splatter at the same point). The burst color rides the gesture's
-# match accent so it reads as tied to the action that produced it.
-#
-#   "off"    — no burst (default)
-#   "burst"  — omnidirectional particle explosion (~0.7s)
-trail-end = "off"
+# Overall multiplier applied to every gesture-related effect — the
+# trail-end burst above, plus the overlay's card-match / card-unmatch
+# animations (a single knob for the whole "how loud should this feel"
+# axis).
+#   subtle  ≈ 0.6× (calm)
+#   normal  ≈ 1.0× (default, the calibrated baseline)
+#   bold    ≈ 1.6× (more attention-grabbing)
+#   wild    ≈ 2.5× (over-the-top)
+intensity = "normal"
 
 
 # -----------------------------------------------------------------
@@ -295,6 +298,31 @@ shortcut-badge = true
 # on SF Symbol or file-path icons — those already render at a
 # consistent baseline. Set false to fall back to bare glyphs.
 icon-chip = true
+
+
+# -----------------------------------------------------------------
+# Launcher effects — cosmetic panel animations + border decoration
+# -----------------------------------------------------------------
+# Lives under [launcher] (not the gesture tree) so the trigger-family
+# scoping is obvious. All purely cosmetic — `enabled = false` above
+# silences these along with the panel.
+[launcher.effect]
+
+# Panel open animation. Plays when a launcher panel pops up (root
+# panel on middle-click; child panels when a folder / dynamic row is
+# hovered open). Default "off" keeps the historical instant pop.
+# Unknown values log + clamp to "off".
+#
+#   "off"   — no animation (default)
+#   "fade"  — alpha 0 → 1 ease-out (~140 ms)
+#   "pop"   — alpha + scale 0.92 → 1.0 ease-out cubic (~180 ms)
+open = "off"
+
+# Symmetric close animation. Mirrors `open` but on the way out —
+# `fade` eases alpha to 0, `pop` adds a scale-down. Default "off".
+# Root + child panels animate in parallel so the cascade unwinds
+# together.
+close = "off"
 
 # Decorative panel border. Sits on the colour-decoration axis (paired
 # with the trail's shape-only `trail-style`). Inherited by child

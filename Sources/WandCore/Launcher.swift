@@ -224,6 +224,29 @@ public enum LauncherLayout: String, Sendable, Hashable, CaseIterable {
     }
 }
 
+/// `[launcher.effect]` — purely cosmetic panel animations + border
+/// decoration. Lives inside `LauncherSpec` so the launcher's own
+/// effect knobs are grouped together (v4.x's `[gesture.effect]`
+/// mixed gesture HUD card animations with launcher-open/close, which
+/// muddied the trigger-family scoping). `border` also moved here from
+/// the bare `[launcher]` block so the colour-decoration axis lives in
+/// one place.
+public struct LauncherEffectSpec: Sendable, Equatable {
+    public let open: LauncherOpenAnim
+    public let close: LauncherCloseAnim
+    public let border: LauncherBorder
+
+    public init(open: LauncherOpenAnim = .off,
+                close: LauncherCloseAnim = .off,
+                border: LauncherBorder = .off) {
+        self.open = open
+        self.close = close
+        self.border = border
+    }
+
+    public static let `default` = LauncherEffectSpec()
+}
+
 /// The whole `[launcher]` block. `trigger` lives here (not the top-
 /// level `[trigger]` which gestures own) so each family has its own
 /// button. `enabled = false` keeps the tap from being installed at
@@ -252,26 +275,23 @@ public struct LauncherSpec: Sendable, Equatable {
     /// effect on SF Symbol or file-path icons — those already render
     /// at a consistent baseline. Default `true`.
     public let iconChip: Bool
-    /// Decorative border around the launcher panel. Default `.off`.
-    /// `.rainbow` strokes the panel's rounded rect with a continuously
-    /// hue-rotating colour — sits on the *colour-decoration* axis,
-    /// distinct from the trail's shape-only `TrailStyle`. Inherited by
-    /// child panels for visual consistency.
-    public let border: LauncherBorder
+    /// Panel open/close animations + decorative border. See
+    /// `LauncherEffectSpec`.
+    public let effect: LauncherEffectSpec
 
     public init(enabled: Bool, trigger: Trigger,
                 layout: LauncherLayout = .list,
                 items: [LauncherItem],
                 shortcutBadge: Bool = true,
                 iconChip: Bool = true,
-                border: LauncherBorder = .off) {
+                effect: LauncherEffectSpec = .default) {
         self.enabled = enabled
         self.trigger = trigger
         self.layout = layout
         self.items = items
         self.shortcutBadge = shortcutBadge
         self.iconChip = iconChip
-        self.border = border
+        self.effect = effect
     }
 
     public static let `default` = LauncherSpec(
@@ -281,7 +301,7 @@ public struct LauncherSpec: Sendable, Equatable {
         items: [],
         shortcutBadge: true,
         iconChip: true,
-        border: .off
+        effect: .default
     )
 }
 

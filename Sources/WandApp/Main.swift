@@ -303,30 +303,40 @@ enum WandApp {
             }
         }
 
-        // Post-fire decal — Splatoon-style splatter / blob / scorch /
-        // star left at the cursor when a rule fires. Held for the
-        // process lifetime; reads the live config per-fire so the
-        // `decal` / `decal-duration-ms` / `decal-size` knobs take
-        // effect on the next stroke.
+        // Post-fire fire-moment effects — decal (Splatoon-style
+        // splatter/blob/scorch/star) AND trail-end burst (particle
+        // explosion). Both live in their own click-through windows,
+        // INDEPENDENT of `[gesture.overlay].enabled`, so the user
+        // can disable the trail HUD and still get the cursor-anchored
+        // fire effects. Held for the process lifetime; both read the
+        // live config per-fire so knobs take effect on the next
+        // stroke.
         let decalManager = DecalManager()
+        let burstManager = BurstManager()
         controller.onGestureFire = { [weak controller] cgPoint in
             MainActor.assumeIsolated {
-                guard let cfg = controller?.config,
-                      cfg.effectDecal != .off,
-                      cfg.effectDecalDurationMs > 0
-                else { return }
+                guard let cfg = controller?.config else { return }
                 let cocoaPoint = ScreenCoords.cocoaPoint(fromCG: cgPoint)
                 let color = NSColorParse.nsColor(cfg.overlayColor)
                     ?? .systemBlue
-                decalManager.emit(
-                    at: cocoaPoint, color: color,
-                    kind: cfg.effectDecal,
-                    durationSec: TimeInterval(cfg.effectDecalDurationMs)
-                        / 1000.0,
-                    size: CGFloat(cfg.effectDecalSize))
+                if cfg.fireDecal != .off, cfg.fireDecalDurationMs > 0 {
+                    decalManager.emit(
+                        at: cocoaPoint, color: color,
+                        kind: cfg.fireDecal,
+                        durationSec: TimeInterval(cfg.fireDecalDurationMs)
+                            / 1000.0,
+                        size: CGFloat(cfg.fireDecalSize))
+                }
+                if cfg.fireTrailEnd == .burst {
+                    burstManager.emit(
+                        at: cocoaPoint, color: color,
+                        kind: cfg.fireTrailEnd,
+                        intensity: cfg.fireIntensity.multiplier)
+                }
             }
         }
         _ = decalManager   // hold a reference for the process lifetime
+        _ = burstManager   // ditto — fire-moment effects need both alive
 
         controller.start()
 
