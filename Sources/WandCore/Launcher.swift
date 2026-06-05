@@ -224,74 +224,91 @@ public enum LauncherLayout: String, Sendable, Hashable, CaseIterable {
     }
 }
 
-/// `[launcher.effect]` — purely cosmetic panel animations + border
-/// decoration. Lives inside `LauncherSpec` so the launcher's own
-/// effect knobs are grouped together (v4.x's `[gesture.effect]`
-/// mixed gesture HUD card animations with launcher-open/close, which
-/// muddied the trigger-family scoping). `border` also moved here from
-/// the bare `[launcher]` block so the colour-decoration axis lives in
-/// one place.
-public struct LauncherEffectSpec: Sendable, Equatable {
+/// `[launcher.row]` — per-row visual conventions that affect every
+/// `[[launcher.item]]` uniformly. Split out of the bare `[launcher]`
+/// block in v6 so the trigger-identity fields (button / modifiers /
+/// enabled / layout) don't mix with row cosmetics.
+public struct LauncherRowSpec: Sendable, Equatable {
+    /// Auto-derive a `⌘W`-style glyph badge from an item's
+    /// `action-keys` and render it right-aligned on `.list` rows
+    /// whose action is `.key(...)`. `false` suppresses every badge
+    /// globally. Default `true`. Has no effect on toolbar layouts.
+    public let shortcutBadge: Bool
+    /// Soft rounded chip behind emoji / text-glyph icons so they sit
+    /// on the same visual footprint as SF Symbol icons. No effect on
+    /// SF Symbol / file-path icons. Default `true`.
+    public let iconChip: Bool
+
+    public init(shortcutBadge: Bool = true,
+                iconChip: Bool = true) {
+        self.shortcutBadge = shortcutBadge
+        self.iconChip = iconChip
+    }
+
+    public static let `default` = LauncherRowSpec()
+}
+
+/// `[launcher.animation]` — temporal panel transitions (open/close).
+/// Split from v5's `[launcher.effect]` because animations and the
+/// static `border` decoration sit on different axes — one moves in
+/// time, the other paints once. v6 makes that axis split explicit.
+public struct LauncherAnimationSpec: Sendable, Equatable {
     public let open: LauncherOpenAnim
     public let close: LauncherCloseAnim
-    public let border: LauncherBorder
 
     public init(open: LauncherOpenAnim = .off,
-                close: LauncherCloseAnim = .off,
-                border: LauncherBorder = .off) {
+                close: LauncherCloseAnim = .off) {
         self.open = open
         self.close = close
+    }
+
+    public static let `default` = LauncherAnimationSpec()
+}
+
+/// `[launcher.decoration]` — static panel decoration. Currently just
+/// the `border`, but the section name leaves room for solid hues /
+/// vapor / pencil variants that paint once and don't animate.
+public struct LauncherDecorationSpec: Sendable, Equatable {
+    public let border: LauncherBorder
+
+    public init(border: LauncherBorder = .off) {
         self.border = border
     }
 
-    public static let `default` = LauncherEffectSpec()
+    public static let `default` = LauncherDecorationSpec()
 }
 
 /// The whole `[launcher]` block. `trigger` lives here (not the top-
 /// level `[trigger]` which gestures own) so each family has its own
 /// button. `enabled = false` keeps the tap from being installed at
-/// all — same opt-out shape as `overlay.enabled`.
+/// all — same opt-out shape as `overlay.enabled`. `layout` is the
+/// orientation primitive (single value, kept inline).
 ///
-/// The launcher UI is always a non-activating NSPanel — the user
-/// keeps keyboard focus in the underlying app while picking. There
-/// is no NSMenu fallback (it was removed once panel-mode covered the
-/// schema completely). `layout` chooses the panel's orientation;
-/// the items-file `[launcher].layout` overrides this one for the
-/// `wand --show-menu` external-trigger path.
+/// Row cosmetics, panel animations, and static decorations live in
+/// dedicated sub-blocks (`row` / `animation` / `decoration`) so each
+/// concern is visible from the section path alone.
 public struct LauncherSpec: Sendable, Equatable {
     public let enabled: Bool
     public let trigger: Trigger
     public let layout: LauncherLayout
     public let items: [LauncherItem]
-    /// Auto-derive a `⌘W`-style glyph badge from an item's
-    /// `action-keys` and render it right-aligned on `.list` rows whose
-    /// action is `.key(...)`. `false` suppresses every badge globally
-    /// (rows still fire normally — the badge is purely cosmetic
-    /// documentation of the underlying shortcut). Default `true`.
-    public let shortcutBadge: Bool
-    /// Draw a soft rounded "chip" behind emoji / text-glyph icons so
-    /// they sit on the same visual footprint as SF Symbol icons.
-    /// `false` falls back to the bare glyph (no background). Has no
-    /// effect on SF Symbol or file-path icons — those already render
-    /// at a consistent baseline. Default `true`.
-    public let iconChip: Bool
-    /// Panel open/close animations + decorative border. See
-    /// `LauncherEffectSpec`.
-    public let effect: LauncherEffectSpec
+    public let row: LauncherRowSpec
+    public let animation: LauncherAnimationSpec
+    public let decoration: LauncherDecorationSpec
 
     public init(enabled: Bool, trigger: Trigger,
                 layout: LauncherLayout = .list,
                 items: [LauncherItem],
-                shortcutBadge: Bool = true,
-                iconChip: Bool = true,
-                effect: LauncherEffectSpec = .default) {
+                row: LauncherRowSpec = .default,
+                animation: LauncherAnimationSpec = .default,
+                decoration: LauncherDecorationSpec = .default) {
         self.enabled = enabled
         self.trigger = trigger
         self.layout = layout
         self.items = items
-        self.shortcutBadge = shortcutBadge
-        self.iconChip = iconChip
-        self.effect = effect
+        self.row = row
+        self.animation = animation
+        self.decoration = decoration
     }
 
     public static let `default` = LauncherSpec(
@@ -299,9 +316,9 @@ public struct LauncherSpec: Sendable, Equatable {
         trigger: Trigger(button: .middle, modifiers: []),
         layout: .list,
         items: [],
-        shortcutBadge: true,
-        iconChip: true,
-        effect: .default
+        row: .default,
+        animation: .default,
+        decoration: .default
     )
 }
 

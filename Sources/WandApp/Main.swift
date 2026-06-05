@@ -150,7 +150,7 @@ enum WandApp {
             FileHandle.standardError.write(Data((
                 "wand: loaded \(cfg.rules.count) rule(s), "
                 + "trigger=\(cfg.trigger.button.rawValue), "
-                + "minStrokePx=\(cfg.minStrokePx)\(launcherLine)\n"
+                + "minStrokePx=\(cfg.recognition.minStrokePx)\(launcherLine)\n"
             ).utf8))
             // `--validate --items PATH` also validates a standalone
             // items file (intended for --show-menu) — parse + report
@@ -196,10 +196,10 @@ enum WandApp {
 
         let source = MacOSMouseSource(
             trigger: cfg.trigger,
-            minStrokePx: cfg.minStrokePx,
-            maxSegmentMs: cfg.maxSegmentMs,
-            cancelReversals: cfg.cancelReversals,
-            cancelWindowMs: cfg.cancelWindowMs
+            minStrokePx: cfg.recognition.minStrokePx,
+            maxSegmentMs: cfg.recognition.maxSegmentMs,
+            cancelReversals: cfg.recognition.cancelReversals,
+            cancelWindowMs: cfg.recognition.cancelWindowMs
         )
 
         // Launcher trigger — only allocated when opted in at startup.
@@ -226,7 +226,7 @@ enum WandApp {
         // Declared `outside` the `if` so the live-reload hook below
         // can hot-apply `[overlay]` changes without a restart.
         var overlay: GestureOverlay?
-        if cfg.overlayEnabled {
+        if cfg.overlay.enabled {
             overlay = GestureOverlay(cfg)
             overlay?.show()
             // Cache the target app icon across drag samples — a single
@@ -288,9 +288,9 @@ enum WandApp {
                 lastIconBundle = ""
                 MainActor.assumeIsolated { overlay?.clear() }
             }
-            Log.line("overlay: enabled (match=\(cfg.overlayColor), "
-                     + "noMatch=\(cfg.overlayColorNoMatch), "
-                     + "width=\(cfg.overlayWidth))")
+            Log.line("overlay: enabled (match=\(cfg.overlay.trail.color), "
+                     + "noMatch=\(cfg.overlay.trail.colorNoMatch), "
+                     + "width=\(cfg.overlay.trail.width))")
         }
 
         // Push `[overlay]` changes to the live overlay so edits take
@@ -317,21 +317,22 @@ enum WandApp {
             MainActor.assumeIsolated {
                 guard let cfg = controller?.config else { return }
                 let cocoaPoint = ScreenCoords.cocoaPoint(fromCG: cgPoint)
-                let color = NSColorParse.nsColor(cfg.overlayColor)
+                let color = NSColorParse.nsColor(cfg.overlay.trail.color)
                     ?? .systemBlue
-                if cfg.fireDecal != .off, cfg.fireDecalDurationMs > 0 {
+                let decalSpec = cfg.fire.decal
+                if decalSpec.kind != .off, decalSpec.durationMs > 0 {
                     decalManager.emit(
                         at: cocoaPoint, color: color,
-                        kind: cfg.fireDecal,
-                        durationSec: TimeInterval(cfg.fireDecalDurationMs)
+                        kind: decalSpec.kind,
+                        durationSec: TimeInterval(decalSpec.durationMs)
                             / 1000.0,
-                        size: CGFloat(cfg.fireDecalSize))
+                        size: CGFloat(decalSpec.size))
                 }
-                if cfg.fireTrailEnd == .burst {
+                if cfg.fire.burst.kind == .burst {
                     burstManager.emit(
                         at: cocoaPoint, color: color,
-                        kind: cfg.fireTrailEnd,
-                        intensity: cfg.gestureIntensity.multiplier)
+                        kind: cfg.fire.burst.kind,
+                        intensity: cfg.intensity.multiplier)
                 }
             }
         }
@@ -406,11 +407,12 @@ enum WandApp {
         // Tuned values — the same ones the daemon would apply. Lets a
         // remote diagnosis confirm what's in effect without parsing
         // config.toml independently.
+        let rec = cfg.recognition
         print(line(true, "Tuning:",
-                   "min-stroke-px=\(cfg.minStrokePx) "
-                   + "max-segment-ms=\(cfg.maxSegmentMs) "
-                   + "cancel-reversals=\(cfg.cancelReversals) "
-                   + "cancel-window-ms=\(cfg.cancelWindowMs)"))
+                   "min-stroke-px=\(rec.minStrokePx) "
+                   + "max-segment-ms=\(rec.maxSegmentMs) "
+                   + "cancel-reversals=\(rec.cancelReversals) "
+                   + "cancel-window-ms=\(rec.cancelWindowMs)"))
 
         // Rule patterns — confirms the user's edits parsed where they
         // expect. Truncate at 12 to keep --doctor scannable.
@@ -844,18 +846,18 @@ enum WandApp {
 
         let source = MacOSMouseSource(
             trigger: cfg.trigger,
-            minStrokePx: cfg.minStrokePx,
+            minStrokePx: cfg.recognition.minStrokePx,
             isRecording: true
         )
         source.start { event in
             let dirs = Recognition.recognize(samples: event.samples,
-                                              minStrokePx: cfg.minStrokePx)
+                                              minStrokePx: cfg.recognition.minStrokePx)
             let (dx, dy) = event.samples.span
             guard !dirs.isEmpty else {
                 FileHandle.standardOutput.write(Data((
                     "(too short)  samples=\(event.samples.count)  "
                     + "max|dx|=\(Int(dx)) max|dy|=\(Int(dy))  "
-                    + "threshold=\(cfg.minStrokePx)  "
+                    + "threshold=\(cfg.recognition.minStrokePx)  "
                     + "target=\(event.target.bundleID)\n"
                 ).utf8))
                 return
@@ -881,7 +883,7 @@ enum WandApp {
         FileHandle.standardError.write(Data((
             "wand --record: draw gestures with the configured "
             + "trigger button (\(cfg.trigger.button.rawValue) mouse, "
-            + "minStrokePx=\(cfg.minStrokePx)). Ctrl-C to exit.\n"
+            + "minStrokePx=\(cfg.recognition.minStrokePx)). Ctrl-C to exit.\n"
         ).utf8))
         app.run()
         exit(0)
