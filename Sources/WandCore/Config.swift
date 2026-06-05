@@ -294,9 +294,40 @@ public struct WandConfig: Sendable {
         // with their position.
         let items: [LauncherItem] = (doc.arrays["launcher.item"] ?? []).enumerated()
             .compactMap { idx, row in parseItem(row, idx: idx) }
+
+        // ── Trigger collision detection ───────────────────────
+        // Two trigger families sharing the same (button, modifiers)
+        // would have their CGEventTaps fight over the same down
+        // event — the daemon would install both, only one would see
+        // each click, and *which* one is determined by the CG
+        // registration order. From the outside it looks like "one
+        // of them silently stopped working".
+        //
+        // Policy: declaration-order wins (gesture > launcher >
+        // future families in source order). The loser is forced to
+        // `enabled = false` so its tap is never installed, and the
+        // demotion is logged with a hint on how to fix it. A
+        // different button OR a non-empty modifier difference
+        // resolves the conflict (modifier sets are compared
+        // strictly — `[]` and `["ctrl"]` are different triggers).
+        let gestureTrigger = Trigger(button: button, modifiers: mods)
+        let launcherTrigger = Trigger(button: launcherButton,
+                                       modifiers: launcherMods)
+        var effectiveLauncherEnabled = launcherEnabled
+        if launcherEnabled && launcherTrigger == gestureTrigger {
+            Log.line("config: [launcher].button = \"\(launcherButton.rawValue)\""
+                + " + modifiers=\(modifierList(launcherMods)) collides"
+                + " with [gesture] — [launcher] disabled for this"
+                + " session. Pick a distinct button, or add a"
+                + " modifier (e.g. `modifiers = [\"ctrl\"]`) to one"
+                + " side. (Declaration-order policy: gesture wins,"
+                + " later families lose.)")
+            effectiveLauncherEnabled = false
+        }
+
         let launcher = LauncherSpec(
-            enabled: launcherEnabled,
-            trigger: Trigger(button: launcherButton, modifiers: launcherMods),
+            enabled: effectiveLauncherEnabled,
+            trigger: launcherTrigger,
             layout: launcherLayout,
             items: items,
             shortcutBadge: launcherShortcutBadge,
@@ -334,7 +365,7 @@ public struct WandConfig: Sendable {
             }
 
         return WandConfig(
-            trigger: Trigger(button: button, modifiers: mods),
+            trigger: gestureTrigger,
             minStrokePx: minPx,
             maxSegmentMs: maxMs,
             cancelReversals: cancelRev,
@@ -455,6 +486,19 @@ public struct WandConfig: Sendable {
                      + "(allowed \(lo)..\(hi))")
         }
         return clamped
+    }
+
+    /// Render a Modifier set as a stable, sorted, bracketed string
+    /// for log lines — `[]` for empty, `["cmd", "shift"]` for two.
+    /// Sort by rawValue so the same set always renders the same way
+    /// (Swift's Set has no inherent order, and log diffability beats
+    /// the natural-language order).
+    private static func modifierList(_ mods: Set<Modifier>) -> String {
+        if mods.isEmpty { return "[]" }
+        let names = mods.map(\.rawValue).sorted()
+            .map { "\"\($0)\"" }
+            .joined(separator: ", ")
+        return "[\(names)]"
     }
 
     /// Parse a string-keyed enum from a TOML table. Empty / missing
