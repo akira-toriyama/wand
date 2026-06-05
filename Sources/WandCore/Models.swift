@@ -169,6 +169,15 @@ public enum Intensity: String, Sendable, Hashable, CaseIterable {
     }
 }
 
+/// Trail-end burst — particle effect emitted at the cursor position
+/// when a gesture rule fires. Independent of the static `DecalKind`
+/// (which lingers at the same point) and the assist-card `Effect`
+/// (which animates the HUD card). Default `.off`.
+public enum TrailEndKind: String, Sendable, Hashable, CaseIterable {
+    case off
+    case burst
+}
+
 /// Launcher panel open-animation. Default `.off` (panel pops in
 /// instantly). `.fade` eases the panel's alpha 0 → 1; `.pop` adds a
 /// brief scale-in (0.92 → 1.0) on top of the fade.

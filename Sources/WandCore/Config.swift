@@ -87,6 +87,11 @@ public struct WandConfig: Sendable {
     /// `.fade` eases the panel's alpha in; `.pop` adds a brief
     /// scale-in on top. Applies to root + child panels uniformly.
     public var effectLauncherOpen: LauncherOpenAnim
+    /// Particle burst emitted at the cursor position when a gesture
+    /// rule fires. Independent of `effectMatch` (animates the HUD
+    /// card) and `effectDecal` (lingers as a static splatter). Off
+    /// by default.
+    public var effectTrailEnd: TrailEndKind
     /// Launcher trigger family — middle-click (or other configured
     /// button) pops a contextual menu near the cursor. Trigger lives
     /// inside the spec so each family owns its own button; the
@@ -118,6 +123,7 @@ public struct WandConfig: Sendable {
         effectDecalDurationMs: 3000,
         effectDecalSize: 60,
         effectLauncherOpen: .off,
+        effectTrailEnd: .off,
         launcher: .default
     )
 
@@ -237,6 +243,9 @@ public struct WandConfig: Sendable {
         let effectLauncherOpen: LauncherOpenAnim = parseEnum(
             ef, key: "launcher-open",
             section: "gesture.effect", default: .off)
+        let effectTrailEnd: TrailEndKind = parseEnum(
+            ef, key: "trail-end",
+            section: "gesture.effect", default: .off)
 
         // ── [launcher.*] ──────────────────────────────────────
         // Middle-click (or other configured button) contextual
@@ -325,6 +334,7 @@ public struct WandConfig: Sendable {
             effectDecalDurationMs: effectDecalDurationMs,
             effectDecalSize: effectDecalSize,
             effectLauncherOpen: effectLauncherOpen,
+            effectTrailEnd: effectTrailEnd,
             launcher: launcher
         )
     }

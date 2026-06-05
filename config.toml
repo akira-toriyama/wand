@@ -240,6 +240,16 @@ decal-size = 60
 #   "pop"   — alpha + scale 0.92 → 1.0 ease-out cubic (~180 ms)
 launcher-open = "off"
 
+# Trail-end burst — particle effect emitted at the cursor position
+# the moment a gesture rule fires. Independent of `match` above
+# (which animates the HUD card) and `decal` (which leaves a static
+# splatter at the same point). The burst color rides the gesture's
+# match accent so it reads as tied to the action that produced it.
+#
+#   "off"    — no burst (default)
+#   "burst"  — omnidirectional particle explosion (~0.7s)
+trail-end = "off"
+
 
 # -----------------------------------------------------------------
 # Launcher — middle-click pops a contextual menu near the cursor
