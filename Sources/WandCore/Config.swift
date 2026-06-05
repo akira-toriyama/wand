@@ -6,131 +6,41 @@
 import Foundation
 
 public struct WandConfig: Sendable {
+    /// `[gesture]` — the gesture trigger (button + modifiers). Other
+    /// gesture-family knobs live in dedicated sub-blocks
+    /// (`recognition` / `overlay` / `fire`).
     public var trigger: Trigger
-    public var minStrokePx: Int
-    /// Maximum time (ms) from button-down to button-up for a stroke to
-    /// still count as a gesture. A slower drag is abandoned (no
-    /// action). `0` = no limit. Lets you right-drag normally without
-    /// it being read as a gesture, as long as you take your time.
-    public var maxSegmentMs: Int
-    /// Number of 180° direction reversals (a back-and-forth scribble)
-    /// that cancels the in-progress stroke — once reached, the gesture
-    /// is latched dead and releasing fires nothing, no waiting for a
-    /// timeout. `0` = off. A real gesture rarely reverses, so the
-    /// default catches deliberate scribbles without false positives.
-    public var cancelReversals: Int
-    /// Time window (ms) the `cancelReversals` reversals must fall within
-    /// for a scribble to cancel — so only a *fast* back-and-forth counts,
-    /// not a slow deliberate one. `0` = any speed (count alone cancels).
-    public var cancelWindowMs: Int
+    /// `[gesture].intensity` — gesture-wide effect multiplier. Scope
+    /// spans `[gesture.overlay.cards]` (HUD card particle effects)
+    /// AND `[gesture.fire.burst]` (cursor-anchored explosion). Decal
+    /// has its own size / duration knobs and is not scaled. Kept
+    /// inline at the gesture level (next to button / modifiers)
+    /// because moving it into either sub-block would mislead about
+    /// the scope.
+    public var intensity: Intensity
+    /// `[gesture.recognition]` — sample → direction tuning.
+    public var recognition: GestureRecognitionSpec
+    /// `[exclude].apps` — global bundle-id exclusion list. Applies
+    /// to both gesture rules and launcher items.
     public var excludeApps: [String]
+    /// `[[gesture.rule]]` — gesture pattern → action mappings.
     public var rules: [Rule]
-    /// Gesture-trail overlay. Colors stay strings here so Core needn't
-    /// depend on AppKit's NSColor — the adapter parses them (`#rgb` /
-    /// `#rrggbb` / `#rrggbbaa` / a few names). `overlayColor` is drawn
-    /// while the in-progress stroke matches a rule (and before it's
-    /// recognisable); `overlayColorNoMatch` while the shape so far
-    /// matches nothing.
-    public var overlayEnabled: Bool
-    public var overlayColor: String
-    public var overlayColorNoMatch: String
-    public var overlayWidth: Int
-    /// Named preset that determines how the trail line is rendered —
-    /// width, glow, dash pattern, per-segment color. `.normal` is the
-    /// existing single-color stroke; other cases swap in dashed,
-    /// rainbow hue rotation, comet tapering, etc. Sourced from
-    /// `[gesture.overlay].trail-style`; unknown values log + clamp to
-    /// `.normal`. Hot-reloadable.
-    public var overlayTrailStyle: TrailStyle
-    /// Show the target-app icon badge at the gesture origin?
-    /// Independent of `overlayEnabled` so a user can keep the trail
-    /// + assist tooltips but hide the badge alone.
-    public var overlayBadgeEnabled: Bool
-    /// Use the macOS frosted blur (`NSVisualEffectView`) under the
-    /// HUD cards + badge. `false` falls back to the older solid dark
-    /// fill — useful when blur feels heavy on the eyes or perf.
-    public var overlayBlurEnabled: Bool
-    /// Origin badge size in points. Clamped 32..96.
-    public var overlayBadgeSize: Int
-    /// Scale-in pop on the origin badge.
-    public var overlayAnimEnabled: Bool
-    /// How long (ms) the trail stays on screen after a gesture fires —
-    /// the in-progress segment is first snapped onto the lastDir axis
-    /// so the whole path reads as a clean orthogonal polyline, then
-    /// held at full alpha and faded out across this window. Clamped
-    /// 0..2000; `0` disables hold (immediate clear, like the
-    /// no-match path). Hot-reloadable.
-    public var overlayFinalHoldMs: Int
-    /// Exit animation when an assist card becomes unreachable mid-
-    /// gesture (the user picked a different direction). Lives under
-    /// `[gesture.overlay].card-unmatch` — these effects animate the
-    /// overlay's HUD cards, so they're intrinsically tied to the
-    /// overlay being visible. Unknown values clamp to `.none`.
-    public var overlayCardUnmatch: Effect
-    /// Exit animation when the firing card actually fires at button-
-    /// up. Particle effects (`fireworks`, `confetti`) read more
-    /// naturally here. Lives under `[gesture.overlay].card-match`
-    /// (see `overlayCardUnmatch`).
-    public var overlayCardMatch: Effect
-    /// Particle burst emitted at the cursor position when a gesture
-    /// rule fires. Lives in its own click-through window (independent
-    /// of `[gesture.overlay].enabled`), so the burst still fires when
-    /// the trail overlay is disabled. Default `.off`.
-    public var fireTrailEnd: TrailEndKind
-    /// Post-fire "ink decal" left at the cursor position when a
-    /// gesture fires — a Splatoon-style splatter / blob / scorch /
-    /// star that lingers and fades. Independent of overlay enabled.
-    /// Default `.off`.
-    public var fireDecal: DecalKind
-    /// How long (ms) a decal stays visible before being released.
-    /// Clamped 0..10000; `0` collapses to `.off` regardless of the
-    /// `fireDecal` value.
-    public var fireDecalDurationMs: Int
-    /// Decal footprint in points (width = height). Clamped 10..200,
-    /// default 60.
-    public var fireDecalSize: Int
-    /// Overall multiplier for every visual effect produced by a
-    /// gesture firing — overlay card animations (fireworks /
-    /// confetti) AND the trail-end burst. Decal has its own
-    /// size / duration knobs and is not affected.
-    ///
-    /// Lives at the top level of `[gesture]` (not under any sub-
-    /// block) because its scope spans both `[gesture.overlay]` and
-    /// `[gesture.fire]` — putting it inside either sub-block would
-    /// mislead readers about which effects it actually scales.
-    /// Unknown values clamp to `.normal`.
-    public var gestureIntensity: Intensity
-    /// Launcher trigger family — middle-click (or other configured
-    /// button) pops a contextual menu near the cursor. Trigger lives
-    /// inside the spec so each family owns its own button; the
-    /// top-level `trigger` is the gesture family.
+    /// `[gesture.overlay]` and sub-blocks — trail + badge + cards.
+    public var overlay: GestureOverlaySpec
+    /// `[gesture.fire]` and sub-blocks — burst + decal.
+    public var fire: GestureFireSpec
+    /// `[launcher]` and sub-blocks — trigger + items + row /
+    /// animation / decoration cosmetics.
     public var launcher: LauncherSpec
 
     public static let `default` = WandConfig(
         trigger: Trigger(button: .right, modifiers: []),
-        minStrokePx: 16,
-        maxSegmentMs: 0,
-        cancelReversals: 2,
-        cancelWindowMs: 500,
+        intensity: .normal,
+        recognition: .default,
         excludeApps: [],
         rules: [],
-        overlayEnabled: true,
-        overlayColor: "#3b82f6",
-        overlayColorNoMatch: "#ef4444",
-        overlayWidth: 3,
-        overlayTrailStyle: .normal,
-        overlayBadgeEnabled: true,
-        overlayBlurEnabled: true,
-        overlayBadgeSize: 56,
-        overlayAnimEnabled: true,
-        overlayFinalHoldMs: 400,
-        overlayCardUnmatch: .none,
-        overlayCardMatch: .none,
-        fireTrailEnd: .off,
-        fireDecal: .off,
-        fireDecalDurationMs: 3000,
-        fireDecalSize: 60,
-        gestureIntensity: .normal,
+        overlay: .default,
+        fire: .default,
         launcher: .default
     )
 
@@ -198,73 +108,105 @@ public struct WandConfig: Sendable {
         let mods = Set(g.strings("modifiers")
             .compactMap { Modifier(rawValue: $0.lowercased()) })
 
-        // Each clamp helper logs when the parsed value differs from
-        // user input, so a typo like `min-stroke-px = 9999` is visible
-        // in /tmp/wand.log instead of silently capping.
-        let minPx = clampInt(g, key: "min-stroke-px",
-                             default: 16, lo: 4, hi: 200)
-        let maxMs = clampMs(g, key: "max-segment-ms",
-                            default: 0, lo: 100, hi: 60000)
-        let cancelRev = clampMs(g, key: "cancel-reversals",
-                                default: 2, lo: 1, hi: 20)
-        let cancelWin = clampMs(g, key: "cancel-window-ms",
-                                default: 500, lo: 100, hi: 5000)
-        // Top-level `intensity` covers every visual effect produced
-        // by a gesture firing — overlay card animations AND the
-        // trail-end burst. Placed here (not inside a sub-block)
-        // because the scope spans both [gesture.overlay] and
-        // [gesture.fire]; living in either would mislead readers.
-        // Decal has its own size / duration knobs and is not
-        // affected by this multiplier.
-        let gestureIntensity: Intensity = parseEnum(
+        // `[gesture].intensity` — gesture-wide effect multiplier.
+        // Stays inline at the gesture level (next to button /
+        // modifiers) because its scope spans both [gesture.overlay]
+        // cards and [gesture.fire] burst — moving it inside either
+        // sub-block would mislead about what it scales.
+        let intensity: Intensity = parseEnum(
             g, key: "intensity", section: "gesture", default: .normal)
 
-        // [gesture.overlay] — gesture-trail HUD (badge / cards /
-        // trail color / blur). Renamed from bare [overlay] to make
-        // the scope obvious next to a future [launcher.overlay]
-        // (when ring/panel mode lands).
-        //
-        // Card-match / card-unmatch animate the assist cards inside
-        // the overlay, so they live under [gesture.overlay] (not
-        // [gesture.fire]) — the dependency is now visible in the
-        // section name.
+        // [gesture.recognition] — sample → direction tuning. v6 split
+        // these out of the bare [gesture] block (which now holds only
+        // trigger identity + the family-wide intensity knob) so
+        // recognition behaviour and trigger identity don't share a
+        // section.
+        let rec = doc.tables["gesture.recognition"] ?? [:]
+        let minPx = clampInt(rec, key: "min-stroke-px",
+                             default: 16, lo: 4, hi: 200)
+        let maxMs = clampMs(rec, key: "max-segment-ms",
+                            default: 0, lo: 100, hi: 60000)
+        let cancelRev = clampMs(rec, key: "cancel-reversals",
+                                default: 2, lo: 1, hi: 20)
+        let cancelWin = clampMs(rec, key: "cancel-window-ms",
+                                default: 500, lo: 100, hi: 5000)
+        let recognition = GestureRecognitionSpec(
+            minStrokePx: minPx,
+            maxSegmentMs: maxMs,
+            cancelReversals: cancelRev,
+            cancelWindowMs: cancelWin)
+
+        // [gesture.overlay] — shared overlay toggles (enabled + blur);
+        // trail / badge / cards each live in their own nested sub-block
+        // so each field's scope is visible from the section path.
         let ov = doc.tables["gesture.overlay"] ?? [:]
         let overlayEnabled = ov.bool("enabled", true)
-        let overlayColor = { let c = ov.string("color"); return c.isEmpty ? "#3b82f6" : c }()
-        let overlayColorNoMatch = { let c = ov.string("color-no-match"); return c.isEmpty ? "#ef4444" : c }()
-        let overlayWidth = clampInt(ov, key: "width",
-                                    default: 3, lo: 1, hi: 40)
-        let overlayTrailStyle: TrailStyle = parseEnum(
-            ov, key: "trail-style", section: "gesture.overlay",
-            default: .normal)
-        let overlayBadgeEnabled = ov.bool("badge-enabled", true)
         let overlayBlurEnabled = ov.bool("blur-enabled", true)
-        let overlayBadgeSize = clampInt(ov, key: "badge-size",
-                                        default: 56, lo: 32, hi: 96)
-        let overlayAnimEnabled = ov.bool("anim-enabled", true)
-        let overlayFinalHoldMs = clampInt(ov, key: "final-hold-ms",
-                                          default: 400, lo: 0, hi: 2000)
-        let overlayCardUnmatch: Effect = parseEnum(
-            ov, key: "card-unmatch", section: "gesture.overlay",
-            default: .none)
-        let overlayCardMatch: Effect = parseEnum(
-            ov, key: "card-match", section: "gesture.overlay",
-            default: .none)
 
-        // [gesture.fire] — effects emitted at the moment a gesture
-        // rule fires. Both the trail-end burst and the decal live in
-        // their own click-through windows, so they fire even when
-        // [gesture.overlay].enabled = false.
-        let fi = doc.tables["gesture.fire"] ?? [:]
-        let fireTrailEnd: TrailEndKind = parseEnum(
-            fi, key: "trail-end", section: "gesture.fire", default: .off)
-        let fireDecal: DecalKind = parseEnum(
-            fi, key: "decal", section: "gesture.fire", default: .off)
-        let fireDecalDurationMs = clampInt(
-            fi, key: "decal-duration-ms",
+        // [gesture.overlay.trail]
+        let tr = doc.tables["gesture.overlay.trail"] ?? [:]
+        let trailColor = { let c = tr.string("color"); return c.isEmpty ? "#3b82f6" : c }()
+        let trailColorNoMatch = { let c = tr.string("color-no-match"); return c.isEmpty ? "#ef4444" : c }()
+        let trailWidth = clampInt(tr, key: "width",
+                                  default: 3, lo: 1, hi: 40)
+        let trailStyle: TrailStyle = parseEnum(
+            tr, key: "style", section: "gesture.overlay.trail",
+            default: .normal)
+        let trailFinalHoldMs = clampInt(tr, key: "final-hold-ms",
+                                        default: 400, lo: 0, hi: 2000)
+        let trail = GestureOverlayTrailSpec(
+            color: trailColor,
+            colorNoMatch: trailColorNoMatch,
+            width: trailWidth,
+            style: trailStyle,
+            finalHoldMs: trailFinalHoldMs)
+
+        // [gesture.overlay.badge]
+        let bd = doc.tables["gesture.overlay.badge"] ?? [:]
+        let badgeEnabled = bd.bool("enabled", true)
+        let badgeSize = clampInt(bd, key: "size",
+                                 default: 56, lo: 32, hi: 96)
+        let badgeAnimEnabled = bd.bool("anim-enabled", true)
+        let badge = GestureOverlayBadgeSpec(
+            enabled: badgeEnabled,
+            size: badgeSize,
+            animEnabled: badgeAnimEnabled)
+
+        // [gesture.overlay.cards]
+        let cd = doc.tables["gesture.overlay.cards"] ?? [:]
+        let cardsMatch: Effect = parseEnum(
+            cd, key: "match", section: "gesture.overlay.cards", default: .none)
+        let cardsUnmatch: Effect = parseEnum(
+            cd, key: "unmatch", section: "gesture.overlay.cards", default: .none)
+        let cards = GestureOverlayCardsSpec(
+            match: cardsMatch, unmatch: cardsUnmatch)
+
+        let overlay = GestureOverlaySpec(
+            enabled: overlayEnabled,
+            blurEnabled: overlayBlurEnabled,
+            trail: trail, badge: badge, cards: cards)
+
+        // [gesture.fire.burst]
+        let bu = doc.tables["gesture.fire.burst"] ?? [:]
+        let burstKind: TrailEndKind = parseEnum(
+            bu, key: "kind", section: "gesture.fire.burst", default: .off)
+        let burst = GestureFireBurstSpec(kind: burstKind)
+
+        // [gesture.fire.decal]
+        let de = doc.tables["gesture.fire.decal"] ?? [:]
+        let decalKind: DecalKind = parseEnum(
+            de, key: "kind", section: "gesture.fire.decal", default: .off)
+        let decalDurationMs = clampInt(
+            de, key: "duration-ms",
             default: 3000, lo: 0, hi: 10000)
-        let fireDecalSize = clampInt(
-            fi, key: "decal-size", default: 60, lo: 10, hi: 200)
+        let decalSize = clampInt(
+            de, key: "size", default: 60, lo: 10, hi: 200)
+        let decal = GestureFireDecalSpec(
+            kind: decalKind,
+            durationMs: decalDurationMs,
+            size: decalSize)
+
+        let fire = GestureFireSpec(burst: burst, decal: decal)
 
         // ── [launcher.*] ──────────────────────────────────────
         // Middle-click (or other configured button) contextual
@@ -282,51 +224,53 @@ public struct WandConfig: Sendable {
         // per-call via their own `[launcher].layout`. Default `.list`.
         let launcherLayout: LauncherLayout = parseEnum(
             lr, key: "layout", section: "launcher", default: .list)
-        let launcherShortcutBadge = lr.bool("shortcut-badge", true)
-        let launcherIconChip = lr.bool("icon-chip", true)
 
-        // [launcher.effect] — launcher panel open/close animations
-        // + decorative border. Lives under launcher (not the gesture
-        // tree) so the trigger-family scoping stays clean.
-        let le = doc.tables["launcher.effect"] ?? [:]
-        let launcherEffectOpen: LauncherOpenAnim = parseEnum(
-            le, key: "open", section: "launcher.effect", default: .off)
-        let launcherEffectClose: LauncherCloseAnim = parseEnum(
-            le, key: "close", section: "launcher.effect", default: .off)
-        let launcherEffectBorder: LauncherBorder = parseEnum(
-            le, key: "border", section: "launcher.effect", default: .off)
-        let launcherEffect = LauncherEffectSpec(
-            open: launcherEffectOpen,
-            close: launcherEffectClose,
-            border: launcherEffectBorder)
+        // [launcher.row] — per-row visual cosmetics (split from the
+        // bare [launcher] block so trigger identity stays clean).
+        let lrow = doc.tables["launcher.row"] ?? [:]
+        let launcherRow = LauncherRowSpec(
+            shortcutBadge: lrow.bool("shortcut-badge", true),
+            iconChip: lrow.bool("icon-chip", true))
+
+        // [launcher.animation]
+        let la = doc.tables["launcher.animation"] ?? [:]
+        let launcherAnimOpen: LauncherOpenAnim = parseEnum(
+            la, key: "open", section: "launcher.animation", default: .off)
+        let launcherAnimClose: LauncherCloseAnim = parseEnum(
+            la, key: "close", section: "launcher.animation", default: .off)
+        let launcherAnimation = LauncherAnimationSpec(
+            open: launcherAnimOpen, close: launcherAnimClose)
+
+        // [launcher.decoration]
+        let ld = doc.tables["launcher.decoration"] ?? [:]
+        let launcherDecorBorder: LauncherBorder = parseEnum(
+            ld, key: "border", section: "launcher.decoration", default: .off)
+        let launcherDecoration = LauncherDecorationSpec(
+            border: launcherDecorBorder)
 
         // Warn when the user opted out of the launcher but still
-        // configured non-default panel effects — those knobs only
-        // fire when a panel actually opens, so they're dead config
-        // until `[launcher].enabled = true`. Default values stay
-        // silent (no one needs a warning for `open = "off"`); the
-        // log only mentions the fields they actually set, so the
-        // fix is obvious. Skipped when the launcher was enabled by
-        // the user — the collision check below handles the demotion
-        // case separately.
+        // configured non-default panel cosmetics — those only fire
+        // when a panel actually opens, so they're dead config until
+        // `[launcher].enabled = true`. Default values stay silent;
+        // the log lists exactly what's dead. Skipped when launcher
+        // is enabled — the collision check below handles demotion.
         if !launcherEnabled {
             var nonDefault: [String] = []
-            if launcherEffectOpen != .off {
-                nonDefault.append("open = \"\(launcherEffectOpen.rawValue)\"")
+            if launcherAnimOpen != .off {
+                nonDefault.append("[launcher.animation].open = \"\(launcherAnimOpen.rawValue)\"")
             }
-            if launcherEffectClose != .off {
-                nonDefault.append("close = \"\(launcherEffectClose.rawValue)\"")
+            if launcherAnimClose != .off {
+                nonDefault.append("[launcher.animation].close = \"\(launcherAnimClose.rawValue)\"")
             }
-            if launcherEffectBorder != .off {
-                nonDefault.append("border = \"\(launcherEffectBorder.rawValue)\"")
+            if launcherDecorBorder != .off {
+                nonDefault.append("[launcher.decoration].border = \"\(launcherDecorBorder.rawValue)\"")
             }
             if !nonDefault.isEmpty {
-                Log.line("config: [launcher.effect] has "
-                    + "\(nonDefault.joined(separator: ", ")) but "
-                    + "[launcher].enabled = false — these knobs"
-                    + " only fire when a launcher panel actually"
+                Log.line("config: \(nonDefault.joined(separator: ", "))"
+                    + " is set but [launcher].enabled = false — these"
+                    + " knobs only fire when a launcher panel actually"
                     + " opens. Either set [launcher].enabled = true,"
-                    + " or remove the [launcher.effect] block.")
+                    + " or remove the offending lines.")
             }
         }
 
@@ -340,18 +284,9 @@ public struct WandConfig: Sendable {
         // ── Trigger collision detection ───────────────────────
         // Two trigger families sharing the same (button, modifiers)
         // would have their CGEventTaps fight over the same down
-        // event — the daemon would install both, only one would see
-        // each click, and *which* one is determined by the CG
-        // registration order. From the outside it looks like "one
-        // of them silently stopped working".
-        //
-        // Policy: declaration-order wins (gesture > launcher >
-        // future families in source order). The loser is forced to
-        // `enabled = false` so its tap is never installed, and the
-        // demotion is logged with a hint on how to fix it. A
-        // different button OR a non-empty modifier difference
-        // resolves the conflict (modifier sets are compared
-        // strictly — `[]` and `["ctrl"]` are different triggers).
+        // event. Declaration-order wins (gesture > launcher > future
+        // families); the loser is forced enabled = false. A different
+        // button OR a non-empty modifier difference resolves it.
         let gestureTrigger = Trigger(button: button, modifiers: mods)
         let launcherTrigger = Trigger(button: launcherButton,
                                        modifiers: launcherMods)
@@ -372,9 +307,9 @@ public struct WandConfig: Sendable {
             trigger: launcherTrigger,
             layout: launcherLayout,
             items: items,
-            shortcutBadge: launcherShortcutBadge,
-            iconChip: launcherIconChip,
-            effect: launcherEffect)
+            row: launcherRow,
+            animation: launcherAnimation,
+            decoration: launcherDecoration)
 
         // [[gesture.rule]] — gesture pattern → action mappings.
         // Log every dropped rule with its position + reason so
@@ -408,29 +343,12 @@ public struct WandConfig: Sendable {
 
         return WandConfig(
             trigger: gestureTrigger,
-            minStrokePx: minPx,
-            maxSegmentMs: maxMs,
-            cancelReversals: cancelRev,
-            cancelWindowMs: cancelWin,
+            intensity: intensity,
+            recognition: recognition,
             excludeApps: excludes,
             rules: rules,
-            overlayEnabled: overlayEnabled,
-            overlayColor: overlayColor,
-            overlayColorNoMatch: overlayColorNoMatch,
-            overlayWidth: overlayWidth,
-            overlayTrailStyle: overlayTrailStyle,
-            overlayBadgeEnabled: overlayBadgeEnabled,
-            overlayBlurEnabled: overlayBlurEnabled,
-            overlayBadgeSize: overlayBadgeSize,
-            overlayAnimEnabled: overlayAnimEnabled,
-            overlayFinalHoldMs: overlayFinalHoldMs,
-            overlayCardUnmatch: overlayCardUnmatch,
-            overlayCardMatch: overlayCardMatch,
-            fireTrailEnd: fireTrailEnd,
-            fireDecal: fireDecal,
-            fireDecalDurationMs: fireDecalDurationMs,
-            fireDecalSize: fireDecalSize,
-            gestureIntensity: gestureIntensity,
+            overlay: overlay,
+            fire: fire,
             launcher: launcher
         )
     }
@@ -500,9 +418,9 @@ public struct WandConfig: Sendable {
             }
         }
         // v5.0 → v5.1: [gesture.fire].intensity moved up to
-        // [gesture].intensity (top-level) since its scope spans both
-        // [gesture.overlay] cards and [gesture.fire] burst — keeping
-        // it inside [gesture.fire] misled readers about what it scales.
+        // [gesture].intensity (top-level). v6 also retires the rest
+        // of [gesture.fire]'s flat shape — see the [gesture.fire]
+        // key-level renames below for the full migration.
         if let fi = doc.tables["gesture.fire"], fi["intensity"] != nil {
             Log.line("config: [gesture.fire].intensity was moved to "
                      + "[gesture].intensity (top-level) — its scope "
@@ -511,10 +429,88 @@ public struct WandConfig: Sendable {
                      + "location was misleading. Move the line up.")
         }
         // v4 → v5: [launcher].border moved to [launcher.effect].border.
+        // v6 further moves it to [launcher.decoration].border (handled
+        // by the [launcher.effect] key-rename block below).
         if let lr = doc.tables["launcher"], lr["border"] != nil {
-            Log.line("config: [launcher].border was moved in v5 — "
-                     + "place it under [launcher.effect].border instead.")
+            Log.line("config: [launcher].border was moved — "
+                     + "place it under [launcher.decoration].border.")
         }
+
+        // ── v5 → v6 sub-block split ─────────────────────────────
+        // v6 splits previously-flat [gesture.overlay] and [gesture.fire]
+        // into nested sub-blocks (trail / badge / cards under overlay;
+        // burst / decal under fire). Row cosmetics moved out of
+        // [launcher] into [launcher.row]. [launcher.effect] retired
+        // in favour of [launcher.animation] + [launcher.decoration].
+        if let ov = doc.tables["gesture.overlay"] {
+            let overlayKeyRenames: [(old: String, new: String)] = [
+                ("color",          "[gesture.overlay.trail].color"),
+                ("color-no-match", "[gesture.overlay.trail].color-no-match"),
+                ("width",          "[gesture.overlay.trail].width"),
+                ("trail-style",    "[gesture.overlay.trail].style"),
+                ("final-hold-ms",  "[gesture.overlay.trail].final-hold-ms"),
+                ("badge-enabled",  "[gesture.overlay.badge].enabled"),
+                ("badge-size",     "[gesture.overlay.badge].size"),
+                ("anim-enabled",   "[gesture.overlay.badge].anim-enabled"),
+                ("card-match",     "[gesture.overlay.cards].match"),
+                ("card-unmatch",   "[gesture.overlay.cards].unmatch"),
+            ]
+            for r in overlayKeyRenames where ov[r.old] != nil {
+                Log.line("config: [gesture.overlay].\(r.old) moved in"
+                         + " v6 — place it under \(r.new).")
+            }
+        }
+        if let fi = doc.tables["gesture.fire"] {
+            let fireKeyRenames: [(old: String, new: String)] = [
+                ("trail-end",         "[gesture.fire.burst].kind"),
+                ("decal",             "[gesture.fire.decal].kind"),
+                ("decal-duration-ms", "[gesture.fire.decal].duration-ms"),
+                ("decal-size",        "[gesture.fire.decal].size"),
+            ]
+            for r in fireKeyRenames where fi[r.old] != nil {
+                Log.line("config: [gesture.fire].\(r.old) moved in"
+                         + " v6 — place it under \(r.new).")
+            }
+        }
+        // v5 [gesture] held the recognition tuning knobs flat. v6
+        // moves them to [gesture.recognition] so trigger identity and
+        // recognition behaviour don't share a section.
+        if let g = doc.tables["gesture"] {
+            let recKeys = ["min-stroke-px", "max-segment-ms",
+                            "cancel-reversals", "cancel-window-ms"]
+            for key in recKeys where g[key] != nil {
+                Log.line("config: [gesture].\(key) moved in v6 — place"
+                         + " it under [gesture.recognition].\(key).")
+            }
+        }
+        // v5 [launcher] held shortcut-badge / icon-chip flat. v6
+        // moves them to [launcher.row].
+        if let lr = doc.tables["launcher"] {
+            let rowKeys = ["shortcut-badge", "icon-chip"]
+            for key in rowKeys where lr[key] != nil {
+                Log.line("config: [launcher].\(key) moved in v6 —"
+                         + " place it under [launcher.row].\(key).")
+            }
+        }
+        // v5 [launcher.effect] retired in v6 — split into
+        // [launcher.animation] (open/close) + [launcher.decoration]
+        // (border). Section-level warning + per-key hints.
+        if let le = doc.tables["launcher.effect"] {
+            Log.line("config: [launcher.effect] was retired in v6 —"
+                + " split into [launcher.animation] (open / close) +"
+                + " [launcher.decoration] (border). Until renamed,"
+                + " the values from this section are ignored.")
+            let effectKeyRenames: [(old: String, new: String)] = [
+                ("open",   "[launcher.animation].open"),
+                ("close",  "[launcher.animation].close"),
+                ("border", "[launcher.decoration].border"),
+            ]
+            for r in effectKeyRenames where le[r.old] != nil {
+                Log.line("config: [launcher.effect].\(r.old) moved in"
+                         + " v6 — place it under \(r.new).")
+            }
+        }
+
         let arrayRenames: [(old: String, new: String)] = [
             ("rules", "[[gesture.rule]]"),
             ("item",  "[[launcher.item]]"),

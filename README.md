@@ -44,16 +44,19 @@ right now is tinted in the match color. At the gesture's start point
 a small badge shows the **target app's icon** so the window wand
 will act on is unambiguous even when keyboard focus sits elsewhere.
 
-Colors, width, on/off, and per-piece toggles (badge / blur / size /
-animation) live in the `[gesture.overlay]` section of `config.toml`.
+Visual knobs live in scoped sub-blocks of `[gesture.overlay]`:
+the trail line itself in `[gesture.overlay.trail]`, the origin
+badge in `[gesture.overlay.badge]`, and the assist-card exit
+animations in `[gesture.overlay.cards]`.
 
-The assist cards can also animate out — drop, slide, explode, vibrate,
-or burst with fireworks / confetti particles. Pick one effect for the
-moment a card becomes unreachable mid-gesture (`card-unmatch`) and
-another for the moment a rule actually fires (`card-match`), both
-in `[gesture.overlay]`. Default is silent. Fire-moment effects that
-work even when the trail overlay is off — the trail-end burst and the
-post-fire ink decal — live separately in `[gesture.fire]`.
+The assist cards can animate out — drop, slide, explode, vibrate,
+or burst with fireworks / confetti particles. Pick one effect for
+the moment a card becomes unreachable mid-gesture (`unmatch`) and
+another for the moment a rule actually fires (`match`), both in
+`[gesture.overlay.cards]`. Default is silent. Fire-moment effects
+that work even when the trail overlay is off — the trail-end burst
+in `[gesture.fire.burst]` and the post-fire ink decal in
+`[gesture.fire.decal]` — live separately.
 
 Actions target the window **under the cursor**, not whichever window
 holds keyboard focus: `ax` actions operate on it directly, `key`
@@ -274,35 +277,37 @@ back-and-forth without tripping on real gestures. `0` = off.
 must land within that window, so a fast scribble cancels but a slow
 deliberate back-and-forth doesn't; `0` = any speed.
 
-`[gesture.overlay]` adds optional exit animations to the assist
-cards. Each card normally pops out the moment it's no longer
-reachable from the shape you've drawn; with an effect set it eases
-out instead. Two hooks (alongside the trail / badge / blur knobs
-already in the same section):
+`[gesture.overlay.cards]` adds optional exit animations to the
+assist cards. Each card normally pops out the moment it's no
+longer reachable from the shape you've drawn; with an effect set
+it eases out instead. Two hooks:
 
 ```toml
-[gesture.overlay]
-card-unmatch = "drop"        # cards that became unreachable mid-gesture
-card-match   = "fireworks"   # the firing card, on button-up
+[gesture.overlay.cards]
+unmatch = "drop"        # cards that became unreachable mid-gesture
+match   = "fireworks"   # the firing card, on button-up
 ```
 
 Available kinds: `none` (default), `drop`, `rise`, `slide-left`,
 `slide-right`, `explode`, `vibrate`, `fade`, `fireworks`, `confetti`,
 and `random` (picks a different one each time a card disappears).
 Particle effects (`fireworks` / `confetti`) read most naturally on
-`card-match`.
+`match`.
 
 Fire-moment effects that work independently of the overlay live in
-their own block:
+their own click-through windows:
 
 ```toml
-[gesture.fire]
-trail-end = "burst"          # omnidirectional particle burst at the cursor
-decal     = "ink-splatter"   # Splatoon-style splatter that lingers
+[gesture.fire.burst]
+kind = "burst"          # omnidirectional particle burst at the cursor
+
+[gesture.fire.decal]
+kind = "ink-splatter"   # Splatoon-style splatter that lingers
+duration-ms = 3000
+size = 60
 ```
 
-Both the burst and the decal live in their own click-through windows,
-so they fire even when `[gesture.overlay].enabled = false`.
+Both fire even when `[gesture.overlay].enabled = false`.
 
 A single `intensity` knob at the top level of `[gesture]` scales
 every visual effect produced by a gesture firing — overlay card
@@ -312,7 +317,7 @@ duration knobs and is not affected):
 ```toml
 [gesture]
 button = "right"
-intensity = "wild"          # subtle | normal | bold | wild
+intensity = "wild"      # subtle | normal | bold | wild
 ```
 
 ## CLI

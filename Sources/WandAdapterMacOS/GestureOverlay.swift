@@ -42,7 +42,7 @@ public final class GestureOverlay {
     public init(_ cfg: WandConfig) {
         let frame = Self.unionFrame()
         let v = TrailView(frame: CGRect(origin: .zero, size: frame.size),
-                          blurEnabled: cfg.overlayBlurEnabled)
+                          blurEnabled: cfg.overlay.blurEnabled)
         v.originOffset = frame.origin    // global Cocoa origin of the union
         self.view = v
 
@@ -102,20 +102,21 @@ public final class GestureOverlay {
     /// is handled here by ordering the window out, and re-shown on
     /// the next flip back.
     public func applyConfig(_ cfg: WandConfig) {
-        view.matchColor = NSColorParse.nsColor(cfg.overlayColor) ?? .systemBlue
-        view.noMatchColor = NSColorParse.nsColor(cfg.overlayColorNoMatch) ?? .systemRed
-        view.strokeWidth = CGFloat(cfg.overlayWidth)
-        view.trailStyle = cfg.overlayTrailStyle
-        view.badgeEnabled = cfg.overlayBadgeEnabled
-        view.badgeSize = CGFloat(cfg.overlayBadgeSize)
-        view.animEnabled = cfg.overlayAnimEnabled
-        view.setBlurEnabled(cfg.overlayBlurEnabled)
-        view.effectUnmatch = cfg.overlayCardUnmatch
-        view.effectMatch = cfg.overlayCardMatch
-        view.effectIntensity = cfg.gestureIntensity.multiplier
-        view.minStrokePx = CGFloat(cfg.minStrokePx)
-        view.finalHoldDuration = TimeInterval(cfg.overlayFinalHoldMs) / 1000.0
-        if cfg.overlayEnabled {
+        let ov = cfg.overlay
+        view.matchColor = NSColorParse.nsColor(ov.trail.color) ?? .systemBlue
+        view.noMatchColor = NSColorParse.nsColor(ov.trail.colorNoMatch) ?? .systemRed
+        view.strokeWidth = CGFloat(ov.trail.width)
+        view.trailStyle = ov.trail.style
+        view.badgeEnabled = ov.badge.enabled
+        view.badgeSize = CGFloat(ov.badge.size)
+        view.animEnabled = ov.badge.animEnabled
+        view.setBlurEnabled(ov.blurEnabled)
+        view.effectUnmatch = ov.cards.unmatch
+        view.effectMatch = ov.cards.match
+        view.effectIntensity = cfg.intensity.multiplier
+        view.minStrokePx = CGFloat(cfg.recognition.minStrokePx)
+        view.finalHoldDuration = TimeInterval(ov.trail.finalHoldMs) / 1000.0
+        if ov.enabled {
             if !window.isVisible { window.orderFrontRegardless() }
         } else if window.isVisible {
             window.orderOut(nil)

@@ -206,10 +206,10 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
                      + "recognition state consistent")
             forceStrokeEnd()
         }
-        minStrokePx = cfg.minStrokePx
-        maxSegmentMs = cfg.maxSegmentMs
-        cancelReversals = cfg.cancelReversals
-        cancelWindowMs = cfg.cancelWindowMs
+        minStrokePx = cfg.recognition.minStrokePx
+        maxSegmentMs = cfg.recognition.maxSegmentMs
+        cancelReversals = cfg.recognition.cancelReversals
+        cancelWindowMs = cfg.recognition.cancelWindowMs
     }
 
     /// Drop all in-progress stroke state without firing recognition

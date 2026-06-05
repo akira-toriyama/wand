@@ -79,12 +79,13 @@ public final class Controller: @unchecked Sendable {
     }
 
     public func start() {
+        let launcherBit = launcher == nil ? "" :
+            ", launcher=\(config.launcher.trigger.button.rawValue)"
+            + " (\(config.launcher.items.count) item(s))"
         Log.line("controller: start — \(config.rules.count) rule(s), "
-                 + "minStrokePx=\(config.minStrokePx), "
+                 + "minStrokePx=\(config.recognition.minStrokePx), "
                  + "trigger=\(config.trigger.button.rawValue)"
-                 + (launcher == nil ? "" :
-                    ", launcher=\(config.launcher.trigger.button.rawValue)"
-                    + " (\(config.launcher.items.count) item(s))"))
+                 + launcherBit)
         source.start { [weak self] event in
             self?.handle(event)
         }
@@ -115,7 +116,7 @@ public final class Controller: @unchecked Sendable {
             return
         }
         let dirs = Recognition.recognize(samples: event.samples,
-                                          minStrokePx: cfg.minStrokePx)
+                                          minStrokePx: cfg.recognition.minStrokePx)
         guard !dirs.isEmpty else {
             // Reachable only if EventTap and Controller disagree on
             // recognition — i.e. either threshold drift after reload, or
@@ -123,7 +124,7 @@ public final class Controller: @unchecked Sendable {
             Log.line("controller: EventTap delivered but Recognition "
                      + "found 0 directions on \(target.bundleID) "
                      + "(samples=\(event.samples.count), "
-                     + "minStrokePx=\(cfg.minStrokePx)) — ignored")
+                     + "minStrokePx=\(cfg.recognition.minStrokePx)) — ignored")
             return
         }
         counterRecognised += 1
@@ -195,11 +196,11 @@ public final class Controller: @unchecked Sendable {
             target: event.target,
             cocoaPoint: ScreenCoords.cocoaPoint(fromCG: event.point),
             layout: cfg.launcher.layout,
-            shortcutBadge: cfg.launcher.shortcutBadge,
-            iconChip: cfg.launcher.iconChip,
-            openAnim: cfg.launcher.effect.open,
-            closeAnim: cfg.launcher.effect.close,
-            border: cfg.launcher.effect.border
+            shortcutBadge: cfg.launcher.row.shortcutBadge,
+            iconChip: cfg.launcher.row.iconChip,
+            openAnim: cfg.launcher.animation.open,
+            closeAnim: cfg.launcher.animation.close,
+            border: cfg.launcher.decoration.border
         ) { [weak self] item, target in
             self?.counterLauncherDispatched += 1
             Log.line("controller: → launcher item \"\(item.name)\"")
@@ -273,11 +274,11 @@ public final class Controller: @unchecked Sendable {
             target: target,
             cocoaPoint: cocoaPoint,
             layout: parsed.layout,
-            shortcutBadge: cfg.launcher.shortcutBadge,
-            iconChip: cfg.launcher.iconChip,
-            openAnim: cfg.launcher.effect.open,
-            closeAnim: cfg.launcher.effect.close,
-            border: cfg.launcher.effect.border
+            shortcutBadge: cfg.launcher.row.shortcutBadge,
+            iconChip: cfg.launcher.row.iconChip,
+            openAnim: cfg.launcher.animation.open,
+            closeAnim: cfg.launcher.animation.close,
+            border: cfg.launcher.decoration.border
         ) { [weak self] item, target in
             self?.counterShowMenuDispatched += 1
             Log.line("controller: → show-menu item \"\(item.name)\"")
@@ -338,7 +339,7 @@ public final class Controller: @unchecked Sendable {
                      + "required to apply (the event mask is baked into the "
                      + "running tap at startup)")
         }
-        if new.overlayEnabled && !startupConfig.overlayEnabled {
+        if new.overlay.enabled && !startupConfig.overlay.enabled {
             Log.line("controller: reload — [overlay].enabled was false at "
                      + "startup so no overlay window exists; flipping to "
                      + "true now needs a full daemon restart")
@@ -379,7 +380,7 @@ public final class Controller: @unchecked Sendable {
         if config.trigger != startupConfig.trigger {
             pending.append("[trigger]")
         }
-        if config.overlayEnabled && !startupConfig.overlayEnabled {
+        if config.overlay.enabled && !startupConfig.overlay.enabled {
             pending.append("[overlay].enabled = false→true")
         }
         if config.launcher.enabled != startupConfig.launcher.enabled {
@@ -405,15 +406,17 @@ public final class Controller: @unchecked Sendable {
             ? "\nshow-menu: shown=\(counterShowMenuShown), "
               + "dispatched=\(counterShowMenuDispatched)"
             : ""
+        let rec = config.recognition
+        let overlayState = config.overlay.enabled ? "on" : "off"
         let s = """
         pid=\(ProcessInfo.processInfo.processIdentifier)
         rules=\(config.rules.count)
         trigger=\(config.trigger.button.rawValue)
-        min-stroke-px=\(config.minStrokePx)
-        max-segment-ms=\(config.maxSegmentMs)
-        cancel-reversals=\(config.cancelReversals)
-        cancel-window-ms=\(config.cancelWindowMs)
-        overlay=\(config.overlayEnabled ? "on" : "off")\(launcherLine)\(showMenuLine)
+        min-stroke-px=\(rec.minStrokePx)
+        max-segment-ms=\(rec.maxSegmentMs)
+        cancel-reversals=\(rec.cancelReversals)
+        cancel-window-ms=\(rec.cancelWindowMs)
+        overlay=\(overlayState)\(launcherLine)\(showMenuLine)
         counters: recognised=\(counterRecognised) \
         dispatched=\(counterDispatched) \
         no-rule=\(counterNoRule) excluded=\(counterExcluded)
