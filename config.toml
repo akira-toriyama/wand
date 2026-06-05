@@ -375,6 +375,20 @@ action-verb = "minimize"
 # action-type = "key"
 # action-keys = "cmd+r"
 #
+# # Tint — palette-colour an SF Symbol icon so the row reads in its
+# # category at a glance (red for destructive, accent for the active
+# # toggle, etc). Same colour grammar as the overlay's `color`:
+# # named ("systemRed" / "red" / "orange" / … / "accent" for the
+# # system accent), or hex ("#rgb" / "#rrggbb" / "#rrggbbaa").
+# # File / emoji / text icons ignore this — they have no
+# # hierarchical-colour path.
+# [[launcher.item]]
+# name = "Move to Trash"
+# icon = "SF:trash"
+# tint = "systemRed"
+# action-type = "ax"
+# action-verb = "AXDelete"
+#
 # # Nested submenu — `group = ["..."]` is the path to the parent
 # # submenu. The folder is created on first reference; subsequent
 # # items with the same group land inside it.
