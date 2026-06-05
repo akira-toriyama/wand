@@ -79,6 +79,16 @@ wand を構成する各パーツの **正規の呼び名** をまとめた規範
 - 例: `DR`, `URD`, `L`
 - **Don't call it:** shape, sequence, path, motion, 形, 軌跡
 
+### match color / no-match color
+[[assist card]] の枠色および [[trail]] の線色を切り替える 2 色のペア。
+描画中のジェスチャーが [[gesture rule]] にマッチしている瞬間は
+match color、まだマッチしていなければ no-match color。同時に表示中の
+`assist card` のうち、現在マッチしている候補だけが match color で
+強調され、ほかは通常色のまま残る。
+- 設定: `[gesture.overlay]`
+- コード: `WandAdapterMacOS/GestureOverlay`
+- **Don't call it:** active color, hit color, highlight color, success color, fail color, アクティブ色, ハイライト色, 成功色
+
 ---
 
 ## ランチャー面
