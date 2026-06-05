@@ -113,6 +113,7 @@ public final class GestureOverlay {
         view.effectMatch = cfg.effectMatch
         view.effectIntensity = cfg.effectIntensity.multiplier
         view.minStrokePx = CGFloat(cfg.minStrokePx)
+        view.finalHoldDuration = TimeInterval(cfg.overlayFinalHoldMs) / 1000.0
         if cfg.overlayEnabled {
             if !window.isVisible { window.orderFrontRegardless() }
         } else if window.isVisible {
@@ -209,12 +210,28 @@ private final class TrailView: NSView {
 
     /// Polyline state. `origin` = button-down point (badge anchor);
     /// `cursor` = latest sample (line head + HUD anchor); `corners` =
-    /// every committed turn point in between. The trail draws as
-    /// `origin → corners → cursor` — straight segments, Figma-style,
-    /// rather than freehand through every sample.
+    /// every committed turn point in between. The trail is a hybrid:
+    /// `origin → corners` draws as Figma-style orthogonal straight
+    /// segments (the *confirmed* part — only finalised once the user
+    /// turns), and `corners.last → freehandPoints → cursor` draws as
+    /// the raw freehand tail of the current (un-confirmed) segment.
+    /// Every `曲がる` (direction change) snaps the freehand tail into
+    /// a new straight segment and restarts a fresh freehand.
     fileprivate var origin: CGPoint?
     fileprivate var cursor: CGPoint?
     fileprivate var corners: [CGPoint] = []
+    /// Raw mouse samples for the *current* (un-confirmed) segment —
+    /// `freehandPoints[0]` is the segment start (= `corners.last ??
+    /// origin`), the rest are subsequent samples, and the last is
+    /// `cursor`. Reset on every corner commit so the new segment
+    /// starts at the snapped corner.
+    private var freehandPoints: [CGPoint] = []
+    /// Index in `freehandPoints` of the most recent anchor update —
+    /// samples *after* this index are the transition between the old
+    /// anchor and the current sample, and get carried over into the
+    /// next segment's freehand at corner-commit time (so the visual
+    /// doesn't snap-jump from the snapped corner to the raw cursor).
+    private var anchorIndex: Int = 0
     /// Live recognition state — mirrors `Recognition.recognize`:
     /// `anchor` is the point from which the next segment is being
     /// measured; `lastDir` is the most recently committed direction.
@@ -290,6 +307,19 @@ private final class TrailView: NSView {
     /// concurrent `layoutHUD` + `reset` callers can't stack timers
     /// that then each reschedule themselves into an avalanche.
     private var tickScheduled = false
+    /// Hold-and-fade for the trail when a rule fires. Set in `reset()`
+    /// when the fires card was on screen at mouse-up. While true the
+    /// trail keeps drawing (snapped to clean orthogonal lines via
+    /// `commitFinalSegment`) instead of vanishing instantly, so the
+    /// user sees the completed gesture as a tidy polyline for a beat
+    /// before it fades out.
+    fileprivate var holdingFinal: Bool = false
+    fileprivate var finalizeStartedAt: TimeInterval?
+    /// Seconds the post-fire snapped trail stays visible (hold +
+    /// fade). Sourced from `[gesture.overlay].final-hold-ms`; `0`
+    /// disables the hold and falls back to immediate clear.
+    /// Reflected live via `GestureOverlay.applyConfig(_:)`.
+    fileprivate var finalHoldDuration: TimeInterval = 0.40
 
     /// Behind-window vibrant blur, masked to the union of all current
     /// card + badge rounded rects so blur only appears where the HUD
@@ -343,6 +373,12 @@ private final class TrailView: NSView {
 
     /// Convert a CG global point (Y-down) to view-local (Y-up) coords.
     func append(_ cg: CGPoint, valid: Bool, hint: GestureHint?) {
+        // A new stroke is starting while the previous fire is still
+        // holding its snapped polyline — collapse the hold instantly
+        // so the new gesture's trail doesn't overlay the old one.
+        if holdingFinal {
+            _actualReset()
+        }
         if self.hint == nil && hint != nil {
             badgeAppearedAt = CACurrentMediaTime()
         }
@@ -351,11 +387,17 @@ private final class TrailView: NSView {
         let cocoa = ScreenCoords.cocoaPoint(fromCG: cg)
         let p = CGPoint(x: cocoa.x - originOffset.x,
                         y: cocoa.y - originOffset.y)
-        if origin == nil { origin = p; anchor = p }
+        if origin == nil {
+            origin = p
+            anchor = p
+            freehandPoints.removeAll(keepingCapacity: true)
+            anchorIndex = 0
+        }
         cursor = p
         // Live direction tracking — same algorithm as
         // `Recognition.recognize` so the polyline elbows land
         // exactly where the recogniser would split a segment.
+        var anchorUpdated = false
         if let a = anchor {
             let dx = p.x - a.x, dy = p.y - a.y
             let absX = abs(dx), absY = abs(dy)
@@ -369,11 +411,29 @@ private final class TrailView: NSView {
                     // raw `anchor` carries hand-jitter perpendicular
                     // to the intended direction.
                     let segStart = corners.last ?? origin ?? a
-                    corners.append(Self.snap(a, to: last, from: segStart))
+                    let corner = Self.snap(a, to: last, from: segStart)
+                    corners.append(corner)
+                    // Restart the freehand tail at the new corner.
+                    // Carry over samples that arrived *after* the last
+                    // anchor update — those were the user's actual
+                    // transition motion into the new direction, so the
+                    // new segment's freehand picks up smoothly from the
+                    // corner instead of jumping straight to `p`.
+                    let transitionStart = anchorIndex + 1
+                    let transition: ArraySlice<CGPoint> =
+                        transitionStart < freehandPoints.count
+                        ? freehandPoints[transitionStart...]
+                        : []
+                    freehandPoints = [corner] + transition
                 }
                 lastDir = dir
                 anchor = p
+                anchorUpdated = true
             }
+        }
+        freehandPoints.append(p)
+        if anchorUpdated {
+            anchorIndex = freehandPoints.count - 1
         }
         layoutHUD()
         needsDisplay = true
@@ -396,10 +456,68 @@ private final class TrailView: NSView {
                 layout: fires, effect: e, startedAt: now))
             scheduleParticleEffect(fires, effect: e)
         }
+        // `prevCardsByKind` is only kept current when `effectMatch` /
+        // `effectUnmatch` is configured (layoutHUD gates the update on
+        // it), so we can't rely on it here. Detect fire directly from
+        // the last `hint`: any row with an empty suffix == a `.fires`
+        // card == the current shape exactly matches a rule.
+        let firedThisStroke = hint?.rows.contains { $0.suffix.isEmpty }
+                              ?? false
         prevCardsByKind.removeAll()
+
+        // Rule fired: snap the in-progress freehand onto the lastDir
+        // axis so the completed gesture renders as a clean orthogonal
+        // polyline, then hold for a beat before clearing. Skipped when
+        // already holding (re-entrant `reset` during the hold), and
+        // skipped when nothing fired (immediate clear, as before).
+        if firedThisStroke && !holdingFinal && finalHoldDuration > 0 {
+            commitFinalSegment()
+            hint = nil
+            originIcon = nil
+            badgeAppearedAt = nil
+            cardLayouts.removeAll()
+            badgeLayout = nil
+            holdingFinal = true
+            finalizeStartedAt = CACurrentMediaTime()
+            DispatchQueue.main.asyncAfter(deadline: .now() + finalHoldDuration) {
+                [weak self] in
+                guard let self = self, self.holdingFinal else { return }
+                self._actualReset()
+            }
+            layoutHUD()
+            needsDisplay = true
+            hudContent.needsDisplay = true
+            kickExitAnimationTick()
+            return
+        }
+
+        _actualReset()
+    }
+
+    /// Snap the in-progress freehand tail into a final straight segment
+    /// along `lastDir`. Mirrors the corner-on-turn snap, but applied at
+    /// stroke-end against `cursor` so the gesture's last leg also lands
+    /// as a clean orthogonal segment when a rule actually fires.
+    private func commitFinalSegment() {
+        guard let lastDir, let cursor else { return }
+        let segStart = corners.last ?? origin ?? cursor
+        let snappedEnd = Self.snap(cursor, to: lastDir, from: segStart)
+        corners.append(snappedEnd)
+        freehandPoints = [snappedEnd]
+        self.cursor = snappedEnd
+    }
+
+    /// The real reset — null out every piece of trail / HUD state and
+    /// nudge a redraw. `reset()` defers here either immediately (no
+    /// fire) or after `finalHoldDuration` (fire).
+    private func _actualReset() {
+        holdingFinal = false
+        finalizeStartedAt = nil
         origin = nil
         cursor = nil
         corners.removeAll(keepingCapacity: true)
+        freehandPoints.removeAll(keepingCapacity: true)
+        anchorIndex = 0
         anchor = nil
         lastDir = nil
         hint = nil
@@ -447,37 +565,28 @@ private final class TrailView: NSView {
         else { return }
         let color = valid ? matchColor : noMatchColor
 
-        // Live segment end: snap the raw cursor onto `lastDir`'s axis
-        // relative to the previous corner (or origin). Keeps the
-        // polyline orthogonal even while the user's hand drifts off
-        // the cardinal axis mid-segment.
-        let segStart = corners.last ?? origin
-        let head: CGPoint
-        if let dir = lastDir {
-            head = Self.snap(cursor, to: dir, from: segStart)
-        } else {
-            head = cursor
-        }
-
-        // Polyline: origin → committed corners → live (snapped) head,
-        // with each interior corner softened by a quadratic-style
-        // bezier of radius `cornerRadius`. The radius is capped to
-        // half of each adjacent segment so back-to-back tight corners
-        // never overshoot. Sits beneath the blurView + HUD overlay.
+        // Hybrid polyline: confirmed segments draw as orthogonal
+        // straight lines with each interior corner softened by a
+        // quadratic-style bezier (radius capped to half each adjacent
+        // segment so back-to-back tight corners never overshoot);
+        // the in-progress segment trails the raw `freehandPoints`
+        // through to the cursor. Sits beneath the blurView + HUD.
         let path = NSBezierPath()
         path.lineWidth = strokeWidth
         path.lineCapStyle = .round
         path.lineJoinStyle = .round
-        let polyline = [origin] + corners + [head]
-        path.move(to: polyline[0])
-        if polyline.count == 2 {
-            path.line(to: polyline[1])
-        } else {
+
+        // Straight part: origin → corners.
+        let straight = [origin] + corners
+        path.move(to: straight[0])
+        if straight.count == 2 {
+            path.line(to: straight[1])
+        } else if straight.count > 2 {
             let desiredR = strokeWidth * 4
-            for i in 1..<polyline.count - 1 {
-                let A = polyline[i - 1]
-                let B = polyline[i]
-                let C = polyline[i + 1]
+            for i in 1..<straight.count - 1 {
+                let A = straight[i - 1]
+                let B = straight[i]
+                let C = straight[i + 1]
                 let inLen = hypot(B.x - A.x, B.y - A.y)
                 let outLen = hypot(C.x - B.x, C.y - B.y)
                 let r = min(desiredR, inLen / 2, outLen / 2)
@@ -492,19 +601,43 @@ private final class TrailView: NSView {
                 // approximation through the corner.
                 path.curve(to: Q, controlPoint1: B, controlPoint2: B)
             }
-            path.line(to: polyline.last!)
+            path.line(to: straight.last!)
         }
+
+        // Freehand tail: `freehandPoints[0]` equals the last straight
+        // point (= corners.last ?? origin), so skip it to avoid a
+        // zero-length segment, then trace through to the cursor.
+        for fp in freehandPoints.dropFirst() {
+            path.line(to: fp)
+        }
+
+        // While holding the post-fire snapped polyline, fade the trail
+        // out over the last third of the hold so it doesn't pop off.
+        var alpha: CGFloat = 1.0
+        if holdingFinal, let t0 = finalizeStartedAt {
+            let elapsed = CACurrentMediaTime() - t0
+            let fadeStart = finalHoldDuration * 0.66
+            if elapsed > fadeStart {
+                let p = (elapsed - fadeStart) / (finalHoldDuration - fadeStart)
+                alpha = max(0.0, 1.0 - CGFloat(p))
+            }
+        }
+
         NSGraphicsContext.saveGraphicsState()
+        if alpha < 1.0 {
+            NSGraphicsContext.current?.cgContext.setAlpha(alpha)
+        }
         let glow = NSShadow()
         glow.shadowColor = color.withAlphaComponent(0.5)
         glow.shadowBlurRadius = 7
         glow.set()
         color.withAlphaComponent(0.9).setStroke()
         path.stroke()
-        // Arrowhead at the live cursor end. Skipped until a direction
-        // has been committed (no axis to point along yet).
+        // Arrowhead at the raw cursor in the last-committed direction.
+        // Skipped until a direction has been committed (no axis to
+        // point along yet).
         if let dir = lastDir {
-            drawArrowhead(at: head, direction: dir, color: color)
+            drawArrowhead(at: cursor, direction: dir, color: color)
         }
         NSGraphicsContext.restoreGraphicsState()
     }
@@ -733,10 +866,12 @@ private final class TrailView: NSView {
         }
     }
 
-    /// Drive redraws while exit animations are running. Idempotent —
-    /// the `tickScheduled` flag absorbs repeat calls within a frame.
+    /// Drive redraws while exit animations OR the post-fire hold are
+    /// running. Idempotent — the `tickScheduled` flag absorbs repeat
+    /// calls within a frame.
     private func kickExitAnimationTick() {
-        guard !exitingCards.isEmpty, !tickScheduled else { return }
+        guard (!exitingCards.isEmpty || holdingFinal), !tickScheduled
+        else { return }
         tickScheduled = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0 / 60) {
             [weak self] in self?.tickExitAnimations()
@@ -748,6 +883,10 @@ private final class TrailView: NSView {
         let now = CACurrentMediaTime()
         exitingCards.removeAll { (now - $0.startedAt) >= $0.effect.duration }
         hudContent.needsDisplay = true
+        // The trail's fade alpha is sampled in `draw`, so it needs a
+        // redraw on each tick too — otherwise the fade is frozen at
+        // its first frame when no exit-card animation is running.
+        if holdingFinal { needsDisplay = true }
         kickExitAnimationTick()
     }
 

@@ -136,6 +136,13 @@ blur-enabled = true
 # first appears. Decorative; set false if motion bothers you.
 anim-enabled = true
 
+# How long (ms) the trail lingers after a gesture fires. The
+# in-progress segment is first snapped onto its axis so the whole
+# path reads as a clean orthogonal polyline, held at full alpha,
+# then faded out across the window. Set to 0 for an instant clear
+# (matches the no-match behaviour). Clamped 0..2000.
+final-hold-ms = 400
+
 
 # -----------------------------------------------------------------
 # Gesture effects — animate assist cards as they leave the screen
