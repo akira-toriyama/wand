@@ -54,6 +54,7 @@ public enum LauncherPanel {
                                 iconChip: Bool = true,
                                 openAnim: LauncherOpenAnim = .off,
                                 closeAnim: LauncherCloseAnim = .off,
+                                border: LauncherBorder = .off,
                                 onSelect: @escaping (LauncherItem, Target) -> Void) {
         current?.dismiss()
         guard !items.isEmpty else {
@@ -80,6 +81,7 @@ public enum LauncherPanel {
             isRoot: true,
             openAnim: openAnim,
             closeAnim: closeAnim,
+            border: border,
             onDismissRoot: { current = nil })
         current = controller
         controller.show()
@@ -797,6 +799,11 @@ private final class PanelController {
     /// inheritance rule as `openAnim` — child panels pick up the
     /// root's value so the cascade unwinds visually together.
     private let closeAnim: LauncherCloseAnim
+    /// Decorative panel border (rainbow / future palette variants).
+    /// Drawn in `show()` as a CAShapeLayer above `contentView`'s
+    /// blur, with a hue-rotating CAKeyframeAnimation. Child panels
+    /// inherit the root's value.
+    private let border: LauncherBorder
     /// Re-entry guard: a fade-out can dispatch async, and a global
     /// click or follow-up `dismiss()` could land mid-fade. Once `true`
     /// the panel is committed to its current teardown path and any
@@ -825,6 +832,7 @@ private final class PanelController {
          isRoot: Bool,
          openAnim: LauncherOpenAnim = .off,
          closeAnim: LauncherCloseAnim = .off,
+         border: LauncherBorder = .off,
          onDismissRoot: (() -> Void)? = nil) {
         self.layout = layout
         self.target = target
@@ -832,6 +840,7 @@ private final class PanelController {
         self.isRoot = isRoot
         self.openAnim = openAnim
         self.closeAnim = closeAnim
+        self.border = border
         self.onDismissRoot = isRoot ? onDismissRoot : nil
 
         self.panel = NonActivatingPanel(
@@ -865,6 +874,11 @@ private final class PanelController {
     }
 
     func show() {
+        // Decorative panel border (rainbow / …) — installed before
+        // the open animation so the border participates in the alpha
+        // ramp without flicker. Auto-released when the panel orders
+        // out (the layer's parent view goes away with the window).
+        installBorderDecoration()
         switch openAnim {
         case .off:
             panel.orderFront(nil)
@@ -907,6 +921,42 @@ private final class PanelController {
             }
         }
         if isRoot { installDismissMonitors() }
+    }
+
+    /// Lay a `CAShapeLayer` over the panel's contentView that strokes
+    /// the rounded outline with the configured `border` decoration.
+    /// No-op for `.off`.
+    private func installBorderDecoration() {
+        guard border == .rainbow,
+              let host = panel.contentView else { return }
+        host.wantsLayer = true
+        let stroke = CAShapeLayer()
+        let inset: CGFloat = 1.0
+        let corner: CGFloat = PanelLayout.cornerRadius
+        // `host.bounds` is locked at `frame.size` here — the panel
+        // doesn't resize after show, so a static path is safe.
+        let rect = host.bounds.insetBy(dx: inset, dy: inset)
+        stroke.path = CGPath(roundedRect: rect,
+                              cornerWidth: corner - inset,
+                              cornerHeight: corner - inset,
+                              transform: nil)
+        stroke.fillColor = nil
+        stroke.lineWidth = 2
+        stroke.strokeColor = NSColor.systemBlue.cgColor   // starting hue
+        // Hue rotation: 8 keyframes around the wheel over 4s, looped.
+        // CAKeyframeAnimation interpolates across CGColors smoothly
+        // — gives the panel an animated rainbow outline.
+        let anim = CAKeyframeAnimation(keyPath: "strokeColor")
+        anim.values = (0..<9).map { i in
+            NSColor(hue: CGFloat(i) / 8.0,
+                    saturation: 0.85, brightness: 1.0,
+                    alpha: 0.95).cgColor
+        }
+        anim.duration = 4.0
+        anim.repeatCount = .infinity
+        anim.calculationMode = .linear
+        stroke.add(anim, forKey: "rainbow")
+        host.layer?.addSublayer(stroke)
     }
 
     /// Dismiss the entire tree from any level. Walks up to root, then
@@ -1038,7 +1088,8 @@ private final class PanelController {
             target: target, onSelect: onSelect,
             isRoot: false,
             openAnim: openAnim,
-            closeAnim: closeAnim)
+            closeAnim: closeAnim,
+            border: border)
         c.parent = self
         child = c
         childAnchor = row
