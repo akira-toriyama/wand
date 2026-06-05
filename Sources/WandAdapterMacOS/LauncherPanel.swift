@@ -436,7 +436,9 @@ private enum PanelLayout {
         item: LauncherItem, layout: LauncherLayout, iconChip: Bool
     ) -> NSImage? {
         if !item.icon.isEmpty {
-            return resolveItemIcon(item.icon, tint: item.tint,
+            return resolveItemIcon(item.icon,
+                                    tint: item.tint,
+                                    tintColors: item.tintColors,
                                     iconChip: iconChip)
         }
         switch layout {
@@ -616,6 +618,7 @@ private enum PanelLayout {
     /// `/tmp/wand.log` without spamming every popup.
     static func resolveItemIcon(_ spec: String,
                                  tint: String = "",
+                                 tintColors: [String] = [],
                                  iconChip: Bool = false) -> NSImage? {
         let pt: CGFloat = ItemRow.iconRenderPt
 
@@ -647,12 +650,29 @@ private enum PanelLayout {
             // heavy symbols look "shrunk" next to a parent of tight ones.
             var cfg = NSImage.SymbolConfiguration(
                 pointSize: pt, weight: .medium, scale: .large)
-            // Per-item tint via `hierarchicalColor` — the recommended
-            // single-colour palette mode for SF Symbols. File / emoji
-            // / text icons can't receive this, so it's gated on the
-            // SF Symbol branch. Unknown tint strings log + fall
-            // through to the default label colour.
-            if !tint.isEmpty {
+            // `tint-colors = [...]` (multi-colour palette) wins over
+            // single `tint` when both are set — the array form is the
+            // more expressive intent, so an explicit palette never
+            // gets silently downgraded. Unknown entries are dropped
+            // with a log line; an entirely-unrecognised palette falls
+            // through to single-tint / no-tint.
+            if !tintColors.isEmpty {
+                let resolved: [NSColor] = tintColors.compactMap { spec in
+                    if let c = NSColorParse.nsColor(spec) { return c }
+                    Log.line("launcher-panel: unknown tint-colors entry "
+                             + "\"\(spec)\" on SF Symbol — skipped")
+                    return nil
+                }
+                if !resolved.isEmpty {
+                    cfg = cfg.applying(
+                        NSImage.SymbolConfiguration(paletteColors: resolved))
+                }
+            } else if !tint.isEmpty {
+                // Per-item tint via `hierarchicalColor` — the recommended
+                // single-colour palette mode for SF Symbols. File / emoji
+                // / text icons can't receive this, so it's gated on the
+                // SF Symbol branch. Unknown tint strings log + fall
+                // through to the default label colour.
                 if let c = NSColorParse.nsColor(tint) {
                     cfg = cfg.applying(
                         NSImage.SymbolConfiguration(hierarchicalColor: c))

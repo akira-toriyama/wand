@@ -450,6 +450,17 @@ action-verb = "minimize"
 # action-type = "ax"
 # action-verb = "AXDelete"
 #
+# # Multi-colour palette — `tint-colors = [...]` applies SF Symbol's
+# # hierarchical / multicolor palette. Each entry uses the same
+# # grammar as `tint`. Wins over a single `tint` when both are set.
+# # File / emoji / text icons ignore this.
+# [[launcher.item]]
+# name = "Battery Low"
+# icon = "SF:battery.25.fill"
+# tint-colors = ["red", "orange"]
+# action-type = "shell"
+# action-cmd  = "open 'x-apple.systempreferences:com.apple.preference.battery'"
+#
 # # Nested submenu — `group = ["..."]` is the path to the parent
 # # submenu. The folder is created on first reference; subsequent
 # # items with the same group land inside it.
