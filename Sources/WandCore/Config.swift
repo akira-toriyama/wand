@@ -639,6 +639,36 @@ public struct WandConfig: Sendable {
         let filterTitle = row.string("filter-title")
         let filterShell = row.string("filter-shell")
         let state = row.string("state")
+
+        // `icon-anim` / `tint` / `tint-colors` only apply to SF
+        // Symbol icons — the adapter's symbol-effect and palette
+        // paths gate on the `SF:` prefix, so an emoji / file path /
+        // `app:` icon (or no icon at all) silently ignores them.
+        // Warn once per offending row so the dead config is visible
+        // in the log. Default-empty fields stay silent.
+        if !icon.hasPrefix("SF:") {
+            var ignored: [String] = []
+            if !iconAnim.isEmpty {
+                ignored.append("icon-anim = \"\(iconAnim)\"")
+            }
+            if !tint.isEmpty {
+                ignored.append("tint = \"\(tint)\"")
+            }
+            if !tintColors.isEmpty {
+                ignored.append("tint-colors = "
+                    + "[\(tintColors.map { "\"\($0)\"" }.joined(separator: ", "))]")
+            }
+            if !ignored.isEmpty {
+                let iconDescription = icon.isEmpty
+                    ? "no icon set"
+                    : "a non-SF-Symbol icon (\"\(icon)\")"
+                Log.line("config: \(label) — "
+                    + "\(ignored.joined(separator: ", ")) only apply"
+                    + " to SF Symbol icons (icon = \"SF:...\")."
+                    + " Current item has \(iconDescription), so"
+                    + " these fields are ignored.")
+            }
+        }
         return LauncherItem(
             name: name, group: group, separatorBefore: sep,
             apps: apps.isEmpty ? ["*"] : apps,
