@@ -597,6 +597,25 @@ public struct WandConfig: Sendable {
             // parent's own `action` is unused (a sentinel keeps the
             // type total — `.shell("")` doubles as a no-op marker;
             // expansion paths never call it).
+            //
+            // Warn if the user also set action-* fields on the
+            // parent: those rows parse cleanly but are silently
+            // dropped because the dynamic branch never consults
+            // them. `[[gesture.rule]]` already drops + logs on bad
+            // action; the dynamic-launcher path keeps the parent
+            // alive (the folder still works) but tells the user
+            // exactly which lines are dead.
+            let strayActionKeys = [
+                "action-type", "action-keys", "action-verb",
+                "action-cmd", "action-url",
+            ].filter { !row.string($0).isEmpty }
+            if !strayActionKeys.isEmpty {
+                Log.line("config: \(label) — `dynamic` is set, so the "
+                    + "parent's own \(strayActionKeys.joined(separator: " / ")) "
+                    + "is ignored (only the template-* fields drive "
+                    + "the children). Remove these lines from this "
+                    + "row to silence this warning.")
+            }
             guard let t = parseTemplate(row) else {
                 Log.line("config: dropped \(label) — `dynamic` is set "
                          + "but no valid template-* fields found "
