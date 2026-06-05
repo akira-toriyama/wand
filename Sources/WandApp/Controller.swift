@@ -196,7 +196,8 @@ public final class Controller: @unchecked Sendable {
             cocoaPoint: ScreenCoords.cocoaPoint(fromCG: event.point),
             layout: cfg.launcher.layout,
             shortcutBadge: cfg.launcher.shortcutBadge,
-            iconChip: cfg.launcher.iconChip
+            iconChip: cfg.launcher.iconChip,
+            openAnim: cfg.effectLauncherOpen
         ) { [weak self] item, target in
             self?.counterLauncherDispatched += 1
             Log.line("controller: → launcher item \"\(item.name)\"")
@@ -271,7 +272,8 @@ public final class Controller: @unchecked Sendable {
             cocoaPoint: cocoaPoint,
             layout: parsed.layout,
             shortcutBadge: cfg.launcher.shortcutBadge,
-            iconChip: cfg.launcher.iconChip
+            iconChip: cfg.launcher.iconChip,
+            openAnim: cfg.effectLauncherOpen
         ) { [weak self] item, target in
             self?.counterShowMenuDispatched += 1
             Log.line("controller: → show-menu item \"\(item.name)\"")

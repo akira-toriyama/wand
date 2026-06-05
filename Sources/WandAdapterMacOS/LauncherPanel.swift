@@ -52,6 +52,7 @@ public enum LauncherPanel {
                                 layout: LauncherLayout = .list,
                                 shortcutBadge: Bool = true,
                                 iconChip: Bool = true,
+                                openAnim: LauncherOpenAnim = .off,
                                 onSelect: @escaping (LauncherItem, Target) -> Void) {
         current?.dismiss()
         guard !items.isEmpty else {
@@ -76,6 +77,7 @@ public enum LauncherPanel {
             layout: layout,
             target: target, onSelect: onSelect,
             isRoot: true,
+            openAnim: openAnim,
             onDismissRoot: { current = nil })
         current = controller
         controller.show()
@@ -785,6 +787,10 @@ private final class PanelController {
     private let target: Target
     private let onSelect: (LauncherItem, Target) -> Void
     private let isRoot: Bool
+    /// Open-time animation applied in `show()`. Inherited by child
+    /// panels when they're spawned (so the whole cascade feels
+    /// consistent). `.off` keeps the historical instant pop.
+    private let openAnim: LauncherOpenAnim
     /// Root-only: cleared in `tearDown()`, called once when the entire
     /// tree is gone. Non-root controllers leave this nil.
     private let onDismissRoot: (() -> Void)?
@@ -806,11 +812,13 @@ private final class PanelController {
          target: Target,
          onSelect: @escaping (LauncherItem, Target) -> Void,
          isRoot: Bool,
+         openAnim: LauncherOpenAnim = .off,
          onDismissRoot: (() -> Void)? = nil) {
         self.layout = layout
         self.target = target
         self.onSelect = onSelect
         self.isRoot = isRoot
+        self.openAnim = openAnim
         self.onDismissRoot = isRoot ? onDismissRoot : nil
 
         self.panel = NonActivatingPanel(
@@ -844,7 +852,47 @@ private final class PanelController {
     }
 
     func show() {
-        panel.orderFront(nil)
+        switch openAnim {
+        case .off:
+            panel.orderFront(nil)
+        case .fade:
+            // Alpha 0 → 1 ease-out over ~140ms. Cheap and reliable —
+            // no layer transform involved, so it composites the same
+            // on any backend.
+            panel.alphaValue = 0
+            panel.orderFront(nil)
+            NSAnimationContext.runAnimationGroup { ctx in
+                ctx.duration = 0.14
+                ctx.allowsImplicitAnimation = true
+                panel.animator().alphaValue = 1
+            }
+        case .pop:
+            // Alpha 0 → 1 + scale 0.92 → 1.0 on the contentView's
+            // CALayer. Scaling the NSWindow's frame instead would
+            // shift its on-screen origin, so we animate the layer
+            // inside a stable window. ~180ms ease-out cubic for a
+            // gentle pop that doesn't feel jittery.
+            panel.alphaValue = 0
+            if let layer = panel.contentView?.layer {
+                let size = panel.contentView?.bounds.size
+                    ?? .zero
+                layer.anchorPoint = CGPoint(x: 0.5, y: 0.5)
+                layer.position = CGPoint(x: size.width / 2,
+                                          y: size.height / 2)
+                layer.transform = CATransform3DMakeScale(0.92, 0.92, 1)
+            }
+            panel.orderFront(nil)
+            NSAnimationContext.runAnimationGroup { ctx in
+                ctx.duration = 0.18
+                ctx.timingFunction = CAMediaTimingFunction(
+                    name: .easeOut)
+                ctx.allowsImplicitAnimation = true
+                panel.animator().alphaValue = 1
+                if let layer = panel.contentView?.layer {
+                    layer.transform = CATransform3DIdentity
+                }
+            }
+        }
         if isRoot { installDismissMonitors() }
     }
 
@@ -934,7 +982,8 @@ private final class PanelController {
             content: content, rows: rows, frame: frame,
             layout: .list,
             target: target, onSelect: onSelect,
-            isRoot: false)
+            isRoot: false,
+            openAnim: openAnim)
         c.parent = self
         child = c
         childAnchor = row

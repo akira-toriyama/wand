@@ -169,6 +169,15 @@ public enum Intensity: String, Sendable, Hashable, CaseIterable {
     }
 }
 
+/// Launcher panel open-animation. Default `.off` (panel pops in
+/// instantly). `.fade` eases the panel's alpha 0 → 1; `.pop` adds a
+/// brief scale-in (0.92 → 1.0) on top of the fade.
+public enum LauncherOpenAnim: String, Sendable, Hashable, CaseIterable {
+    case off
+    case fade
+    case pop
+}
+
 /// Post-fire "ink decal" left at the cursor position when a gesture
 /// fires — a Splatoon-style splatter / blob / scorch / star that
 /// lingers for `effectDecalDurationMs` and fades out. Default `.off`

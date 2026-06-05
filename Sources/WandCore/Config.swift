@@ -83,6 +83,10 @@ public struct WandConfig: Sendable {
     /// Decal footprint in points (width = height). Clamped 10..200,
     /// default 60.
     public var effectDecalSize: Int
+    /// Launcher panel open animation. Default `.off` (instant pop).
+    /// `.fade` eases the panel's alpha in; `.pop` adds a brief
+    /// scale-in on top. Applies to root + child panels uniformly.
+    public var effectLauncherOpen: LauncherOpenAnim
     /// Launcher trigger family — middle-click (or other configured
     /// button) pops a contextual menu near the cursor. Trigger lives
     /// inside the spec so each family owns its own button; the
@@ -113,6 +117,7 @@ public struct WandConfig: Sendable {
         effectDecal: .off,
         effectDecalDurationMs: 3000,
         effectDecalSize: 60,
+        effectLauncherOpen: .off,
         launcher: .default
     )
 
@@ -229,6 +234,9 @@ public struct WandConfig: Sendable {
             default: 3000, lo: 0, hi: 10000)
         let effectDecalSize = clampInt(
             ef, key: "decal-size", default: 60, lo: 10, hi: 200)
+        let effectLauncherOpen: LauncherOpenAnim = parseEnum(
+            ef, key: "launcher-open",
+            section: "gesture.effect", default: .off)
 
         // ── [launcher.*] ──────────────────────────────────────
         // Middle-click (or other configured button) contextual
@@ -316,6 +324,7 @@ public struct WandConfig: Sendable {
             effectDecal: effectDecal,
             effectDecalDurationMs: effectDecalDurationMs,
             effectDecalSize: effectDecalSize,
+            effectLauncherOpen: effectLauncherOpen,
             launcher: launcher
         )
     }

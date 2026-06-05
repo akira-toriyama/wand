@@ -230,6 +230,16 @@ decal-duration-ms = 3000
 # Decal footprint in points (width = height). Clamped 10..200.
 decal-size = 60
 
+# Launcher panel open animation. Plays when a launcher panel pops up
+# (root panel on middle-click; child panels when a folder / dynamic
+# row is hovered open). Default "off" keeps the historical instant
+# pop. Unknown values log + clamp to "off".
+#
+#   "off"   — no animation (default)
+#   "fade"  — alpha 0 → 1 ease-out (~140 ms)
+#   "pop"   — alpha + scale 0.92 → 1.0 ease-out cubic (~180 ms)
+launcher-open = "off"
+
 
 # -----------------------------------------------------------------
 # Launcher — middle-click pops a contextual menu near the cursor
