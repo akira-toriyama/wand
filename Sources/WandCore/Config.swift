@@ -169,6 +169,7 @@ public struct WandConfig: Sendable {
             lr, key: "layout", section: "launcher", default: .list)
         let items: [LauncherItem] = (doc.arrays["launcher.item"] ?? []).enumerated()
             .compactMap { idx, row in parseItem(row, idx: idx) }
+        warnToolbarOnlyFields(items: items, layout: layout)
         return LauncherItemsFile(layout: layout, items: items)
     }
 
@@ -334,6 +335,7 @@ public struct WandConfig: Sendable {
         // with their position.
         let items: [LauncherItem] = (doc.arrays["launcher.item"] ?? []).enumerated()
             .compactMap { idx, row in parseItem(row, idx: idx) }
+        warnToolbarOnlyFields(items: items, layout: launcherLayout)
 
         // ── Trigger collision detection ───────────────────────
         // Two trigger families sharing the same (button, modifiers)
@@ -540,6 +542,41 @@ public struct WandConfig: Sendable {
         return clamped
     }
 
+    /// Warn once per row when an item carries fields that only render
+    /// in `[launcher].layout = "list"`. Toolbar variants are short
+    /// horizontal strips with no room for a section header, a 2nd-line
+    /// subtitle, or a row separator — those fields parse cleanly but
+    /// never appear, leaving dead config in the file.
+    ///
+    /// `shortcut-badge` at `[launcher]` level is intentionally not
+    /// surfaced here: it's a global default with a true/false value
+    /// that doesn't change toolbar's behaviour either way, so warning
+    /// about it would just add noise.
+    private static func warnToolbarOnlyFields(items: [LauncherItem],
+                                               layout: LauncherLayout) {
+        guard layout != .list else { return }
+        for (idx, item) in items.enumerated() {
+            var ignored: [String] = []
+            if !item.header.isEmpty {
+                ignored.append("`header = \"\(item.header)\"`")
+            }
+            if !item.subtitle.isEmpty {
+                ignored.append("`subtitle = \"\(item.subtitle)\"`")
+            }
+            if item.separatorBefore {
+                ignored.append("`separator-before = true`")
+            }
+            guard !ignored.isEmpty else { continue }
+            let label = "[[item]][\(idx)]"
+                + (item.name.isEmpty ? "" : " \(item.name)")
+            Log.line("config: \(label) — "
+                + "\(ignored.joined(separator: ", ")) only apply to"
+                + " `[launcher].layout = \"list\"`. Current layout is"
+                + " \"\(layout.rawValue)\", so these fields are"
+                + " ignored.")
+        }
+    }
+
     /// Render a Modifier set as a stable, sorted, bracketed string
     /// for log lines — `[]` for empty, `["cmd", "shift"]` for two.
     /// Sort by rawValue so the same set always renders the same way
@@ -620,23 +657,32 @@ public struct WandConfig: Sendable {
             // type total — `.shell("")` doubles as a no-op marker;
             // expansion paths never call it).
             //
-            // Warn if the user also set action-* fields on the
-            // parent: those rows parse cleanly but are silently
-            // dropped because the dynamic branch never consults
-            // them. `[[gesture.rule]]` already drops + logs on bad
-            // action; the dynamic-launcher path keeps the parent
-            // alive (the folder still works) but tells the user
-            // exactly which lines are dead.
-            let strayActionKeys = [
+            // Warn if the user also set action-* / state fields on
+            // the parent: those rows parse cleanly but are silently
+            // dropped because the dynamic branch renders the parent
+            // as a folder (no action, no selectability), and the
+            // dynamic-folder render path bypasses `renderItemLabel`
+            // entirely (so `state = "on"` / `state = "shell:..."`
+            // never produces a checkmark or runs the shell).
+            //
+            // `[[gesture.rule]]` drops + logs on bad action; the
+            // dynamic-launcher parent keeps working but tells the
+            // user exactly which lines are dead.
+            var strayDynamicFields: [String] = [
                 "action-type", "action-keys", "action-verb",
                 "action-cmd", "action-url",
             ].filter { !row.string($0).isEmpty }
-            if !strayActionKeys.isEmpty {
-                Log.line("config: \(label) — `dynamic` is set, so the "
-                    + "parent's own \(strayActionKeys.joined(separator: " / ")) "
-                    + "is ignored (only the template-* fields drive "
-                    + "the children). Remove these lines from this "
-                    + "row to silence this warning.")
+            if !row.string("state").isEmpty {
+                strayDynamicFields.append("state")
+            }
+            if !strayDynamicFields.isEmpty {
+                Log.line("config: \(label) — `dynamic` is set, so the"
+                    + " parent's own "
+                    + "\(strayDynamicFields.joined(separator: " / "))"
+                    + " is ignored (the row renders as a folder for"
+                    + " the dynamic children, not as a selectable"
+                    + " leaf). Remove these lines from this row to"
+                    + " silence this warning.")
             }
             guard let t = parseTemplate(row) else {
                 Log.line("config: dropped \(label) — `dynamic` is set "
