@@ -91,6 +91,14 @@ public struct LauncherItem: Sendable, Equatable {
     ///     is typical: `"🌐"`, `"⚡"`, `"AI"`)
     /// Unresolvable specs log once and fall through to no-icon.
     public let icon: String
+    /// Optional tint color applied to **SF Symbol icons only**. Same
+    /// grammar as the gesture-overlay colour keys: named colours
+    /// (`"systemRed"` / `"red"` / `"orange"` / …, or `"accent"` for
+    /// the system accent) and hex (`#rgb` / `#rrggbb` / `#rrggbbaa`).
+    /// Empty (the default) renders the symbol in `.labelColor`.
+    /// File / emoji / text icons ignore this — they have no
+    /// hierarchical-color path.
+    public let tint: String
     /// Title-glob filter on top of `apps`. Empty = no filter.
     /// Matched against the cursor-anchored target's window title at
     /// menu-open time. Same `*` / `?` glob as `apps`.
@@ -129,6 +137,7 @@ public struct LauncherItem: Sendable, Equatable {
                 apps: [String] = ["*"],
                 header: String = "",
                 icon: String = "",
+                tint: String = "",
                 filterTitle: String = "",
                 filterShell: String = "",
                 state: String = "",
@@ -141,6 +150,7 @@ public struct LauncherItem: Sendable, Equatable {
         self.apps = apps
         self.header = header
         self.icon = icon
+        self.tint = tint
         self.filterTitle = filterTitle
         self.filterShell = filterShell
         self.state = state

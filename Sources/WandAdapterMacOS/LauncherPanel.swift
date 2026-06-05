@@ -411,7 +411,7 @@ private enum PanelLayout {
         item: LauncherItem, layout: LauncherLayout
     ) -> NSImage? {
         if !item.icon.isEmpty {
-            return resolveItemIcon(item.icon)
+            return resolveItemIcon(item.icon, tint: item.tint)
         }
         switch layout {
         case .list:
@@ -584,7 +584,8 @@ private enum PanelLayout {
     /// recognised forms. Returns nil (which collapses to no image on
     /// the row) on miss; logs once so a typo is visible in
     /// `/tmp/wand.log` without spamming every popup.
-    static func resolveItemIcon(_ spec: String) -> NSImage? {
+    static func resolveItemIcon(_ spec: String,
+                                 tint: String = "") -> NSImage? {
         let pt: CGFloat = ItemRow.iconRenderPt
 
         // SF Symbol prefix.
@@ -596,8 +597,22 @@ private enum PanelLayout {
             // longer read as smaller than tight ones (lock, magnifying
             // glass). Without this, child panels filled with whitespace-
             // heavy symbols look "shrunk" next to a parent of tight ones.
-            let cfg = NSImage.SymbolConfiguration(
+            var cfg = NSImage.SymbolConfiguration(
                 pointSize: pt, weight: .medium, scale: .large)
+            // Per-item tint via `hierarchicalColor` — the recommended
+            // single-colour palette mode for SF Symbols. File / emoji
+            // / text icons can't receive this, so it's gated on the
+            // SF Symbol branch. Unknown tint strings log + fall
+            // through to the default label colour.
+            if !tint.isEmpty {
+                if let c = NSColorParse.nsColor(tint) {
+                    cfg = cfg.applying(
+                        NSImage.SymbolConfiguration(hierarchicalColor: c))
+                } else {
+                    Log.line("launcher-panel: unknown tint \"\(tint)\" "
+                             + "on SF Symbol — falling back to no tint")
+                }
+            }
             guard let img = NSImage(systemSymbolName: name,
                                      accessibilityDescription: nil)?
                 .withSymbolConfiguration(cfg) else {
