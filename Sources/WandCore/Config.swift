@@ -456,6 +456,7 @@ public struct WandConfig: Sendable {
         let subtitle = row.string("subtitle")
         let icon = row.string("icon")
         let tint = row.string("tint")
+        let tintColors = row.strings("tint-colors")
         let filterTitle = row.string("filter-title")
         let filterShell = row.string("filter-shell")
         let state = row.string("state")
@@ -466,6 +467,7 @@ public struct WandConfig: Sendable {
             subtitle: subtitle,
             icon: icon,
             tint: tint,
+            tintColors: tintColors,
             filterTitle: filterTitle, filterShell: filterShell,
             state: state,
             dynamic: dynamic, template: template,

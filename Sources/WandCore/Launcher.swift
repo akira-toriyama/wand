@@ -107,6 +107,15 @@ public struct LauncherItem: Sendable, Equatable {
     /// File / emoji / text icons ignore this — they have no
     /// hierarchical-color path.
     public let tint: String
+    /// Optional **multi-colour palette** for SF Symbol icons. Each
+    /// string uses the same grammar as `tint`. When non-empty, the
+    /// palette wins over the single `tint` and is applied via
+    /// `NSImage.SymbolConfiguration(paletteColors:)` — best for
+    /// hierarchical / multicolor SF Symbol variants (`flame.fill`,
+    /// `paintbrush.pointed.fill`, etc). Symbols without a multicolor
+    /// variant still render the first palette colour. File / emoji /
+    /// text icons ignore this entirely.
+    public let tintColors: [String]
     /// Title-glob filter on top of `apps`. Empty = no filter.
     /// Matched against the cursor-anchored target's window title at
     /// menu-open time. Same `*` / `?` glob as `apps`.
@@ -147,6 +156,7 @@ public struct LauncherItem: Sendable, Equatable {
                 subtitle: String = "",
                 icon: String = "",
                 tint: String = "",
+                tintColors: [String] = [],
                 filterTitle: String = "",
                 filterShell: String = "",
                 state: String = "",
@@ -161,6 +171,7 @@ public struct LauncherItem: Sendable, Equatable {
         self.subtitle = subtitle
         self.icon = icon
         self.tint = tint
+        self.tintColors = tintColors
         self.filterTitle = filterTitle
         self.filterShell = filterShell
         self.state = state
