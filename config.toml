@@ -383,6 +383,18 @@ action-verb = "minimize"
 # action-type = "key"
 # action-keys = "cmd+r"
 #
+# # Subtitle — a 2nd line of muted text below the title. Useful to
+# # explain what an opaque `shell` action does, or to disambiguate two
+# # identically-named items. Empty subtitle keeps the single-line row
+# # height. Only renders in list layout (toolbar variants ignore it).
+# # `{line}` substitution works on dynamic-item templates too.
+# [[launcher.item]]
+# name = "Translate"
+# subtitle = "選択テキストを日本語へ"
+# icon = "SF:globe"
+# action-type = "shell"
+# action-cmd  = "echo $SELECTION | translate --to ja"
+#
 # # Tint — palette-colour an SF Symbol icon so the row reads in its
 # # category at a glance (red for destructive, accent for the active
 # # toggle, etc). Same colour grammar as the overlay's `color`:

@@ -91,6 +91,14 @@ public struct LauncherItem: Sendable, Equatable {
     ///     is typical: `"🌐"`, `"⚡"`, `"AI"`)
     /// Unresolvable specs log once and fall through to no-icon.
     public let icon: String
+    /// Optional second line drawn under `name`. Use it to explain
+    /// what an opaque `shell` action does, or to disambiguate two
+    /// identically-named items. Empty = no second line and the row
+    /// keeps its single-line height. Only rendered in `.list` layout
+    /// (toolbar variants are too short for a subtitle to fit).
+    /// `LauncherTemplate.{line}` substitution applies here too, so a
+    /// dynamic-item template can carry `subtitle = "{line}"`.
+    public let subtitle: String
     /// Optional tint color applied to **SF Symbol icons only**. Same
     /// grammar as the gesture-overlay colour keys: named colours
     /// (`"systemRed"` / `"red"` / `"orange"` / …, or `"accent"` for
@@ -136,6 +144,7 @@ public struct LauncherItem: Sendable, Equatable {
                 separatorBefore: Bool = false,
                 apps: [String] = ["*"],
                 header: String = "",
+                subtitle: String = "",
                 icon: String = "",
                 tint: String = "",
                 filterTitle: String = "",
@@ -149,6 +158,7 @@ public struct LauncherItem: Sendable, Equatable {
         self.separatorBefore = separatorBefore
         self.apps = apps
         self.header = header
+        self.subtitle = subtitle
         self.icon = icon
         self.tint = tint
         self.filterTitle = filterTitle

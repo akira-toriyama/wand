@@ -409,8 +409,11 @@ private enum PanelLayout {
             guard case .key(let keys) = item.action else { return "" }
             return KeyCombo.format(keys) ?? ""
         }()
+        // Subtitle only in list layout — toolbar variants are too short.
+        let subtitle = layout == .list ? item.subtitle : ""
         let r = ItemRow(kind: .leaf(item), label: label, icon: icon,
-                         layout: layout, shortcut: shortcut)
+                         layout: layout, shortcut: shortcut,
+                         subtitle: subtitle)
         rows.append(r)
         return r
     }
@@ -965,6 +968,13 @@ private final class ItemRow: NSView {
     /// muted-grey label inside `installListLayout` only.
     private let shortcutText: String
     private var shortcutField: NSTextField?
+    /// Optional second line under the title. Empty = single-line row
+    /// (the existing `listRowHeight`); non-empty bumps the row to
+    /// `listRowHeightWithSubtitle` and shows a muted-grey caption.
+    /// Toolbar variants ignore this — the `makeItemRow` factory only
+    /// passes a non-empty value when `layout == .list`.
+    private let subtitleText: String
+    private var subtitleField: NSTextField?
     /// Bounding box in points for the icon view. The actual rendered
     /// SF Symbol is sized to `iconRenderPt` and scaled `.large`, so it
     /// fills the box optically.
@@ -974,6 +984,11 @@ private final class ItemRow: NSView {
     /// with `.medium` weight + `.large` scale.
     static let iconRenderPt: CGFloat = 17
     private static let listRowHeight: CGFloat = 26
+    /// Taller row variant for items that supply a non-empty subtitle.
+    /// Just enough to fit the 11pt secondary caption under the title
+    /// without making single-line rows in the same panel feel
+    /// inconsistent — the icon stays centred, captions hang below.
+    private static let listRowHeightWithSubtitle: CGFloat = 38
     /// Section-header band height. Just enough to breathe a small-caps
     /// 10pt label without the band dominating the panel.
     private static let sectionHeaderHeight: CGFloat = 22
@@ -992,11 +1007,13 @@ private final class ItemRow: NSView {
     var titleForLog: String { rawLabel }
 
     init(kind: RowKind, label: String, icon: NSImage?,
-         layout: LauncherLayout, shortcut: String = "") {
+         layout: LauncherLayout, shortcut: String = "",
+         subtitle: String = "") {
         self.kind = kind
         self.layout = layout
         self.rawLabel = label
         self.shortcutText = shortcut
+        self.subtitleText = subtitle
         super.init(frame: .zero)
 
         translatesAutoresizingMaskIntoConstraints = false
@@ -1115,8 +1132,43 @@ private final class ItemRow: NSView {
             titleTrailingConst = -8
         }
 
+        // Subtitle-aware vertical layout. Without a subtitle the row
+        // stays single-line at `listRowHeight` and the title sits on
+        // the centre Y. With a subtitle the row grows to
+        // `listRowHeightWithSubtitle`; the title hangs from the top
+        // and the muted-grey subtitle hangs below it, while the icon
+        // stays centred so the visual baseline doesn't drift.
+        let hasSubtitle = !subtitleText.isEmpty
+        let rowHeight: CGFloat = hasSubtitle
+            ? Self.listRowHeightWithSubtitle : Self.listRowHeight
+
+        var verticalConstraints: [NSLayoutConstraint] = []
+        if hasSubtitle {
+            let sub = NSTextField(labelWithString: subtitleText)
+            sub.translatesAutoresizingMaskIntoConstraints = false
+            sub.font = .systemFont(ofSize: 11)
+            sub.textColor = .secondaryLabelColor
+            sub.lineBreakMode = .byTruncatingTail
+            sub.maximumNumberOfLines = 1
+            sub.cell?.usesSingleLineMode = true
+            addSubview(sub)
+            subtitleField = sub
+            verticalConstraints = [
+                titleField.topAnchor.constraint(equalTo: topAnchor,
+                                                  constant: 4),
+                sub.topAnchor.constraint(equalTo: titleField.bottomAnchor,
+                                          constant: 1),
+                sub.leadingAnchor.constraint(equalTo: titleField.leadingAnchor),
+                sub.trailingAnchor.constraint(equalTo: titleField.trailingAnchor),
+            ]
+        } else {
+            verticalConstraints = [
+                titleField.centerYAnchor.constraint(equalTo: centerYAnchor),
+            ]
+        }
+
         NSLayoutConstraint.activate([
-            heightAnchor.constraint(equalToConstant: Self.listRowHeight),
+            heightAnchor.constraint(equalToConstant: rowHeight),
 
             iconView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
             iconView.centerYAnchor.constraint(equalTo: centerYAnchor),
@@ -1127,8 +1179,7 @@ private final class ItemRow: NSView {
                                                 constant: 8),
             titleField.trailingAnchor.constraint(equalTo: titleTrailingAnchor,
                                                   constant: titleTrailingConst),
-            titleField.centerYAnchor.constraint(equalTo: centerYAnchor),
-        ])
+        ] + verticalConstraints)
     }
 
     private func installToolbarLayout(label: String) {
@@ -1202,6 +1253,8 @@ private final class ItemRow: NSView {
         case .leaf, .folder, .dynamic:
             titleField.textColor = .labelColor
         }
+        subtitleField?.textColor = .secondaryLabelColor
+        shortcutField?.textColor = .tertiaryLabelColor
         chevronView?.contentTintColor = .secondaryLabelColor
         // Toolbar variants: tint SF Symbol icons in `.labelColor`
         // so they read as text-level contrast rather than the
@@ -1220,6 +1273,11 @@ private final class ItemRow: NSView {
         layer?.cornerRadius = Self.hoverCornerRadius
         titleField.textColor = .white
         chevronView?.contentTintColor = .white
+        // The subtitle / shortcut badges live on the same row as
+        // titleField, so they need to flip alongside it — otherwise
+        // their muted-grey would read as smudged on the accent fill.
+        subtitleField?.textColor = NSColor.white.withAlphaComponent(0.85)
+        shortcutField?.textColor = NSColor.white.withAlphaComponent(0.85)
         if layout != .list {
             iconView.contentTintColor = .white
         }

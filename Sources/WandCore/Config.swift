@@ -427,6 +427,7 @@ public struct WandConfig: Sendable {
         let group = row.strings("group")
         let sep = row.bool("separator-before", false)
         let header = row.string("header")
+        let subtitle = row.string("subtitle")
         let icon = row.string("icon")
         let tint = row.string("tint")
         let filterTitle = row.string("filter-title")
@@ -436,6 +437,7 @@ public struct WandConfig: Sendable {
             name: name, group: group, separatorBefore: sep,
             apps: apps.isEmpty ? ["*"] : apps,
             header: header,
+            subtitle: subtitle,
             icon: icon,
             tint: tint,
             filterTitle: filterTitle, filterShell: filterShell,
