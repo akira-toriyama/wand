@@ -252,18 +252,26 @@ public struct LauncherSpec: Sendable, Equatable {
     /// effect on SF Symbol or file-path icons — those already render
     /// at a consistent baseline. Default `true`.
     public let iconChip: Bool
+    /// Decorative border around the launcher panel. Default `.off`.
+    /// `.rainbow` strokes the panel's rounded rect with a continuously
+    /// hue-rotating colour — sits on the *colour-decoration* axis,
+    /// distinct from the trail's shape-only `TrailStyle`. Inherited by
+    /// child panels for visual consistency.
+    public let border: LauncherBorder
 
     public init(enabled: Bool, trigger: Trigger,
                 layout: LauncherLayout = .list,
                 items: [LauncherItem],
                 shortcutBadge: Bool = true,
-                iconChip: Bool = true) {
+                iconChip: Bool = true,
+                border: LauncherBorder = .off) {
         self.enabled = enabled
         self.trigger = trigger
         self.layout = layout
         self.items = items
         self.shortcutBadge = shortcutBadge
         self.iconChip = iconChip
+        self.border = border
     }
 
     public static let `default` = LauncherSpec(
@@ -272,7 +280,8 @@ public struct LauncherSpec: Sendable, Equatable {
         layout: .list,
         items: [],
         shortcutBadge: true,
-        iconChip: true
+        iconChip: true,
+        border: .off
     )
 }
 

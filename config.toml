@@ -119,26 +119,25 @@ color-no-match = "#ef4444"
 # doubles it, `dashed`/`dotted` use it as the dash unit.
 width = 3
 
-# Trail style preset — bundles width × glow × dash × color so a
-# single key swaps the trail's whole personality. Unknown values
-# log + fall back to "normal".
+# Trail style preset — bundles width × glow × dash. **Shape only —
+# the trail's colour is always sourced from `color` / `color-no-match`
+# above**, so the match-vs-no-match signal isn't lost when the style
+# changes. Colour-decoration variants (rainbow / vapor / pencil) live
+# on a different axis (see `[launcher].border` for the launcher-side
+# counterpart). Unknown values log + fall back to "normal".
 #
-#   "normal"  — single-color stroke at `width` with a soft glow
-#               (the default; same look as before this key existed)
+#   "normal"  — single stroke at `width` with a soft glow (default)
 #   "thin"    — `width * 0.5` (1.5pt floor) + reduced glow
 #   "thick"   — `width * 2` + amplified glow
 #   "glow"    — `width` with an exaggerated 18pt bloom; neon vibe
 #   "dashed"  — broken line (3:2 dash:gap, sized off `width`)
 #   "dotted"  — short-dash dotted line (0.6:2 dash:gap)
-#   "rainbow" — each polyline segment gets its own hue; corner
-#               smoothing is skipped (the hue switch needs a hard
-#               break to register)
 #   "comet"   — width tapers from origin (thin) to cursor (thick),
 #               like a meteor's tail. Corner smoothing skipped.
 #
-# Heavier styles — "brush", "splatoon", "laser", "lightning",
-# "vapor", "pencil" — are planned in follow-up phases of #63 and
-# not available yet.
+# Heavier shape-only styles — "brush" (variable width), "lightning"
+# (jagged jitter), "laser" (heavy bloom) — are planned in follow-up
+# phases of #63.
 trail-style = "normal"
 
 # Show the target-app icon as a small "badge" at the gesture's
@@ -296,6 +295,18 @@ shortcut-badge = true
 # on SF Symbol or file-path icons — those already render at a
 # consistent baseline. Set false to fall back to bare glyphs.
 icon-chip = true
+
+# Decorative panel border. Sits on the colour-decoration axis (paired
+# with the trail's shape-only `trail-style`). Inherited by child
+# panels for visual consistency.
+#
+#   "off"     — no border (default)
+#   "rainbow" — animated hue-rotating outline cycling around the
+#               panel's rounded rect (~4s loop)
+#
+# Future palette variants (vapor / pencil / solid hues) will land in
+# follow-ups.
+border = "off"
 
 
 # -----------------------------------------------------------------

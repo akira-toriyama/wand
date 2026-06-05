@@ -178,6 +178,17 @@ public enum TrailEndKind: String, Sendable, Hashable, CaseIterable {
     case burst
 }
 
+/// Launcher panel border decoration. Default `.off` (no border).
+/// `.rainbow` strokes the panel's rounded rect with a continuously
+/// hue-rotating colour cycle — purely cosmetic, sits on the colour-
+/// decoration axis (paired with the trail's `TrailStyle` which is
+/// shape-only). Other colour-decoration kinds (`vapor`, `pencil`,
+/// solid hues) will land in follow-ups.
+public enum LauncherBorder: String, Sendable, Hashable, CaseIterable {
+    case off
+    case rainbow
+}
+
 /// Launcher panel open-animation. Default `.off` (panel pops in
 /// instantly). `.fade` eases the panel's alpha 0 → 1; `.pop` adds a
 /// brief scale-in (0.92 → 1.0) on top of the fade.
@@ -209,15 +220,19 @@ public enum DecalKind: String, Sendable, Hashable, CaseIterable {
     case star
 }
 
-/// Named preset that bundles `width × glow × dash × color-mapping` for the
-/// gesture trail. The adapter dispatches on this when rendering the
-/// hybrid `corners → freehand` polyline so a single TOML key can shift
-/// the trail's whole personality (`thin` for minimal, `comet` for
-/// directional emphasis, `rainbow` for the playful end).
+/// Named preset that bundles `width × glow × dash` for the gesture
+/// trail. **Line shape only — colour is always sourced from
+/// `[gesture.overlay].color` / `color-no-match`**, so the trail's
+/// match-vs-no-match signal isn't lost when the style changes.
 ///
-/// Heavier styles — `brush`, `splatoon`, `lightning`, `pencil`, `laser`,
-/// `vapor` — are reserved for follow-up phases of #63 and not part of
-/// this enum until they ship.
+/// Colour-decoration variants (rainbow / vapor / pencil) belong to a
+/// separate axis applied to *other surfaces* (launcher panel border,
+/// gesture tooltip border, etc.) — they're not trail-style values.
+/// See `LauncherBorder` for the launcher-side counterpart.
+///
+/// Heavier line-shape styles — `brush` (variable width), `lightning`
+/// (jagged jitter), `laser` (heavy bloom) — are reserved for follow-
+/// up phases of #63 and not part of this enum until they ship.
 ///
 /// Unknown values clamp to `.normal` (wand's typo-tolerant policy).
 public enum TrailStyle: String, Sendable, Hashable, CaseIterable {
@@ -227,7 +242,6 @@ public enum TrailStyle: String, Sendable, Hashable, CaseIterable {
     case glow
     case dashed
     case dotted
-    case rainbow
     case comet
 }
 
