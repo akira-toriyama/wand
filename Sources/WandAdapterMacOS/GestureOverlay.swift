@@ -1179,22 +1179,24 @@ private final class TrailView: NSView {
     /// widths of gap, which lands as "actively chasing".
     private static let pacmanFaceLag: CGFloat = 50
 
-    /// Pac-Man-themed trail: the cursor lays a stream of pellet dots
-    /// along the whole path (origin → cursor), and the Pac-Man face
+    /// Pac-Man-themed trail: the cursor lays a single line of pellet
+    /// dots along the path (origin → cursor), and the Pac-Man face
     /// chases along that same path `pacmanFaceLag` pt behind the
-    /// cursor — so the cursor leads, the dots extend right up to it,
-    /// and Pac-Man visibly catches up from behind. `strokeWidth` is
-    /// re-purposed as **pellet rows perpendicular to the path** —
-    /// `width = 1` lays down a single line of pellets (the classic
-    /// look), higher values stack rows.
+    /// cursor. `strokeWidth` is interpreted as a **scale multiplier**
+    /// here — `width = 1` gives the default pellet / face size and
+    /// spacing, higher values scale everything up proportionally.
+    /// The arcade aesthetic is always a single line of pellets, so
+    /// thickness rows would fight the visual.
     private func drawPacmanPath(origin: CGPoint, cursor: CGPoint,
                                  color: NSColor, outline: NSColor?) {
-        let dot = Self.pacmanPelletDiameter
-        let thickness = max(1, Int(strokeWidth.rounded()))
-        let offsetBase = CGFloat(thickness - 1) / 2
-        let rowSpacing = dot + 4
+        let scale = max(1, strokeWidth)
+        let dot = Self.pacmanPelletDiameter * scale
+        let interval = Self.pacmanPelletInterval * scale
+        let faceLag = Self.pacmanFaceLag * scale
+        let faceRadius = Self.pacmanFaceRadius * scale
         let pelletFill = color.withAlphaComponent(0.9)
         let outlineFill = outline?.withAlphaComponent(0.9)
+        let outlinePad = max(1, scale)
 
         // 1) Locate where Pac-Man's face sits this frame: walk the
         // path with the lag as `trimTail` — the final step the walker
@@ -1202,46 +1204,41 @@ private final class TrailView: NSView {
         // pass; we only need the coordinate + tangent.
         var faceAnchor: (point: CGPoint, tangent: CGPoint)?
         walkPath(origin: origin,
-                 interval: Self.pacmanPelletInterval,
-                 trimTail: Self.pacmanFaceLag) { p, tangent in
+                 interval: interval,
+                 trimTail: faceLag) { p, tangent in
             faceAnchor = (p, tangent)
         }
 
         // 2) Draw the pellets across the full path (no trim) so the
         // dot trail extends from origin all the way to the cursor.
-        let plot: (CGPoint, CGPoint) -> Void = { p, tangent in
-            let nx = -tangent.y
-            let ny =  tangent.x
-            for i in 0..<thickness {
-                let d = (CGFloat(i) - offsetBase) * rowSpacing
-                let cx = p.x + nx * d
-                let cy = p.y + ny * d
-                if let outlineFill {
-                    outlineFill.setFill()
-                    let outer = NSRect(x: cx - dot / 2 - 1,
-                                       y: cy - dot / 2 - 1,
-                                       width: dot + 2, height: dot + 2)
-                    NSBezierPath(ovalIn: outer).fill()
-                }
-                pelletFill.setFill()
-                let rect = NSRect(x: cx - dot / 2, y: cy - dot / 2,
-                                  width: dot, height: dot)
-                NSBezierPath(ovalIn: rect).fill()
+        // Single line — no thickness stacking.
+        let plot: (CGPoint, CGPoint) -> Void = { p, _ in
+            if let outlineFill {
+                outlineFill.setFill()
+                let outer = NSRect(x: p.x - dot / 2 - outlinePad,
+                                   y: p.y - dot / 2 - outlinePad,
+                                   width: dot + outlinePad * 2,
+                                   height: dot + outlinePad * 2)
+                NSBezierPath(ovalIn: outer).fill()
             }
+            pelletFill.setFill()
+            let rect = NSRect(x: p.x - dot / 2, y: p.y - dot / 2,
+                              width: dot, height: dot)
+            NSBezierPath(ovalIn: rect).fill()
         }
-        walkPath(origin: origin,
-                 interval: Self.pacmanPelletInterval,
-                 step: plot)
+        walkPath(origin: origin, interval: interval, step: plot)
 
         // 3) Draw the face. Path too short for a meaningful lag (just
         // pressed the button) → fall back to the cursor so the face
         // is visible immediately instead of hiding for the first
-        // ~50pt of motion.
+        // stretch of motion.
         if let anchor = faceAnchor {
             drawPacmanFace(at: anchor.point, tangent: anchor.tangent,
+                            radius: faceRadius,
                             color: color, outline: outline)
         } else {
             drawPacmanFace(at: cursor, tangent: CGPoint(x: 1, y: 0),
+                            radius: faceRadius,
                             color: color, outline: outline)
         }
     }
@@ -1255,8 +1252,8 @@ private final class TrailView: NSView {
     /// around (counter-clockwise from `+mouthHalf` to `-mouthHalf`)
     /// so the "closed" portion of the face fills.
     private func drawPacmanFace(at p: CGPoint, tangent: CGPoint,
+                                 radius: CGFloat,
                                  color: NSColor, outline: NSColor?) {
-        let radius = Self.pacmanFaceRadius
         // Cosine remap to [0, 1]: 0 at min mouth, 1 at max mouth.
         let phase = (1 - cos(CACurrentMediaTime() * 2 * .pi
                               * Self.pacmanChompHz)) / 2
@@ -1266,13 +1263,14 @@ private final class TrailView: NSView {
         let dirDeg = atan2(tangent.y, tangent.x) * 180 / .pi
         let startDeg = dirDeg + mouthHalf
         let endDeg = dirDeg - mouthHalf
-        // Optional outer wedge in the outline colour. 1.5pt larger
-        // radius so the rim shows around the main face on every
-        // chomp frame.
+        // Optional outer wedge in the outline colour. Rim width
+        // scales with the face radius so it stays proportionally
+        // visible at any `strokeWidth`.
         if let outline {
             let outer = NSBezierPath()
             outer.move(to: p)
-            outer.appendArc(withCenter: p, radius: radius + 1.5,
+            outer.appendArc(withCenter: p,
+                             radius: radius + max(1.5, radius * 0.15),
                              startAngle: startDeg, endAngle: endDeg,
                              clockwise: false)
             outer.close()

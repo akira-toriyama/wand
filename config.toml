@@ -289,9 +289,14 @@ color-outline = ""
 #   ascii                    — thickness in fixed-size glyphs
 #                              (14pt font; `width = 3` lays down a
 #                              3-glyph-wide band)
+#   pacman                   — scale multiplier on pellet / face
+#                              size + spacing + lag. Single line of
+#                              pellets always; `width = 2` doubles
+#                              the whole arcade aesthetic.
 # So in pixel / ascii, raising `width` adds more small marks across
-# the path rather than scaling each mark up — a denser cluster of
-# small glyphs / cells, not bigger ones.
+# the path rather than scaling each mark up. pacman is different —
+# the arcade look is always one line, so `width` scales sizes
+# instead of stacking rows.
 width = 3
 
 # Trail dash pattern preset. **Shape only — the trail's colour is
@@ -313,9 +318,11 @@ width = 3
 #               track. Style-specific exception: `color` is
 #               overridden by the palette; `color-no-match` still
 #               wins so the failure signal survives.
-#   "pacman"  — small pellets along the path + a Pac-Man wedge at the
-#               cursor whose mouth opens along the current direction.
-#               `width` = rows of pellets across the path.
+#   "pacman"  — small pellets along the path + a Pac-Man wedge that
+#               chases behind the cursor, mouth chomping along the
+#               current direction. Always a single line of pellets
+#               (the arcade look); `width` scales pellet / face size
+#               + spacing.
 style = "normal"
 
 # Draw an arrowhead tip at the cursor in the last-committed direction
