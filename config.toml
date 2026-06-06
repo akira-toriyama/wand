@@ -300,10 +300,13 @@ color-outline = ""
 #                              size + spacing + lag. Single line of
 #                              pellets always; `width = 2` doubles
 #                              the whole arcade aesthetic.
+#   city                     — scale multiplier on building size +
+#                              spacing. `width = 6` doubles the
+#                              skyline rather than stacking rows.
 # So in pixel / ascii, raising `width` adds more small marks across
-# the path rather than scaling each mark up. pacman is different —
-# the arcade look is always one line, so `width` scales sizes
-# instead of stacking rows.
+# the path rather than scaling each mark up. pacman / city are
+# different — they're always a single silhouette line, so `width`
+# scales sizes instead of stacking rows.
 width = 3
 
 # Trail dash pattern preset. **Shape only — the trail's colour is
@@ -335,6 +338,12 @@ width = 3
 #               tangent so the direction reads at every point — not
 #               just at the cursor tip. Replaces the retired
 #               `arrowhead = true` knob.
+#   "city"    — skyline: each path point spawns a building (filled
+#               rect rising toward screen-up) with a randomised
+#               height + roof variant (flat / antenna / pitched).
+#               Path = the ground line. `width` scales the whole
+#               skyline (building size + spacing), not the count
+#               per unit length.
 style = "normal"
 
 # How long (ms) the trail lingers after a gesture fires. The

@@ -274,6 +274,14 @@ public enum TrailStyle: String, Sendable, Hashable, CaseIterable {
     /// the arrowhead-on-cursor look in mind needs to switch to
     /// `arrow` explicitly.
     case arrow
+    /// City skyline: a row of buildings rises from the path, each
+    /// with a deterministic randomised height + roof variant
+    /// (flat / antenna / pitched). Buildings grow toward screen
+    /// `+y` so the path reads as the ground line. Colour flows
+    /// from the trail colour like the other styles, so the
+    /// match-vs-no-match signal stays legible. `width` is
+    /// re-purposed as the per-building scale multiplier.
+    case city
 }
 
 /// The window the stroke acts on. Resolved at *button-down* time —
