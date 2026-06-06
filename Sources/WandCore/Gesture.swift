@@ -63,6 +63,17 @@ public struct GestureOverlayTrailSpec: Sendable, Equatable {
     public let color: String
     /// While the in-progress shape can no longer reach any rule.
     public let colorNoMatch: String
+    /// Outline / underlay colour drawn behind / around the trail
+    /// so the main `color` reads against backgrounds that would
+    /// otherwise swallow it (e.g. `color = "black"` on a dark
+    /// app). Empty = no outline (historical behaviour). Same
+    /// grammar as `color`: named / hex / dynamic tokens
+    /// (`rainbow` / `neon` / `splatoon`). The exact rendering is
+    /// style-specific — bezier styles get a wider underlay stroke,
+    /// pixel / rainbow-road get a 1pt frame inset into each cell,
+    /// ascii gets a glyph stroke, pacman pellets / face get a
+    /// concentric outer ring.
+    public let colorOutline: String
     /// Stroke width in points. Clamped 1..40. Style presets may
     /// adjust this — `thin` halves, `thick` doubles, etc.
     public let width: Int
@@ -95,6 +106,7 @@ public struct GestureOverlayTrailSpec: Sendable, Equatable {
 
     public init(color: String = "#3b82f6",
                 colorNoMatch: String = "#ef4444",
+                colorOutline: String = "",
                 width: Int = 3,
                 style: TrailStyle = .normal,
                 arrowhead: Bool = true,
@@ -103,6 +115,7 @@ public struct GestureOverlayTrailSpec: Sendable, Equatable {
                 straightenOnTurn: Bool = false) {
         self.color = color
         self.colorNoMatch = colorNoMatch
+        self.colorOutline = colorOutline
         self.width = width
         self.style = style
         self.arrowhead = arrowhead

@@ -167,9 +167,11 @@ public struct WandConfig: Sendable {
         let trailFinalHoldMs = clampInt(tr, key: "final-hold-ms",
                                         default: 400, lo: 0, hi: 2000)
         let trailStraightenOnTurn = tr.bool("straighten-on-turn", false)
+        let trailColorOutline = tr.string("color-outline")
         let trail = GestureOverlayTrailSpec(
             color: trailColor,
             colorNoMatch: trailColorNoMatch,
+            colorOutline: trailColorOutline,
             width: trailWidth,
             style: trailStyle,
             arrowhead: trailArrowhead,

@@ -219,6 +219,18 @@ blur-enabled = true
 color = "#3b82f6"
 color-no-match = "#ef4444"
 
+# Outline / underlay colour drawn behind or around the trail so the
+# main `color` reads against backgrounds that would otherwise
+# swallow it (e.g. `color = "black"` on a dark editor). Empty = no
+# outline. Same grammar as `color` (named / hex / `rainbow` /
+# `neon` / `splatoon`). Style-specific rendering:
+#   normal/dashed/dotted — wider underlay stroke beneath the trail
+#   pixel / rainbow-road — 1pt outline-colour frame inset into each
+#                          cell (every dot looks framed)
+#   ascii                — outlined glyphs (filled + stroked)
+#   pacman               — concentric outer ring on pellets + face
+color-outline = ""
+
 # Trail width. Clamped 1..40. Meaning depends on `style`:
 #   normal / dashed / dotted — stroke width in points
 #   pixel                    — thickness in fixed-size cells

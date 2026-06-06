@@ -107,6 +107,10 @@ public final class GestureOverlay {
             ov.trail.color, fallback: .systemBlue)
         view.noMatchMode = TrailColorMode.parse(
             ov.trail.colorNoMatch, fallback: .systemRed)
+        view.outlineMode = ov.trail.colorOutline.isEmpty
+            ? nil
+            : TrailColorMode.parse(ov.trail.colorOutline,
+                                    fallback: .black)
         view.colorCyclePeriod = TimeInterval(ov.trail.colorCycleMs) / 1000.0
         view.strokeWidth = CGFloat(ov.trail.width)
         view.trailStyle = ov.trail.style
@@ -167,6 +171,11 @@ private final class TrailView: NSView {
     /// (`rainbow`, `neon`, `splatoon`) drive dynamic resolution at
     /// `draw(_:)` time. Set live from `[cast.overlay.trail].color`.
     var matchMode: TrailColorMode = .static(.systemBlue)
+    /// Optional outline / underlay colour mode. `nil` = no outline
+    /// (historical behaviour); set live from
+    /// `[cast.overlay.trail].color-outline`. Each style renders the
+    /// outline differently — see `outlineColor(for:)`.
+    var outlineMode: TrailColorMode? = nil
     /// Same as `matchMode`, but for the no-match side
     /// (`[cast.overlay.trail].color-no-match`).
     var noMatchMode: TrailColorMode = .static(.systemRed)
@@ -638,6 +647,10 @@ private final class TrailView: NSView {
         let color = mode.currentColor(at: CACurrentMediaTime(),
                                        strokeSeed: strokeSeed,
                                        cyclePeriod: colorCyclePeriod)
+        let outlineColor: NSColor? = outlineMode?.currentColor(
+            at: CACurrentMediaTime(),
+            strokeSeed: strokeSeed,
+            cyclePeriod: colorCyclePeriod)
 
         // While holding the post-fire snapped polyline, fade the trail
         // out over the last third of the hold so it doesn't pop off.
@@ -665,16 +678,20 @@ private final class TrailView: NSView {
         // modes cover their use cases without a separate axis.
         switch trailStyle {
         case .normal, .dashed, .dotted:
-            drawSinglePath(origin: origin, cursor: cursor, color: color)
+            drawSinglePath(origin: origin, cursor: cursor,
+                            color: color, outline: outlineColor)
         case .pixel:
-            drawPixelPath(origin: origin, cursor: cursor, color: color)
+            drawPixelPath(origin: origin, cursor: cursor,
+                           color: color, outline: outlineColor)
         case .ascii:
-            drawAsciiPath(origin: origin, cursor: cursor, color: color)
+            drawAsciiPath(origin: origin, cursor: cursor,
+                           color: color, outline: outlineColor)
         case .rainbowRoad:
             drawRainbowRoadPath(origin: origin, cursor: cursor,
-                                 color: color)
+                                 color: color, outline: outlineColor)
         case .pacman:
-            drawPacmanPath(origin: origin, cursor: cursor, color: color)
+            drawPacmanPath(origin: origin, cursor: cursor,
+                            color: color, outline: outlineColor)
         }
 
         // Arrowhead at the raw cursor in the last-committed direction.
@@ -752,13 +769,28 @@ private final class TrailView: NSView {
 
     /// Render a single-color trail. `normal` / `thin` / `thick` / `glow`
     /// / `dashed` / `dotted` all funnel through here — they only differ
-    /// in lineWidth, glow radius, and dash pattern.
+    /// in lineWidth, glow radius, and dash pattern. When `outline` is
+    /// set, the same path is stroked first with a wider line in the
+    /// outline colour so the main stroke reads against backgrounds
+    /// that would otherwise swallow it.
     private func drawSinglePath(origin: CGPoint, cursor: CGPoint,
-                                 color: NSColor) {
+                                 color: NSColor, outline: NSColor?) {
         let p = styleParams(base: strokeWidth)
         let path = buildHybridPath(origin: origin, lineWidth: p.width)
         if !p.lineDash.isEmpty {
             path.setLineDash(p.lineDash, count: p.lineDash.count, phase: 0)
+        }
+        if let outline {
+            // 2pt total extra (1pt each side) — visible without
+            // dominating the trail.
+            let underlay = buildHybridPath(origin: origin,
+                                            lineWidth: p.width + 2)
+            if !p.lineDash.isEmpty {
+                underlay.setLineDash(p.lineDash,
+                                      count: p.lineDash.count, phase: 0)
+            }
+            outline.withAlphaComponent(0.9).setStroke()
+            underlay.stroke()
         }
         let glow = NSShadow()
         glow.shadowColor = color.withAlphaComponent(0.5)
@@ -907,12 +939,13 @@ private final class TrailView: NSView {
     /// path. Colour comes from the resolved trail colour. Cells are
     /// de-duplicated via a Set so overlapping stripes never overdraw.
     private func drawPixelPath(origin: CGPoint, cursor: CGPoint,
-                                color: NSColor) {
+                                color: NSColor, outline: NSColor?) {
         let cell = Self.pixelCellSize
         let thickness = max(1, Int(strokeWidth.rounded()))
         let offsetBase = CGFloat(thickness - 1) / 2
         var seen = Set<UInt64>()
-        color.withAlphaComponent(0.95).setFill()
+        let fill = color.withAlphaComponent(0.95)
+        let outlineFill = outline?.withAlphaComponent(0.95)
         let plot: (CGPoint, CGPoint) -> Void = { p, tangent in
             // Normal to the path: rotate tangent 90°.
             let nx = -tangent.y
@@ -930,7 +963,20 @@ private final class TrailView: NSView {
                 let rect = NSRect(x: CGFloat(gx) * cell,
                                   y: CGFloat(gy) * cell,
                                   width: cell, height: cell)
-                NSBezierPath(rect: rect).fill()
+                // Outline = full-cell outline-colour fill, then a
+                // 1pt-inset main-colour fill on top. Adjacent cells
+                // don't overdraw each other because both rects are
+                // contained within the cell's own grid square.
+                if let outlineFill {
+                    outlineFill.setFill()
+                    NSBezierPath(rect: rect).fill()
+                    fill.setFill()
+                    NSBezierPath(rect: rect.insetBy(dx: 1, dy: 1))
+                        .fill()
+                } else {
+                    fill.setFill()
+                    NSBezierPath(rect: rect).fill()
+                }
             }
         }
         // Sample slightly finer than the cell so diagonal segments
@@ -977,14 +1023,22 @@ private final class TrailView: NSView {
     /// re-purposed as **thickness in glyphs**: a `width = 3` trail
     /// lays down a 3-glyph-wide band perpendicular to the path.
     private func drawAsciiPath(origin: CGPoint, cursor: CGPoint,
-                                color: NSColor) {
+                                color: NSColor, outline: NSColor?) {
         let fontSize = Self.asciiFontSize
         let font = NSFont.monospacedSystemFont(ofSize: fontSize,
                                                 weight: .bold)
-        let attrs: [NSAttributedString.Key: Any] = [
+        // Negative `.strokeWidth` with `.strokeColor` makes Cocoa
+        // paint each glyph as filled-with-outline (positive would
+        // be outline only). 4 ≈ 0.4pt outline at this font size —
+        // visible without losing glyph readability.
+        var attrs: [NSAttributedString.Key: Any] = [
             .font: font,
             .foregroundColor: color.withAlphaComponent(0.95),
         ]
+        if let outline {
+            attrs[.strokeColor] = outline.withAlphaComponent(0.95)
+            attrs[.strokeWidth] = -4.0
+        }
         // Pre-build one NSAttributedString per palette entry — cheap
         // cache (~10 small strings) so the per-step draw doesn't
         // re-allocate.
@@ -1045,17 +1099,19 @@ private final class TrailView: NSView {
     /// switches to `color` (= the resolved no-match colour) so the
     /// failure signal still reads even with the bespoke palette.
     private func drawRainbowRoadPath(origin: CGPoint, cursor: CGPoint,
-                                      color: NSColor) {
+                                      color: NSColor,
+                                      outline: NSColor?) {
         let cell = Self.pixelCellSize
         let thickness = max(1, Int(strokeWidth.rounded()))
         let offsetBase = CGFloat(thickness - 1) / 2
         var seen = Set<UInt64>()
         // Cell counter drives both the dedup key and the colour
         // rotation. Bumped per *placed* cell (not per attempted) so
-        // a tetromino's 4 cells stay the same colour even when some
-        // would-be cells are skipped by dedup.
+        // a track segment's 4 cells stay the same colour even when
+        // some would-be cells are skipped by dedup.
         var cellIndex = 0
         let useFallback = !valid
+        let outlineFill = outline?.withAlphaComponent(0.95)
         let plot: (CGPoint, CGPoint) -> Void = { p, tangent in
             let nx = -tangent.y
             let ny =  tangent.x
@@ -1077,11 +1133,19 @@ private final class TrailView: NSView {
                     fill = Self.rainbowRoadColors[pick]
                 }
                 cellIndex += 1
-                fill.withAlphaComponent(0.95).setFill()
                 let rect = NSRect(x: CGFloat(gx) * cell,
                                   y: CGFloat(gy) * cell,
                                   width: cell, height: cell)
-                NSBezierPath(rect: rect).fill()
+                if let outlineFill {
+                    outlineFill.setFill()
+                    NSBezierPath(rect: rect).fill()
+                    fill.withAlphaComponent(0.95).setFill()
+                    NSBezierPath(rect: rect.insetBy(dx: 1, dy: 1))
+                        .fill()
+                } else {
+                    fill.withAlphaComponent(0.95).setFill()
+                    NSBezierPath(rect: rect).fill()
+                }
             }
         }
         walkPath(origin: origin, interval: cell * 0.5, step: plot)
@@ -1120,11 +1184,13 @@ private final class TrailView: NSView {
     /// `width = 1` lays down a single line of pellets (the classic
     /// look), higher values stack rows.
     private func drawPacmanPath(origin: CGPoint, cursor: CGPoint,
-                                 color: NSColor) {
+                                 color: NSColor, outline: NSColor?) {
         let dot = Self.pacmanPelletDiameter
         let thickness = max(1, Int(strokeWidth.rounded()))
         let offsetBase = CGFloat(thickness - 1) / 2
         let rowSpacing = dot + 4
+        let pelletFill = color.withAlphaComponent(0.9)
+        let outlineFill = outline?.withAlphaComponent(0.9)
 
         // 1) Locate where Pac-Man's face sits this frame: walk the
         // path with the lag as `trimTail` — the final step the walker
@@ -1139,7 +1205,6 @@ private final class TrailView: NSView {
 
         // 2) Draw the pellets across the full path (no trim) so the
         // dot trail extends from origin all the way to the cursor.
-        color.withAlphaComponent(0.9).setFill()
         let plot: (CGPoint, CGPoint) -> Void = { p, tangent in
             let nx = -tangent.y
             let ny =  tangent.x
@@ -1147,6 +1212,14 @@ private final class TrailView: NSView {
                 let d = (CGFloat(i) - offsetBase) * rowSpacing
                 let cx = p.x + nx * d
                 let cy = p.y + ny * d
+                if let outlineFill {
+                    outlineFill.setFill()
+                    let outer = NSRect(x: cx - dot / 2 - 1,
+                                       y: cy - dot / 2 - 1,
+                                       width: dot + 2, height: dot + 2)
+                    NSBezierPath(ovalIn: outer).fill()
+                }
+                pelletFill.setFill()
                 let rect = NSRect(x: cx - dot / 2, y: cy - dot / 2,
                                   width: dot, height: dot)
                 NSBezierPath(ovalIn: rect).fill()
@@ -1159,13 +1232,13 @@ private final class TrailView: NSView {
         // 3) Draw the face. Path too short for a meaningful lag (just
         // pressed the button) → fall back to the cursor so the face
         // is visible immediately instead of hiding for the first
-        // ~28pt of motion.
+        // ~50pt of motion.
         if let anchor = faceAnchor {
             drawPacmanFace(at: anchor.point, tangent: anchor.tangent,
-                            color: color)
+                            color: color, outline: outline)
         } else {
             drawPacmanFace(at: cursor, tangent: CGPoint(x: 1, y: 0),
-                            color: color)
+                            color: color, outline: outline)
         }
     }
 
@@ -1178,7 +1251,7 @@ private final class TrailView: NSView {
     /// around (counter-clockwise from `+mouthHalf` to `-mouthHalf`)
     /// so the "closed" portion of the face fills.
     private func drawPacmanFace(at p: CGPoint, tangent: CGPoint,
-                                 color: NSColor) {
+                                 color: NSColor, outline: NSColor?) {
         let radius = Self.pacmanFaceRadius
         // Cosine remap to [0, 1]: 0 at min mouth, 1 at max mouth.
         let phase = (1 - cos(CACurrentMediaTime() * 2 * .pi
@@ -1189,6 +1262,19 @@ private final class TrailView: NSView {
         let dirDeg = atan2(tangent.y, tangent.x) * 180 / .pi
         let startDeg = dirDeg + mouthHalf
         let endDeg = dirDeg - mouthHalf
+        // Optional outer wedge in the outline colour. 1.5pt larger
+        // radius so the rim shows around the main face on every
+        // chomp frame.
+        if let outline {
+            let outer = NSBezierPath()
+            outer.move(to: p)
+            outer.appendArc(withCenter: p, radius: radius + 1.5,
+                             startAngle: startDeg, endAngle: endDeg,
+                             clockwise: false)
+            outer.close()
+            outline.withAlphaComponent(0.95).setFill()
+            outer.fill()
+        }
         let path = NSBezierPath()
         path.move(to: p)
         path.appendArc(withCenter: p, radius: radius,
