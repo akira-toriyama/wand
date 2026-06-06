@@ -29,16 +29,28 @@ public struct CastThemePalette: Sendable, Equatable {
     public let cardsBorderColor: String
     public let cardsBodyColor: String
     public let cardsTextColor: String
+    /// Decal ink colour. Empty = inherit `trail.color` (current
+    /// default) — themes that want a differentiated decal can
+    /// override (e.g. `splatoon` uses `"splatoon"` for the
+    /// multi-team-ink feel even when trail picks one team).
+    public let decalColor: String
+    /// Burst particle colour. Empty = inherit `trail.color`. Same
+    /// override grammar as `decalColor`.
+    public let burstColor: String
     public init(trailColor: String, trailColorNoMatch: String,
                 trailColorOutline: String,
                 cardsBorderColor: String, cardsBodyColor: String,
-                cardsTextColor: String) {
+                cardsTextColor: String,
+                decalColor: String = "",
+                burstColor: String = "") {
         self.trailColor = trailColor
         self.trailColorNoMatch = trailColorNoMatch
         self.trailColorOutline = trailColorOutline
         self.cardsBorderColor = cardsBorderColor
         self.cardsBodyColor = cardsBodyColor
         self.cardsTextColor = cardsTextColor
+        self.decalColor = decalColor
+        self.burstColor = burstColor
     }
 }
 
@@ -90,7 +102,12 @@ public enum CastTheme: String, Sendable, CaseIterable {
                 trailColorOutline: "#ffffff",
                 cardsBorderColor: "splatoon",
                 cardsBodyColor: "#1a1a1a",
-                cardsTextColor: "#ffffff")
+                cardsTextColor: "#ffffff",
+                // Decal goes full multi-team palette per fire — the
+                // identifying feel of the theme. Burst inherits trail
+                // (one team's colour per stroke, matching the line).
+                decalColor: "splatoon",
+                burstColor: "")
         case .rainbow:
             return CastThemePalette(
                 trailColor: "rainbow",
@@ -354,9 +371,19 @@ public struct GestureOverlaySpec: Sendable, Equatable {
 /// false`.
 public struct GestureFireBurstSpec: Sendable, Equatable {
     public let kind: TrailEndKind
+    /// Burst particle colour. Same three-mode grammar as
+    /// `[cast.fire.decal].color`:
+    ///   `""` / `"trail"`  — inherit `[cast.overlay.trail].color`
+    ///                       (the historical default — burst reads
+    ///                       as tied to the trail accent).
+    ///   `"splatoon"`     — pick a random hue from the Splatoon ink
+    ///                       palette at each fire (Turf War feel).
+    ///   `<hex / name>`   — any value `trail.color` accepts.
+    public let color: String
 
-    public init(kind: TrailEndKind = .off) {
+    public init(kind: TrailEndKind = .off, color: String = "") {
         self.kind = kind
+        self.color = color
     }
 
     public static let `default` = GestureFireBurstSpec()

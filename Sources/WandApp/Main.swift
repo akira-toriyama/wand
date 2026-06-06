@@ -449,9 +449,25 @@ enum WandApp {
                         size: CGFloat(decalSpec.size))
                 }
                 if cfg.fire.burst.kind == .burst {
+                    // Resolve burst colour with the same three-mode
+                    // grammar as decal: `""` / `"trail"` inherits the
+                    // trail accent, `"splatoon"` picks a random ink,
+                    // anything else parses as static colour.
+                    let burstSpec = cfg.fire.burst
+                    let burstColor: NSColor
+                    switch burstSpec.color.trimmingCharacters(
+                        in: .whitespaces).lowercased() {
+                    case "", "trail":
+                        burstColor = color
+                    case "splatoon":
+                        burstColor = NSColorParse.randomSplatoonInk()
+                    default:
+                        burstColor = NSColorParse.nsColor(
+                            burstSpec.color) ?? color
+                    }
                     burstManager.emit(
-                        at: cocoaPoint, color: color,
-                        kind: cfg.fire.burst.kind,
+                        at: cocoaPoint, color: burstColor,
+                        kind: burstSpec.kind,
                         intensity: cfg.intensity.multiplier)
                 }
             }

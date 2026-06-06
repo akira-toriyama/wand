@@ -240,7 +240,10 @@ public struct WandConfig: Sendable {
         let bu = doc.tables["cast.fire.burst"] ?? [:]
         let burstKind: TrailEndKind = parseEnum(
             bu, key: "kind", section: "cast.fire.burst", default: .off)
-        let burst = GestureFireBurstSpec(kind: burstKind)
+        let burstColor = { let c = bu.string("color")
+            return c.isEmpty ? palette.burstColor : c }()
+        let burst = GestureFireBurstSpec(kind: burstKind,
+                                          color: burstColor)
 
         // [cast.fire.decal]
         let de = doc.tables["cast.fire.decal"] ?? [:]
@@ -251,7 +254,8 @@ public struct WandConfig: Sendable {
             default: 3000, lo: 0, hi: 10000)
         let decalSize = clampInt(
             de, key: "size", default: 60, lo: 10, hi: 500)
-        let decalColor = de.string("color")
+        let decalColor = { let c = de.string("color")
+            return c.isEmpty ? palette.decalColor : c }()
         let decal = GestureFireDecalSpec(
             kind: decalKind,
             durationMs: decalDurationMs,
