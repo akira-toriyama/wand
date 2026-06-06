@@ -412,21 +412,29 @@ enum WandApp {
                     // Resolve the decal colour from its own knob,
                     // falling back to the trail colour when unset.
                     // `"splatoon"` re-rolls the hue per-fire from the
-                    // built-in palette (the deliberate Turf War feel
-                    // — each fire is a different team's ink).
+                    // built-in palette AND passes the full palette
+                    // through so each splat unit inside the decal can
+                    // pick its own colour (Splatoon "multi-shot": two
+                    // splats in one decal can land different team
+                    // colours).
                     let decalColor: NSColor
+                    let decalPalette: [NSColor]
                     switch decalSpec.color.trimmingCharacters(
                         in: .whitespaces).lowercased() {
                     case "", "trail":
                         decalColor = color
+                        decalPalette = []
                     case "splatoon":
                         decalColor = NSColorParse.randomSplatoonInk()
+                        decalPalette = NSColorParse.splatoonInks
                     default:
                         decalColor = NSColorParse.nsColor(decalSpec.color)
                             ?? color
+                        decalPalette = []
                     }
                     decalManager.emit(
                         at: cocoaPoint, color: decalColor,
+                        palette: decalPalette,
                         kind: decalSpec.kind,
                         durationSec: TimeInterval(decalSpec.durationMs)
                             / 1000.0,

@@ -37,9 +37,14 @@ public final class DecalManager {
     /// `color` (the gesture's accent — typically the overlay match
     /// color), `kind` (which shape to draw), `durationSec` (total
     /// time-to-live including fade), and `size` (decal footprint in
-    /// points). No-op for `.off`, zero duration, or non-positive size.
+    /// points). When `palette` is non-empty, each splat unit inside
+    /// the decal picks its own colour from the palette — so a single
+    /// decal can end up with 2-3 differently-coloured splats, the
+    /// Splatoon "multi-shot" feel. Empty palette = every unit uses
+    /// `color`. No-op for `.off`, zero duration, or non-positive size.
     public func emit(at point: CGPoint,
                       color: NSColor,
+                      palette: [NSColor] = [],
                       kind: DecalKind,
                       durationSec: TimeInterval,
                       size: CGFloat) {
@@ -76,7 +81,8 @@ public final class DecalManager {
         win.collectionBehavior = [.canJoinAllSpaces, .stationary,
                                   .fullScreenAuxiliary, .ignoresCycle]
 
-        let view = DecalView(kind: kind, color: color, margin: margin)
+        let view = DecalView(kind: kind, color: color,
+                              palette: palette, margin: margin)
         win.contentView = view
         win.orderFrontRegardless()
         live.append(win)
@@ -116,19 +122,27 @@ private final class DecalView: NSView {
 
     private let kind: DecalKind
     private let color: NSColor
+    /// Optional palette for per-unit colour variation. When non-empty,
+    /// each splat unit inside the decal picks its own colour from
+    /// here — used by `"splatoon"` mode so a single decal can stack
+    /// 2-3 differently-coloured splats. Empty = every unit uses
+    /// `color`.
+    private let palette: [NSColor]
     /// Pixel margin between the drawable square (the original `size`)
     /// and the view's bounds — gives the splatter geometry a few px
     /// of slack so anti-aliased edges aren't clipped.
     private let margin: CGFloat
     /// Frozen RNG seed per decal so the splatter shape doesn't
     /// re-roll on every `needsDisplay`. Used by `drawInkSplatter` for
-    /// main blob jitter + satellite offsets so successive draws of
-    /// the same window stay visually consistent.
+    /// unit placement + tendril jitter + colour picks so successive
+    /// draws of the same window stay visually consistent.
     private let seed: UInt64
 
-    init(kind: DecalKind, color: NSColor, margin: CGFloat) {
+    init(kind: DecalKind, color: NSColor,
+         palette: [NSColor], margin: CGFloat) {
         self.kind = kind
         self.color = color
+        self.palette = palette
         self.margin = margin
         self.seed = UInt64.random(in: 0..<UInt64.max)
         super.init(frame: .zero)
@@ -152,121 +166,154 @@ private final class DecalView: NSView {
         }
     }
 
-    /// Splatoon-style splatter, four layers stacked centre-out. The
-    /// composition is deliberately scattered — 3-5 **primary** blobs
-    /// of varying size + position fill the splat region instead of
-    /// one big centred blob, mirroring how an in-game ink shot
-    /// scatters across multiple impact points. Smaller satellites
-    /// and droplet specks fill the gaps and the outer fringe.
+    /// Splatoon-style splat composition: 2-3 independent **splat
+    /// units** stacked at random offsets, each a complete classic
+    /// "ink splat" silhouette in the SVG sense (round body with
+    /// radial tendril spikes + small detached droplet specks). The
+    /// lead unit sits near the centre and is the largest; the 1-2
+    /// additional units orbit at random angles and are smaller.
     ///
-    ///   0. ink rings   — one darkened underlayer per primary blob,
-    ///                    so each primary reads as a "wet ink puddle
-    ///                    with a darker pooled edge" rather than a
-    ///                    flat sticker.
-    ///   1. primaries   — 3-5 mid/large irregular polygons. The first
-    ///                    one sits near (but not exactly at) the
-    ///                    splat centre and is slightly larger so it
-    ///                    reads as the lead splat; the rest orbit at
-    ///                    random angles with random size + jitter.
-    ///   2. satellites  — 5-9 smaller blobs filling gaps between
-    ///                    primaries and out to the perimeter.
-    ///   3. specks      — 10-17 tiny droplets in the outer fringe,
-    ///                    the "wet ink, droplets fly outward" polish.
+    /// Each unit independently composes:
+    ///   - ink ring underlayer (darkened rim, "wet ink puddle" cue)
+    ///   - tendril body (round-ish blob with radial spike extensions
+    ///     via `tendrilBlobPath`'s 3-tier radius distribution)
+    ///   - 3-6 detached droplet specks immediately around it
     ///
-    /// All distances are bounded so the splatter stays inside the
-    /// configured `size` footprint rather than clipping against the
-    /// view bounds. The frozen per-decal seed governs every layer so
-    /// the shape doesn't re-roll on each `needsDisplay`.
+    /// When `palette` is non-empty each unit picks its own colour
+    /// from it (Splatoon "multi-shot" feel — two splats from the
+    /// same fire can land different team colours). Empty palette =
+    /// every unit uses `color`.
+    ///
+    /// The frozen per-decal seed governs every roll (unit count,
+    /// positions, sizes, tendril radii, speck offsets, colour picks)
+    /// so a window's shape doesn't re-shuffle on `needsDisplay`.
     private func drawInkSplatter(in rect: CGRect, rng: inout SplitMix64) {
-        let centre = CGPoint(x: rect.midX, y: rect.midY)
-        let baseR = rect.width * 0.30
+        let viewCentre = CGPoint(x: rect.midX, y: rect.midY)
+        let unitCount = 2 + Int(rng.next() % 2)   // 2..3
 
-        // Pre-compute the primary blob positions so the ink-ring pass
-        // (Layer 0) and the primary fill pass (Layer 1) agree on where
-        // each puddle sits — we want the ring painted UNDER each
-        // primary, not in a separate pre-computed grid.
-        struct Primary {
-            let centre: CGPoint
-            let radius: CGFloat
-            let jitter: CGFloat
-            let points: Int
-        }
-        var primaries: [Primary] = []
+        for i in 0..<unitCount {
+            // Position + size per unit.
+            let unitCentre: CGPoint
+            let unitR: CGFloat
+            if i == 0 {
+                // Lead unit — near (not exactly at) centre, largest.
+                let dx = (CGFloat(rng.nextUnit()) - 0.5)
+                    * rect.width * 0.12
+                let dy = (CGFloat(rng.nextUnit()) - 0.5)
+                    * rect.width * 0.12
+                unitCentre = CGPoint(x: viewCentre.x + dx,
+                                      y: viewCentre.y + dy)
+                unitR = rect.width
+                    * (0.15 + CGFloat(rng.nextUnit()) * 0.05)
+            } else {
+                // Orbit unit — random angle, smaller.
+                let angle = CGFloat(rng.nextUnit()) * .pi * 2
+                let dist = rect.width
+                    * (0.18 + CGFloat(rng.nextUnit()) * 0.10)
+                unitCentre = CGPoint(
+                    x: viewCentre.x + cos(angle) * dist,
+                    y: viewCentre.y + sin(angle) * dist)
+                unitR = rect.width
+                    * (0.07 + CGFloat(rng.nextUnit()) * 0.06)
+            }
 
-        // Lead primary — near (not exactly at) centre, slightly bigger
-        // than the orbiters so it still reads as the impact focus.
-        do {
-            let r = baseR * (0.55 + CGFloat(rng.nextUnit()) * 0.20)
-            let dx = (CGFloat(rng.nextUnit()) - 0.5) * baseR * 0.30
-            let dy = (CGFloat(rng.nextUnit()) - 0.5) * baseR * 0.30
-            primaries.append(Primary(
-                centre: CGPoint(x: centre.x + dx, y: centre.y + dy),
-                radius: r, jitter: 0.42, points: 20))
-        }
+            // Per-unit colour: from palette if set, else fixed.
+            let unitColor: NSColor
+            if !palette.isEmpty {
+                let idx = Int(rng.next() % UInt64(palette.count))
+                unitColor = palette[idx]
+            } else {
+                unitColor = color
+            }
 
-        // 2..4 additional primaries orbiting the centre.
-        let extras = 2 + Int(rng.next() % 3)
-        for _ in 0..<extras {
-            let angle = CGFloat(rng.nextUnit()) * .pi * 2
-            let dist = baseR * (0.40 + CGFloat(rng.nextUnit()) * 0.45)
-            let r = baseR * (0.20 + CGFloat(rng.nextUnit()) * 0.25)
-            let jitter: CGFloat = 0.42 + CGFloat(rng.nextUnit()) * 0.08
-            let pts = 16 + Int(rng.next() % 6)
-            primaries.append(Primary(
-                centre: CGPoint(x: centre.x + cos(angle) * dist,
-                                 y: centre.y + sin(angle) * dist),
-                radius: r, jitter: jitter, points: pts))
-        }
+            // Layer 0 — ink ring underlayer (darker rim).
+            let ring = NSColor.black
+                .blended(withFraction: 0.45, of: unitColor)?
+                .withAlphaComponent(0.78) ?? unitColor
+            ring.setFill()
+            tendrilBlobPath(at: unitCentre,
+                             baseRadius: unitR * 1.08,
+                             rng: &rng).fill()
 
-        // Layer 0 — ink rings under each primary (darker rim).
-        // `blended(withFraction:of:)` mixes 45% black into the team
-        // colour for the "pooled wet edge" shade.
-        let ring = NSColor.black.blended(withFraction: 0.45, of: color)?
-            .withAlphaComponent(0.78) ?? color
-        ring.setFill()
-        for p in primaries {
-            irregularBlobPath(at: p.centre,
-                               baseRadius: p.radius * 1.10,
-                               jitter: p.jitter * 0.85,
-                               points: p.points + 2,
-                               rng: &rng).fill()
-        }
+            // Layer 1 — main body with tendrils.
+            unitColor.withAlphaComponent(0.96).setFill()
+            tendrilBlobPath(at: unitCentre,
+                             baseRadius: unitR,
+                             rng: &rng).fill()
 
-        // Layer 1 — primary blobs.
-        color.withAlphaComponent(0.95).setFill()
-        for p in primaries {
-            irregularBlobPath(at: p.centre,
-                               baseRadius: p.radius,
-                               jitter: p.jitter,
-                               points: p.points,
-                               rng: &rng).fill()
+            // Layer 2 — 3..6 detached droplet specks near this unit.
+            let speckCount = 3 + Int(rng.next() % 4)
+            unitColor.withAlphaComponent(0.88).setFill()
+            for _ in 0..<speckCount {
+                let angle = CGFloat(rng.nextUnit()) * .pi * 2
+                let dist = unitR
+                    * (1.4 + CGFloat(rng.nextUnit()) * 0.8)
+                let dr = unitR
+                    * (0.04 + CGFloat(rng.nextUnit()) * 0.10)
+                let c = CGPoint(
+                    x: unitCentre.x + cos(angle) * dist,
+                    y: unitCentre.y + sin(angle) * dist)
+                irregularBlobPath(at: c, baseRadius: dr,
+                                   jitter: 0.4, points: 8,
+                                   rng: &rng).fill()
+            }
         }
+    }
 
-        // Layer 2 — mid-tier satellites filling gaps (5..9).
-        let satelliteCount = 5 + Int(rng.next() % 5)
-        color.withAlphaComponent(0.88).setFill()
-        for _ in 0..<satelliteCount {
-            let angle = CGFloat(rng.nextUnit()) * .pi * 2
-            let dist = baseR * (0.55 + CGFloat(rng.nextUnit()) * 0.80)
-            let r = baseR * (0.08 + CGFloat(rng.nextUnit()) * 0.16)
-            let c = CGPoint(x: centre.x + cos(angle) * dist,
-                             y: centre.y + sin(angle) * dist)
-            irregularBlobPath(at: c, baseRadius: r,
-                               jitter: 0.45, points: 12, rng: &rng).fill()
+    /// SVG-style classic ink-splat path: round-ish body with radial
+    /// tendril spikes. 22-29 vertices placed at uniform angle steps;
+    /// each vertex's radius rolls into one of three tiers:
+    ///
+    ///   - body   (60% prob): 0.70-1.05× baseR — keeps the blob
+    ///            silhouette close to a jittered circle.
+    ///   - medium (30% prob): 1.20-1.55× baseR — short tendril.
+    ///   - long   (10% prob): 1.80-2.30× baseR — full tendril spike.
+    ///
+    /// Vertices are then connected via Catmull-Rom-to-bezier curves
+    /// (standard 1/6 tension) so the long-tendril vertices read as
+    /// rounded teardrop spikes rather than triangular notches. The
+    /// random tier roll per vertex avoids any regular pattern — the
+    /// tendrils land at unpredictable angles and lengths, mirroring
+    /// the irregular SVG ink-splat shapes.
+    private func tendrilBlobPath(at centre: CGPoint,
+                                  baseRadius r: CGFloat,
+                                  rng: inout SplitMix64) -> NSBezierPath {
+        let vertCount = 22 + Int(rng.next() % 8)
+        var verts: [CGPoint] = []
+        verts.reserveCapacity(vertCount)
+        for i in 0..<vertCount {
+            let angle = CGFloat(i) * (.pi * 2 / CGFloat(vertCount))
+            let roll = CGFloat(rng.nextUnit())
+            let mult: CGFloat
+            if roll < 0.10 {
+                mult = 1.80 + CGFloat(rng.nextUnit()) * 0.50
+            } else if roll < 0.40 {
+                mult = 1.20 + CGFloat(rng.nextUnit()) * 0.35
+            } else {
+                mult = 0.70 + CGFloat(rng.nextUnit()) * 0.35
+            }
+            let radius = r * mult
+            verts.append(CGPoint(x: centre.x + cos(angle) * radius,
+                                  y: centre.y + sin(angle) * radius))
         }
-
-        // Layer 3 — droplet specks (10..17).
-        let speckCount = 10 + Int(rng.next() % 8)
-        color.withAlphaComponent(0.78).setFill()
-        for _ in 0..<speckCount {
-            let angle = CGFloat(rng.nextUnit()) * .pi * 2
-            let dist = baseR * (1.05 + CGFloat(rng.nextUnit()) * 0.50)
-            let r = baseR * (0.04 + CGFloat(rng.nextUnit()) * 0.08)
-            let c = CGPoint(x: centre.x + cos(angle) * dist,
-                             y: centre.y + sin(angle) * dist)
-            irregularBlobPath(at: c, baseRadius: r,
-                               jitter: 0.5, points: 8, rng: &rng).fill()
+        // Same Catmull-Rom-to-bezier smoothing as irregularBlobPath.
+        let path = NSBezierPath()
+        guard !verts.isEmpty else { return path }
+        path.move(to: verts[0])
+        let n = verts.count
+        for i in 0..<n {
+            let p1 = verts[i]
+            let p2 = verts[(i + 1) % n]
+            let p0 = verts[(i - 1 + n) % n]
+            let p3 = verts[(i + 2) % n]
+            let cp1 = CGPoint(x: p1.x + (p2.x - p0.x) / 6.0,
+                               y: p1.y + (p2.y - p0.y) / 6.0)
+            let cp2 = CGPoint(x: p2.x - (p3.x - p1.x) / 6.0,
+                               y: p2.y - (p3.y - p1.y) / 6.0)
+            path.curve(to: p2, controlPoint1: cp1, controlPoint2: cp2)
         }
+        path.close()
+        return path
     }
 
     /// Closed smooth-curve path radiating from `centre`, with each
