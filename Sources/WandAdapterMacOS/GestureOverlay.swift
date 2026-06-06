@@ -659,6 +659,10 @@ private final class TrailView: NSView {
             drawPixelPath(origin: origin, cursor: cursor, color: color)
         case .ascii:
             drawAsciiPath(origin: origin, cursor: cursor, color: color)
+        case .tetris:
+            drawTetrisPath(origin: origin, cursor: cursor, color: color)
+        case .pacman:
+            drawPacmanPath(origin: origin, cursor: cursor, color: color)
         }
 
         // Arrowhead at the raw cursor in the last-committed direction.
@@ -773,8 +777,8 @@ private final class TrailView: NSView {
         case .dotted:
             return TrailStyleParams(width: base, glowRadius: 7,
                                      lineDash: [base * 0.6, base * 2])
-        case .pixel, .ascii:
-            // Unused — `pixel` / `ascii` route through their own
+        case .pixel, .ascii, .tetris, .pacman:
+            // Unused — these styles route through their own
             // renderers and never call `drawSinglePath`. Returning a
             // safe baseline keeps the switch exhaustive without
             // pretending these styles share stroke parameters.
@@ -959,6 +963,129 @@ private final class TrailView: NSView {
             }
         }
         walkPath(origin: origin, interval: interval, step: draw)
+    }
+
+    /// Tetris guideline palette — one colour per tetromino piece, in
+    /// the standard order (I cyan / O yellow / T purple / S green /
+    /// Z red / J blue / L orange). Indexed by `(cellIndex / 4)` so
+    /// every 4 consecutive cells share a colour, reading as a
+    /// tetromino unit travelling along the path.
+    private static let tetrisColors: [NSColor] = [
+        .systemCyan, .systemYellow, .systemPurple, .systemGreen,
+        .systemRed,  .systemBlue,   .systemOrange,
+    ]
+
+    /// Tetris-themed pixel variant: same fixed-cell grid as
+    /// `drawPixelPath`, but the fill colour rotates through the
+    /// 7-piece guideline palette every 4 cells. When the in-progress
+    /// shape can no longer reach any rule (`!valid`), the whole trail
+    /// switches to `color` (= the resolved no-match colour) so the
+    /// failure signal still reads even with the bespoke palette.
+    private func drawTetrisPath(origin: CGPoint, cursor: CGPoint,
+                                 color: NSColor) {
+        let cell = Self.pixelCellSize
+        let thickness = max(1, Int(strokeWidth.rounded()))
+        let offsetBase = CGFloat(thickness - 1) / 2
+        var seen = Set<UInt64>()
+        // Cell counter drives both the dedup key and the colour
+        // rotation. Bumped per *placed* cell (not per attempted) so
+        // a tetromino's 4 cells stay the same colour even when some
+        // would-be cells are skipped by dedup.
+        var cellIndex = 0
+        let useFallback = !valid
+        let plot: (CGPoint, CGPoint) -> Void = { p, tangent in
+            let nx = -tangent.y
+            let ny =  tangent.x
+            for i in 0..<thickness {
+                let d = (CGFloat(i) - offsetBase) * cell
+                let cx = p.x + nx * d
+                let cy = p.y + ny * d
+                let gx = Int((cx / cell).rounded(.down))
+                let gy = Int((cy / cell).rounded(.down))
+                let key = (UInt64(bitPattern: Int64(Int32(gx))) << 32)
+                    | UInt64(UInt32(bitPattern: Int32(gy)))
+                guard seen.insert(key).inserted else { continue }
+                let fill: NSColor
+                if useFallback {
+                    fill = color
+                } else {
+                    let pick = (cellIndex / 4) % Self.tetrisColors.count
+                    fill = Self.tetrisColors[pick]
+                }
+                cellIndex += 1
+                fill.withAlphaComponent(0.95).setFill()
+                let rect = NSRect(x: CGFloat(gx) * cell,
+                                  y: CGFloat(gy) * cell,
+                                  width: cell, height: cell)
+                NSBezierPath(rect: rect).fill()
+            }
+        }
+        walkPath(origin: origin, interval: cell * 0.5, step: plot)
+    }
+
+    /// Fixed sizes for the Pac-Man trail. Pellet = small dot lining
+    /// the path; face = larger wedge that follows the cursor with
+    /// its mouth open along the current tangent.
+    private static let pacmanPelletDiameter: CGFloat = 4
+    private static let pacmanPelletInterval: CGFloat = 14
+    private static let pacmanFaceRadius: CGFloat = 10
+    /// Half-angle of Pac-Man's mouth opening, in degrees.
+    private static let pacmanMouthHalfAngleDeg: CGFloat = 35
+
+    /// Pac-Man-themed trail: small pellet dots along the path with a
+    /// wedge-shaped Pac-Man face at the cursor whose mouth opens
+    /// along the current tangent. `strokeWidth` is re-purposed as
+    /// **pellet rows perpendicular to the path** — `width = 1` lays
+    /// down a single line of pellets (the classic look), higher
+    /// values stack additional rows.
+    private func drawPacmanPath(origin: CGPoint, cursor: CGPoint,
+                                 color: NSColor) {
+        let dot = Self.pacmanPelletDiameter
+        let thickness = max(1, Int(strokeWidth.rounded()))
+        let offsetBase = CGFloat(thickness - 1) / 2
+        let rowSpacing = dot + 4
+        color.withAlphaComponent(0.9).setFill()
+        var lastTangent = CGPoint(x: 1, y: 0)
+        let plot: (CGPoint, CGPoint) -> Void = { p, tangent in
+            lastTangent = tangent
+            let nx = -tangent.y
+            let ny =  tangent.x
+            for i in 0..<thickness {
+                let d = (CGFloat(i) - offsetBase) * rowSpacing
+                let cx = p.x + nx * d
+                let cy = p.y + ny * d
+                let rect = NSRect(x: cx - dot / 2, y: cy - dot / 2,
+                                  width: dot, height: dot)
+                NSBezierPath(ovalIn: rect).fill()
+            }
+        }
+        walkPath(origin: origin,
+                 interval: Self.pacmanPelletInterval,
+                 step: plot)
+        drawPacmanFace(at: cursor, tangent: lastTangent, color: color)
+    }
+
+    /// Draw a closed pie wedge centred on `p`, with the mouth
+    /// opening (an angular slice cut out) facing along `tangent`.
+    /// Angles are converted to degrees for `NSBezierPath.appendArc`,
+    /// which uses degrees. The wedge sweeps the long way around
+    /// (counter-clockwise from `+mouthHalf` to `-mouthHalf`) so the
+    /// "closed" portion of the face fills.
+    private func drawPacmanFace(at p: CGPoint, tangent: CGPoint,
+                                 color: NSColor) {
+        let radius = Self.pacmanFaceRadius
+        let mouthHalf = Self.pacmanMouthHalfAngleDeg
+        let dirDeg = atan2(tangent.y, tangent.x) * 180 / .pi
+        let startDeg = dirDeg + mouthHalf
+        let endDeg = dirDeg - mouthHalf
+        let path = NSBezierPath()
+        path.move(to: p)
+        path.appendArc(withCenter: p, radius: radius,
+                        startAngle: startDeg, endAngle: endDeg,
+                        clockwise: false)
+        path.close()
+        color.withAlphaComponent(0.95).setFill()
+        path.fill()
     }
 
     /// Snap `p` onto the axis defined by `dir` and the point `from` —

@@ -244,6 +244,14 @@ width = 3
 #   "ascii"   — AA-art: 11pt monospaced glyphs (`* + x o # . : = ~ ^`)
 #               picked randomly per stroke; `width` = glyphs across
 #               the path (thickness)
+#   "tetris"  — pixel cells coloured by the 7-piece tetromino palette
+#               (cyan/yellow/purple/green/red/blue/orange), one
+#               colour per 4-cell unit. Style-specific exception:
+#               `color` is overridden by the palette; `color-no-match`
+#               still wins so the failure signal survives.
+#   "pacman"  — small pellets along the path + a Pac-Man wedge at the
+#               cursor whose mouth opens along the current direction.
+#               `width` = rows of pellets across the path.
 style = "normal"
 
 # Draw an arrowhead tip at the cursor in the last-committed direction
