@@ -134,7 +134,7 @@ intensity = "normal"
 # Coordinated colour palette for the cast HUD + fire-moment
 # effects. Sets defaults for:
 #   trail   — color / color-no-match / color-outline
-#   cards   — border-color / body-color / text-color
+#   cards   — border-color / body-color / text-color / fires-color
 #   fire    — burst.color
 # Pick a vibe and the colours are guaranteed to read well together.
 # (Decal is intentionally not themed — it always uses the Splatoon
@@ -162,7 +162,9 @@ intensity = "normal"
 #   "pacman"   — Pac-Man arcade palette: yellow trail on black,
 #                red-ghost no-match. Pairs with
 #                `style = "pacman"` for the canonical arcade
-#                yellow wedge.
+#                yellow wedge. Cards are yellow pellets with
+#                black text; the firing card flips to rainbow —
+#                the power-pellet invincible flash.
 #
 # Unknown names clamp to "default". Validate with `wand --validate`.
 theme = "default"
@@ -422,6 +424,15 @@ body-color = ""
 # work here too. Useful when `body-color` is light enough that
 # white text washes out (set `text-color = "#000000"` etc.).
 text-color = ""
+
+# Body fill for the **firing** card (the one that triggers on
+# release). Empty falls back to the trail accent — the historical
+# "this fires on release" tint. Set to a different colour or a
+# dynamic token to make the firing card flash distinctly from
+# the trail. Used by the `pacman` theme to render the firing
+# card as `rainbow` (power-pellet invincible flash) while the
+# rest of the cards / trail stay arcade yellow.
+fires-color = ""
 
 
 # -----------------------------------------------------------------

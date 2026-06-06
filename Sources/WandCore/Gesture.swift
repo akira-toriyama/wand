@@ -29,6 +29,11 @@ public struct CastThemePalette: Sendable, Equatable {
     public let cardsBorderColor: String
     public let cardsBodyColor: String
     public let cardsTextColor: String
+    /// Body fill for the **firing** card. Empty = inherit the trail
+    /// accent (the historical behaviour). Themes that want a
+    /// distinct firing-card flash (e.g. `pacman`'s power-pellet
+    /// rainbow) override this without touching the trail colour.
+    public let cardsFiresColor: String
     /// Burst particle colour. Empty = inherit `trail.color`. Same
     /// grammar as the trail colour fields.
     public let burstColor: String
@@ -41,6 +46,7 @@ public struct CastThemePalette: Sendable, Equatable {
                 trailColorOutline: String,
                 cardsBorderColor: String, cardsBodyColor: String,
                 cardsTextColor: String,
+                cardsFiresColor: String = "",
                 burstColor: String = "") {
         self.trailColor = trailColor
         self.trailColorNoMatch = trailColorNoMatch
@@ -48,6 +54,7 @@ public struct CastThemePalette: Sendable, Equatable {
         self.cardsBorderColor = cardsBorderColor
         self.cardsBodyColor = cardsBodyColor
         self.cardsTextColor = cardsTextColor
+        self.cardsFiresColor = cardsFiresColor
         self.burstColor = burstColor
     }
 }
@@ -143,13 +150,19 @@ public enum CastTheme: String, Sendable, CaseIterable {
             // particularly well with `style = "pacman"`, where the
             // wedge face inherits the trail colour and ends up the
             // canonical arcade yellow.
+            //
+            // Card scheme: yellow pellet-coloured body with black
+            // text on every directional card. The firing card flips
+            // to rainbow — Pac-Man eating the power pellet and
+            // entering the invincible flashing state.
             return CastThemePalette(
                 trailColor: "#ffea00",
                 trailColorNoMatch: "#ff0000",
                 trailColorOutline: "#000000",
                 cardsBorderColor: "#ffea00",
-                cardsBodyColor: "#000000",
-                cardsTextColor: "#ffea00")
+                cardsBodyColor: "#ffea00",
+                cardsTextColor: "#000000",
+                cardsFiresColor: "rainbow")
         }
     }
 }
@@ -313,19 +326,30 @@ public struct GestureOverlayCardsSpec: Sendable, Equatable {
     /// as `borderColor` / `bodyColor`: named / hex / dynamic tokens
     /// (`rainbow` / `neon` / `splatoon`).
     public let textColor: String
+    /// Body fill colour for the **firing** card (the one that will
+    /// trigger on release). Empty falls back to the trail accent —
+    /// the historical "this card fires on release" tint. Same
+    /// grammar as the other colour fields, including dynamic tokens.
+    /// Useful for themes that want the firing card to flash
+    /// differently from the trail (e.g. the `pacman` theme's
+    /// power-pellet rainbow flash while the trail itself stays
+    /// arcade yellow).
+    public let firesColor: String
 
     public init(match: Effect = .none,
                 unmatch: Effect = .none,
                 fontSize: Int = 13,
                 borderColor: String = "",
                 bodyColor: String = "",
-                textColor: String = "") {
+                textColor: String = "",
+                firesColor: String = "") {
         self.match = match
         self.unmatch = unmatch
         self.fontSize = fontSize
         self.borderColor = borderColor
         self.bodyColor = bodyColor
         self.textColor = textColor
+        self.firesColor = firesColor
     }
 
     public static let `default` = GestureOverlayCardsSpec()

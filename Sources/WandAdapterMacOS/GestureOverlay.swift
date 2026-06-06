@@ -133,6 +133,10 @@ public final class GestureOverlay {
             ? .static(.white)
             : TrailColorMode.parse(ov.cards.textColor,
                                     fallback: .white)
+        view.cardFiresMode = ov.cards.firesColor.isEmpty
+            ? nil
+            : TrailColorMode.parse(ov.cards.firesColor,
+                                    fallback: .systemBlue)
         view.effectIntensity = cfg.intensity.multiplier
         view.minStrokePx = CGFloat(cfg.recognition.minStrokePx)
         view.finalHoldDuration = TimeInterval(ov.trail.finalHoldMs) / 1000.0
@@ -249,6 +253,13 @@ private final class TrailView: NSView {
     /// `splatoon`) animate alongside the trail using the same cycle
     /// period and stroke seed.
     var cardTextMode: TrailColorMode = .static(.white)
+    /// Body fill mode for the **firing** card (`nil` = inherit the
+    /// trail accent, the historical default). Set live from
+    /// `[cast.overlay.cards].fires-color`. Themes like `pacman`
+    /// use this to flash the firing card in a different palette
+    /// from the trail (e.g. rainbow over an arcade-yellow trail —
+    /// the power-pellet invincible look).
+    var cardFiresMode: TrailColorMode? = nil
     /// Pre-resolved multiplier from `Intensity.multiplier` — scales
     /// translation distance, scale deltas, vibration amplitude, and
     /// particle birth-rate / velocity.
@@ -1427,10 +1438,19 @@ private final class TrailView: NSView {
                         break
                     }
                 }
+                // Firing card body: theme/config can override the
+                // historical "trail accent as fill" with its own
+                // palette (e.g. pacman's rainbow flash) via
+                // `cardFiresMode`. Fall back to the trail accent
+                // when unset.
+                let firesBase = cardFiresMode?.currentColor(
+                    at: CACurrentMediaTime(),
+                    strokeSeed: strokeSeed,
+                    cyclePeriod: colorCyclePeriod) ?? accent
                 cardLayouts.append(CardLayout(
                     kind: .fires,
                     rect: firesRect, text: s,
-                    fill: accent.withAlphaComponent(firesAlpha)))
+                    fill: firesBase.withAlphaComponent(firesAlpha)))
             }
             // With blur disabled, regular cards still need a fill —
             // the frost would have been their backdrop. Re-run and
