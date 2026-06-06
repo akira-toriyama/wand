@@ -1086,10 +1086,11 @@ private final class TrailView: NSView {
     /// Half-angle of Pac-Man's mouth opening, in degrees.
     private static let pacmanMouthHalfAngleDeg: CGFloat = 35
     /// How far back along the path Pac-Man's face sits behind the
-    /// live cursor (pt). Same value is passed to `walkPath` as
-    /// `trimTail`, so the trailing pellets stop at the face — no
-    /// pellets paint between the face and the cursor.
-    private static let pacmanFaceLag: CGFloat = 28
+    /// live cursor (pt). Tuned by feel — too small reads as
+    /// "Pac-Man sitting on the cursor" (no chase), too large feels
+    /// like Pac-Man can never catch up. 50pt = roughly 2.5 face
+    /// widths of gap, which lands as "actively chasing".
+    private static let pacmanFaceLag: CGFloat = 50
 
     /// Pac-Man-themed trail: the cursor lays a stream of pellet dots
     /// along the whole path (origin → cursor), and the Pac-Man face
