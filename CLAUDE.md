@@ -279,6 +279,48 @@ Everything below depends on this contract:
   recognition — the rule with the typo silently drops, the rest
   still load. `wand --validate` is the explicit verification
   path.
+- **Breaking schema changes are OK when adding / reshaping
+  features.** wand is config.toml-driven with no users beyond
+  whoever ran the `curl` template line, and we ship migration
+  warnings via `Log.line` (visible through `wand --validate`).
+  Don't preserve a retired key shape with shims; rename + warn,
+  and update the bundled `config.toml` in the same PR. The v5 /
+  v6 restructures (#90, #97) are the established pattern.
+- **Prefer the nested-sub-block style** when a config feature has
+  multiple knobs that share a domain — keys live inside the
+  sub-block that owns them, even if some keys repeat across
+  sub-blocks:
+
+  ```toml
+  # Preferred
+  [foo]
+  color = "red"
+  length = "short"
+
+  [bar]
+  color = "red"
+  size = "xl"
+  ```
+
+  not
+
+  ```toml
+  # Avoid — `color` at the top bleeds down into both sub-blocks
+  color = "red"
+  [foo]
+  length = "short"
+  [bar]
+  size = "xl"
+  ```
+
+  This is a *want / better*, not a *must*. The exception is a
+  setting that genuinely spans both sub-blocks and would invite
+  drift if duplicated — `[gesture].intensity` (scales both
+  `[gesture.overlay.cards]` and `[gesture.fire.burst]`) and
+  `[exclude].apps` (applies to both gesture rules and launcher
+  items) live at the higher scope on purpose; the comment at the
+  call site explains why. Default to the nested form, and justify
+  in a comment when promoting a key upward.
 
 ### TOML parser
 
