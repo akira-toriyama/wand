@@ -1,7 +1,7 @@
-// Post-fire "ink decal" — a Splatoon-style splatter / blob / scorch /
-// star left at the cursor position when a gesture fires. Lives in its
-// own tiny click-through NSWindow so it can sit on top of every app
-// without interfering with input. Fades out and self-releases.
+// Post-fire "ink decal" — a Splatoon-style splatter left at the
+// cursor position when a gesture fires. Lives in its own tiny
+// click-through NSWindow so it can sit on top of every app without
+// interfering with input. Fades out and self-releases.
 //
 // The class is intentionally separate from `GestureOverlay`: that
 // window is sized to the whole virtual desktop and lives for the
@@ -108,21 +108,22 @@ public final class DecalManager {
     }
 }
 
-/// Custom NSView that draws the chosen decal shape. Each `kind` has a
-/// dedicated `draw...` helper so adding a fifth shape doesn't bloat a
-/// single switch into 50 lines — each subroutine owns its geometry.
+/// Custom NSView that draws the chosen decal shape. The dispatch
+/// switch lives in `draw(_:)` so adding a second shape later only
+/// touches one place.
 @MainActor
 private final class DecalView: NSView {
 
     private let kind: DecalKind
     private let color: NSColor
     /// Pixel margin between the drawable square (the original `size`)
-    /// and the view's bounds — gives the radial / starburst geometry
-    /// a few px of slack so anti-aliased edges aren't clipped.
+    /// and the view's bounds — gives the splatter geometry a few px
+    /// of slack so anti-aliased edges aren't clipped.
     private let margin: CGFloat
-    /// Frozen RNG seed per decal so the shape doesn't re-roll on every
-    /// `needsDisplay`. Splatter / star / blob all consume from this so
-    /// successive draws of the same window stay visually consistent.
+    /// Frozen RNG seed per decal so the splatter shape doesn't
+    /// re-roll on every `needsDisplay`. Used by `drawInkSplatter` for
+    /// main blob jitter + satellite offsets so successive draws of
+    /// the same window stay visually consistent.
     private let seed: UInt64
 
     init(kind: DecalKind, color: NSColor, margin: CGFloat) {
@@ -148,9 +149,6 @@ private final class DecalView: NSView {
         switch kind {
         case .off:          return
         case .inkSplatter:  drawInkSplatter(in: inner, rng: &rng)
-        case .paintBlob:    drawPaintBlob(in: inner, rng: &rng)
-        case .scorch:       drawScorch(in: inner)
-        case .star:         drawStar(in: inner)
         }
     }
 
@@ -180,55 +178,10 @@ private final class DecalView: NSView {
         }
     }
 
-    /// Single irregular blob, larger and smoother than the splatter
-    /// case. Reads as a paintbrush stamp rather than a thrown blot.
-    private func drawPaintBlob(in rect: CGRect, rng: inout SplitMix64) {
-        color.withAlphaComponent(0.9).setFill()
-        let centre = CGPoint(x: rect.midX, y: rect.midY)
-        let r = rect.width * 0.4
-        irregularBlobPath(at: centre, baseRadius: r,
-                           jitter: 0.22, points: 22, rng: &rng).fill()
-    }
-
-    /// Radial gradient burn mark — opaque core, transparent edges. No
-    /// jitter; the gradient itself reads as a scorch.
-    private func drawScorch(in rect: CGRect) {
-        let centre = CGPoint(x: rect.midX, y: rect.midY)
-        let r = rect.width * 0.4
-        let gradient = NSGradient(colors: [
-            color.withAlphaComponent(0.85),
-            color.withAlphaComponent(0.5),
-            color.withAlphaComponent(0.0),
-        ], atLocations: [0.0, 0.5, 1.0],
-           colorSpace: .deviceRGB)
-        gradient?.draw(fromCenter: centre, radius: 0,
-                        toCenter: centre, radius: r, options: [])
-    }
-
-    /// 5-pointed star with outer / inner radius ratio of 2.4 (the
-    /// classic sparkle proportion). Filled, single colour.
-    private func drawStar(in rect: CGRect) {
-        let centre = CGPoint(x: rect.midX, y: rect.midY)
-        let outer = rect.width * 0.42
-        let inner = outer / 2.4
-        let points = 5
-        let path = NSBezierPath()
-        for i in 0..<(points * 2) {
-            let angle = CGFloat(i) * .pi / CGFloat(points) - .pi / 2
-            let r = (i % 2 == 0) ? outer : inner
-            let p = CGPoint(x: centre.x + cos(angle) * r,
-                             y: centre.y + sin(angle) * r)
-            if i == 0 { path.move(to: p) } else { path.line(to: p) }
-        }
-        path.close()
-        color.withAlphaComponent(0.92).setFill()
-        path.fill()
-    }
-
     /// Closed polygon path radiating from `centre`, with each vertex
     /// pushed outward from `baseRadius` by a `±jitter` factor (in
-    /// units of the radius). Used as the building block for splatter
-    /// blobs / satellite spatter / paint blobs.
+    /// units of the radius). Used as the building block for the main
+    /// splatter blob + satellite spatter.
     private func irregularBlobPath(at centre: CGPoint,
                                     baseRadius r: CGFloat,
                                     jitter: CGFloat,

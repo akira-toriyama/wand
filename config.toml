@@ -211,27 +211,21 @@ color-no-match = "#ef4444"
 # doubles it, `dashed`/`dotted` use it as the dash unit.
 width = 3
 
-# Trail style preset — bundles width × glow × dash. **Shape only —
-# the trail's colour is always sourced from `color` / `color-no-match`
-# above**, so the match-vs-no-match signal isn't lost when the style
-# changes. Colour-decoration variants live on a different axis (see
-# `[tome.decoration].border`).
+# Trail dash pattern preset. **Shape only — the trail's colour is
+# always sourced from `color` / `color-no-match` above**, so the
+# match-vs-no-match signal isn't lost when the style changes. Width
+# comes from `width` above; glow is fixed.
 #
-#   "normal"  — single stroke at `width` with a soft glow (default)
-#   "thin"    — `width * 0.5` (1.5pt floor) + reduced glow
-#   "thick"   — `width * 2` + amplified glow
-#   "glow"    — `width` with an exaggerated 18pt bloom; neon vibe
+#   "normal"  — single solid stroke (default)
 #   "dashed"  — broken line (3:2 dash:gap, sized off `width`)
 #   "dotted"  — short-dash dotted line (0.6:2 dash:gap)
-#   "comet"   — width tapers from origin (thin) to cursor (thick),
-#               like a meteor's tail. Corner smoothing skipped.
 style = "normal"
 
 # Draw an arrowhead tip at the cursor in the last-committed direction
 # — a directional indicator pointing where the gesture's last segment
-# went. Independent of `style` (a `comet` / `dashed` / etc. trail can
-# still opt in or out of the tip), so the indicator is its own axis,
-# not bundled into the line-shape preset. `false` for a plain line.
+# went. Independent of `style` (a `dashed` trail can still opt in or
+# out of the tip), so the indicator is its own axis, not bundled into
+# the line-shape preset. `false` for a plain line.
 arrowhead = true
 
 # How long (ms) the trail lingers after a gesture fires. The
@@ -305,14 +299,8 @@ kind = "off"
 [cast.fire.decal]
 
 #   "off"           — no decal (default)
-#   "ink-splatter"  — busy splatter: main blob + 3-6 satellite
-#                     spatters (most ragged shape of the four)
-#   "paint-blob"    — single stamp, larger and smoother than
-#                     ink-splatter — reads as a paintbrush mark
-#   "scorch"        — radial gradient burn mark (opaque core,
-#                     transparent edges; no jitter)
-#   "star"          — 5-pointed sparkle (classic outer/inner 2.4
-#                     ratio, single solid colour)
+#   "ink-splatter"  — Splatoon-style splatter: main blob + 3-6
+#                     satellite spatters at random offsets
 # Color comes from `[cast.overlay.trail].color`.
 kind = "off"
 

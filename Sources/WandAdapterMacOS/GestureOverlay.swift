@@ -567,17 +567,15 @@ private final class TrailView: NSView {
             NSGraphicsContext.current?.cgContext.setAlpha(alpha)
         }
 
-        // Per-style dispatch. Most styles share the hybrid corner +
-        // freehand polyline and only swap width / glow / dash, always
-        // colouring with the resolved `color` so match-vs-no-match
-        // stays legible. `comet` needs per-segment width modulation
-        // so it walks the polyline itself (and sacrifices the
-        // corner-smoothing bezier — small visual concession for a
-        // much simpler implementation).
+        // Every remaining style shares the hybrid corner + freehand
+        // polyline and only swaps the dash pattern. Colour always
+        // comes from the resolved `color` so the match-vs-no-match
+        // signal stays legible regardless of dash. Width / glow /
+        // taper variants (`thin` / `thick` / `glow` / `comet`) were
+        // retired — `width` and the future neon/rainbow colour
+        // modes cover their use cases without a separate axis.
         switch trailStyle {
-        case .comet:
-            drawComet(origin: origin, cursor: cursor, color: color)
-        case .normal, .thin, .thick, .glow, .dashed, .dotted:
+        case .normal, .dashed, .dotted:
             drawSinglePath(origin: origin, cursor: cursor, color: color)
         }
 
@@ -657,48 +655,10 @@ private final class TrailView: NSView {
         path.stroke()
     }
 
-    /// Comet: width tapers from origin (thin) to cursor (thick) so the
-    /// trail reads like a meteor's tail. Like `rainbow` this gives up
-    /// corner smoothing — we stroke each segment with a per-segment
-    /// lineWidth, which a smoothed bezier can't carry cleanly.
-    private func drawComet(origin: CGPoint, cursor: CGPoint,
-                            color: NSColor) {
-        let points = polylinePoints(origin: origin)
-        guard points.count >= 2 else { return }
-        let p = styleParams(base: strokeWidth)
-        let glow = NSShadow()
-        glow.shadowColor = color.withAlphaComponent(0.5)
-        glow.shadowBlurRadius = p.glowRadius
-        glow.set()
-        color.withAlphaComponent(0.95).setStroke()
-        let n = points.count - 1
-        for i in 0..<n {
-            // 0.3× at origin → 1.6× at cursor. Smooth-ish ramp.
-            let t = CGFloat(i + 1) / CGFloat(max(n, 1))
-            let w = p.width * (0.3 + 1.3 * t)
-            let seg = NSBezierPath()
-            seg.lineWidth = w
-            seg.lineCapStyle = .round
-            seg.move(to: points[i])
-            seg.line(to: points[i + 1])
-            seg.stroke()
-        }
-    }
-
-    /// Flatten the hybrid polyline into a straight sequence of points
-    /// for per-segment styles (`comet`). Skips the corner smoothing —
-    /// interior corners come through as their raw `B` point.
-    private func polylinePoints(origin: CGPoint) -> [CGPoint] {
-        var out: [CGPoint] = [origin]
-        out.append(contentsOf: corners)
-        // Freehand[0] duplicates `corners.last ?? origin`, so drop it.
-        out.append(contentsOf: freehandPoints.dropFirst())
-        return out
-    }
-
-    /// Per-style stroke parameters. Centralised so the dispatcher in
-    /// `draw(_:)` and the helpers in `drawSinglePath` / `drawRainbow`
-    /// / `drawComet` agree on width / glow / dash.
+    /// Per-style stroke parameters. The remaining styles all share the
+    /// same width and glow; only the dash pattern differs. Kept as a
+    /// struct (rather than inlined) so adding a future style only
+    /// touches one switch.
     private struct TrailStyleParams {
         let width: CGFloat
         let glowRadius: CGFloat
@@ -710,27 +670,12 @@ private final class TrailView: NSView {
         case .normal:
             return TrailStyleParams(width: base, glowRadius: 7,
                                      lineDash: [])
-        case .thin:
-            return TrailStyleParams(width: max(1.5, base * 0.5),
-                                     glowRadius: 3, lineDash: [])
-        case .thick:
-            return TrailStyleParams(width: base * 2.0, glowRadius: 12,
-                                     lineDash: [])
-        case .glow:
-            return TrailStyleParams(width: base, glowRadius: 18,
-                                     lineDash: [])
         case .dashed:
             return TrailStyleParams(width: base, glowRadius: 7,
                                      lineDash: [base * 3, base * 2])
         case .dotted:
             return TrailStyleParams(width: base, glowRadius: 7,
                                      lineDash: [base * 0.6, base * 2])
-        case .comet:
-            // The per-segment drawer manages its own lineWidth modulation
-            // for the taper, but still reads `width` (base scale) and
-            // `glowRadius` from here.
-            return TrailStyleParams(width: base, glowRadius: 7,
-                                     lineDash: [])
         }
     }
 
