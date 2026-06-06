@@ -162,6 +162,9 @@ public struct WandConfig: Sendable {
         let ov = doc.tables["cast.overlay"] ?? [:]
         let overlayEnabled = ov.bool("enabled", true)
         let overlayBlurEnabled = ov.bool("blur-enabled", true)
+        let overlayColorCycleMs = clampInt(
+            ov, key: "color-cycle-ms",
+            default: 2000, lo: 100, hi: 10000)
 
         // [cast.overlay.trail]
         let tr = doc.tables["cast.overlay.trail"] ?? [:]
@@ -180,9 +183,6 @@ public struct WandConfig: Sendable {
             tr, key: "style", section: "cast.overlay.trail",
             default: .normal)
         let trailArrowhead = tr.bool("arrowhead", true)
-        let trailColorCycleMs = clampInt(
-            tr, key: "color-cycle-ms",
-            default: 2000, lo: 100, hi: 10000)
         let trailFinalHoldMs = clampInt(tr, key: "final-hold-ms",
                                         default: 400, lo: 0, hi: 2000)
         let trailStraightenOnTurn = tr.bool("straighten-on-turn", false)
@@ -195,7 +195,6 @@ public struct WandConfig: Sendable {
             width: trailWidth,
             style: trailStyle,
             arrowhead: trailArrowhead,
-            colorCycleMs: trailColorCycleMs,
             finalHoldMs: trailFinalHoldMs,
             straightenOnTurn: trailStraightenOnTurn)
 
@@ -234,6 +233,7 @@ public struct WandConfig: Sendable {
         let overlay = GestureOverlaySpec(
             enabled: overlayEnabled,
             blurEnabled: overlayBlurEnabled,
+            colorCycleMs: overlayColorCycleMs,
             trail: trail, badge: badge, cards: cards)
 
         // [cast.fire.burst]

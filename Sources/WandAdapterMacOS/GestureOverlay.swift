@@ -111,7 +111,7 @@ public final class GestureOverlay {
             ? nil
             : TrailColorMode.parse(ov.trail.colorOutline,
                                     fallback: .black)
-        view.colorCyclePeriod = TimeInterval(ov.trail.colorCycleMs) / 1000.0
+        view.colorCyclePeriod = TimeInterval(ov.colorCycleMs) / 1000.0
         view.strokeWidth = CGFloat(ov.trail.width)
         view.trailStyle = ov.trail.style
         view.arrowheadEnabled = ov.trail.arrowhead

@@ -198,11 +198,6 @@ public struct GestureOverlayTrailSpec: Sendable, Equatable {
     /// indicator is its own axis. Defaults to `true` — preserves
     /// the original hard-coded behaviour.
     public let arrowhead: Bool
-    /// Cycle period in milliseconds for the dynamic colour modes
-    /// (`rainbow` / `neon`). Smaller = faster strobe; larger =
-    /// slower drift. Clamped 100..10000. Ignored by static and
-    /// `splatoon` modes (the latter is per-stroke fixed).
-    public let colorCycleMs: Int
     /// How long (ms) the trail lingers after a gesture fires.
     /// Clamped 0..2000; `0` = instant clear.
     public let finalHoldMs: Int
@@ -222,7 +217,6 @@ public struct GestureOverlayTrailSpec: Sendable, Equatable {
                 width: Int = 3,
                 style: TrailStyle = .normal,
                 arrowhead: Bool = true,
-                colorCycleMs: Int = 2000,
                 finalHoldMs: Int = 400,
                 straightenOnTurn: Bool = false) {
         self.color = color
@@ -231,7 +225,6 @@ public struct GestureOverlayTrailSpec: Sendable, Equatable {
         self.width = width
         self.style = style
         self.arrowhead = arrowhead
-        self.colorCycleMs = colorCycleMs
         self.finalHoldMs = finalHoldMs
         self.straightenOnTurn = straightenOnTurn
     }
@@ -322,17 +315,29 @@ public struct GestureOverlaySpec: Sendable, Equatable {
     /// Frosted blur (`NSVisualEffectView`) under the HUD cards +
     /// badge. `false` falls back to a solid dark fill.
     public let blurEnabled: Bool
+    /// Cycle period in milliseconds for the dynamic colour modes
+    /// (`rainbow` / `neon`). Smaller = faster strobe; larger =
+    /// slower drift. Clamped 100..10000. Shared by trail + cards
+    /// (border / body / text) + outline — anything that resolves
+    /// a `TrailColorMode` uses this period, so a `rainbow` trail
+    /// and a `rainbow` card border cycle in lockstep. Placed at
+    /// overlay scope (not under `trail`) because of that cross-
+    /// surface scope. Ignored by static and `splatoon` modes (the
+    /// latter is per-stroke fixed).
+    public let colorCycleMs: Int
     public let trail: GestureOverlayTrailSpec
     public let badge: GestureOverlayBadgeSpec
     public let cards: GestureOverlayCardsSpec
 
     public init(enabled: Bool = true,
                 blurEnabled: Bool = true,
+                colorCycleMs: Int = 2000,
                 trail: GestureOverlayTrailSpec = .default,
                 badge: GestureOverlayBadgeSpec = .default,
                 cards: GestureOverlayCardsSpec = .default) {
         self.enabled = enabled
         self.blurEnabled = blurEnabled
+        self.colorCycleMs = colorCycleMs
         self.trail = trail
         self.badge = badge
         self.cards = cards

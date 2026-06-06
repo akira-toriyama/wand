@@ -414,7 +414,7 @@ enum WandApp {
                 ).currentColor(at: CACurrentMediaTime(),
                                strokeSeed: UInt64.random(in: 0..<UInt64.max),
                                cyclePeriod: TimeInterval(
-                                cfg.overlay.trail.colorCycleMs) / 1000.0)
+                                cfg.overlay.colorCycleMs) / 1000.0)
                 let decalSpec = cfg.fire.decal
                 if decalSpec.kind != .off, decalSpec.durationMs > 0 {
                     // Resolve the decal colour from its own knob,
