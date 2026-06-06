@@ -32,23 +32,23 @@ enum WandApp {
         CLIENT COMMANDS — need a running daemon (exit 3 if none)
           wand --reload              re-read ~/.config/wand/config.toml
                                        (also automatic on file save).
-                                       Live: [[gesture.rule]] /
+                                       Live: [[cast.rule]] /
                                        [exclude].apps /
-                                       [gesture.recognition] timing /
-                                       [gesture.overlay] / [gesture.fire].
-                                       Restart only: [gesture] button +
-                                       modifiers, [launcher] enabled +
+                                       [cast.recognition] timing /
+                                       [cast.overlay] / [cast.fire].
+                                       Restart only: [cast] button +
+                                       modifiers, [tome] enabled +
                                        button + modifiers.
           wand --status              print rule count, trigger, last
                                        gestures, counters, last reload
           wand --quit                terminate the running daemon
-          wand --show-menu           ask the daemon to pop the launcher
+          wand --show-menu           ask the daemon to pop the tome
             --items <PATH>             menu at a screen point with the
-            --at <X> <Y>               given [[item]] file. Cocoa coords
-            [--selection <TEXT>]       (Y-up). For event-driven triggers
-            [--title <TEXT>]           (eventfx text-selection etc).
-                                       $SELECTION is exported to shell
-                                       actions if --selection given.
+            --at <X> <Y>               given [[tome.item]] file. Cocoa
+            [--selection <TEXT>]       coords (Y-up). For event-driven
+            [--title <TEXT>]           triggers (eventfx text-selection
+                                       etc).  $SELECTION is exported to
+                                       shell actions if --selection given.
                                        --title overrides AX-fetched
                                        focused-window title for
                                        $WAND_TARGET_TITLE (default:
@@ -66,7 +66,7 @@ enum WandApp {
           wand --test PATTERN [APP]  dry-run: which rule would fire for
                                        a pattern (optionally for a bundle id)
           wand --record              interactive recorder: draw a gesture,
-                                       get a paste-ready [[gesture.rule]]
+                                       get a paste-ready [[cast.rule]]
                                        snippet on stdout. Refuses if the
                                        daemon is running (tap conflict).
           wand --resign              re-sign Wand.app with the persistent
@@ -207,14 +207,14 @@ enum WandApp {
             mirrorLineToStderr = true
             let cfg = WandConfig.load()
             let cfgWarnings = Log.lineCount
-            let launcherLine = cfg.launcher.enabled
-                ? ", launcher=\(cfg.launcher.trigger.button.rawValue) "
+            let tomeLine = cfg.launcher.enabled
+                ? ", tome=\(cfg.launcher.trigger.button.rawValue) "
                   + "(\(cfg.launcher.items.count) item(s))"
                 : ""
             FileHandle.standardError.write(Data((
                 "wand: loaded \(cfg.rules.count) rule(s), "
                 + "trigger=\(cfg.trigger.button.rawValue), "
-                + "minStrokePx=\(cfg.recognition.minStrokePx)\(launcherLine)"
+                + "minStrokePx=\(cfg.recognition.minStrokePx)\(tomeLine)"
                 + " — \(cfgWarnings) warning(s)\n"
             ).utf8))
             // `--validate --items PATH` also validates a standalone
@@ -456,20 +456,20 @@ enum WandApp {
         print(line(tap, "Event tap:",
                    tap ? "can install" : "cannot install (needs Accessibility)"))
 
-        // Launcher diagnostics — only meaningful when opted in.
+        // Tome diagnostics — only meaningful when opted in.
         if cfg.launcher.enabled {
             let lTap = MacOSLauncherSource.canInstallTap(
                 trigger: cfg.launcher.trigger)
             ok = ok && lTap
-            print(line(lTap, "Launcher tap:",
+            print(line(lTap, "Tome tap:",
                        lTap
                          ? "can install (button="
                            + "\(cfg.launcher.trigger.button.rawValue), "
                            + "\(cfg.launcher.items.count) item(s))"
                          : "cannot install"))
         } else {
-            print(line(true, "Launcher:",
-                       "disabled (`[launcher] enabled = false`)"))
+            print(line(true, "Tome:",
+                       "disabled (`[tome].enabled = false`)"))
         }
 
         // Tuned values — the same ones the daemon would apply. Lets a
@@ -937,7 +937,7 @@ enum WandApp {
             pattern=\(pattern)  samples=\(event.samples.count)  \
             max|dx|=\(Int(dx)) max|dy|=\(Int(dy))  target=\(event.target.bundleID)
 
-            [[gesture.rule]]
+            [[cast.rule]]
             name = "\(pattern)"
             pattern = "\(pattern)"
             apps = ["\(event.target.bundleID)"]

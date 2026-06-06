@@ -80,7 +80,7 @@ public final class Controller: @unchecked Sendable {
 
     public func start() {
         let launcherBit = launcher == nil ? "" :
-            ", launcher=\(config.launcher.trigger.button.rawValue)"
+            ", tome=\(config.launcher.trigger.button.rawValue)"
             + " (\(config.launcher.items.count) item(s))"
         Log.line("controller: start — \(config.rules.count) rule(s), "
                  + "minStrokePx=\(config.recognition.minStrokePx), "
@@ -171,10 +171,10 @@ public final class Controller: @unchecked Sendable {
         let visibleItems = Matcher.itemsFor(
             target: event.target, items: cfg.launcher.items,
             excludes: cfg.excludeApps, evalShell: evalShell)
-        Log.line("controller: launcher fired on \(event.target.bundleID) "
+        Log.line("controller: tome fired on \(event.target.bundleID) "
                  + "— \(visibleItems.count)/\(cfg.launcher.items.count) item(s) "
                  + "visible")
-        record("launcher on \(event.target.bundleID) "
+        record("tome on \(event.target.bundleID) "
                + "(\(visibleItems.count) item(s))")
         guard !visibleItems.isEmpty else { writeStatus(); return }
         counterLauncherShown += 1
@@ -187,7 +187,7 @@ public final class Controller: @unchecked Sendable {
         // they triggered the menu is what they intended to act on.
         let selection = AXTarget.selectedText()
         if let sel = selection {
-            Log.line("controller: launcher captured $SELECTION = "
+            Log.line("controller: tome captured $SELECTION = "
                      + "\(sel.count) char(s)")
         }
         let env: [String: String] = selection.map { ["SELECTION": $0] } ?? [:]
@@ -203,7 +203,7 @@ public final class Controller: @unchecked Sendable {
             border: cfg.launcher.decoration.border
         ) { [weak self] item, target in
             self?.counterLauncherDispatched += 1
-            Log.line("controller: → launcher item \"\(item.name)\"")
+            Log.line("controller: → tome entry \"\(item.name)\"")
             self?.writeStatus()
             Dispatch.execute(item.action, on: target, extraEnv: env)
         }
@@ -345,13 +345,13 @@ public final class Controller: @unchecked Sendable {
                      + "true now needs a full daemon restart")
         }
         if new.launcher.enabled != startupConfig.launcher.enabled {
-            Log.line("controller: reload — [launcher].enabled toggled "
+            Log.line("controller: reload — [tome].enabled toggled "
                      + "(\(startupConfig.launcher.enabled) → "
                      + "\(new.launcher.enabled)); the tap is installed at "
                      + "startup, restart required to apply")
         }
         if new.launcher.trigger != startupConfig.launcher.trigger {
-            Log.line("controller: reload — [launcher].trigger changed; "
+            Log.line("controller: reload — [tome].trigger changed; "
                      + "the event mask is baked into the running tap, "
                      + "restart required to apply")
         }
@@ -378,27 +378,27 @@ public final class Controller: @unchecked Sendable {
         //   created at startup, so applyConfig has nothing to show
         var pending: [String] = []
         if config.trigger != startupConfig.trigger {
-            pending.append("[trigger]")
+            pending.append("[cast] button/modifiers")
         }
         if config.overlay.enabled && !startupConfig.overlay.enabled {
-            pending.append("[overlay].enabled = false→true")
+            pending.append("[cast.overlay].enabled = false→true")
         }
         if config.launcher.enabled != startupConfig.launcher.enabled {
-            pending.append("[launcher].enabled "
+            pending.append("[tome].enabled "
                 + "\(startupConfig.launcher.enabled)→\(config.launcher.enabled)")
         }
         if config.launcher.trigger != startupConfig.launcher.trigger {
-            pending.append("[launcher].trigger")
+            pending.append("[tome] button/modifiers")
         }
         let pendingLine = pending.isEmpty
             ? ""
             : "\npending-restart: \(pending.joined(separator: ", "))"
-        let launcherLine = config.launcher.enabled
-            ? "\nlauncher=on (button=\(config.launcher.trigger.button.rawValue), "
+        let tomeLine = config.launcher.enabled
+            ? "\ntome=on (button=\(config.launcher.trigger.button.rawValue), "
               + "items=\(config.launcher.items.count), "
               + "shown=\(counterLauncherShown), "
               + "dispatched=\(counterLauncherDispatched))"
-            : "\nlauncher=off"
+            : "\ntome=off"
         // `show-menu` line surfaces only after the external trigger
         // has fired at least once — keeps `--status` quiet for users
         // who haven't wired an external daemon (eventfx).
@@ -416,7 +416,7 @@ public final class Controller: @unchecked Sendable {
         max-segment-ms=\(rec.maxSegmentMs)
         cancel-reversals=\(rec.cancelReversals)
         cancel-window-ms=\(rec.cancelWindowMs)
-        overlay=\(overlayState)\(launcherLine)\(showMenuLine)
+        overlay=\(overlayState)\(tomeLine)\(showMenuLine)
         counters: recognised=\(counterRecognised) \
         dispatched=\(counterDispatched) \
         no-rule=\(counterNoRule) excluded=\(counterExcluded)
