@@ -795,6 +795,7 @@ private final class TrailView: NSView {
     /// at a fixed spacing regardless of original sample density.
     private func walkPath(origin: CGPoint,
                            interval: CGFloat,
+                           trimTail: CGFloat = 0,
                            step: (CGPoint, CGPoint) -> Void) {
         // Freehand mode walks the raw sample stream; straightened
         // mode walks the snapped corner polyline + active freehand.
@@ -802,6 +803,25 @@ private final class TrailView: NSView {
             ? ([origin] + corners + Array(freehandPoints.dropFirst()))
             : rawTrail
         guard !pts.isEmpty, interval > 0 else { return }
+        // `trimTail` (pt) trims that much distance off the end of the
+        // path before emitting — used by the Pac-Man style to leave a
+        // visible gap between the trailing pellets and the cursor's
+        // face, so it reads as Pac-Man running ahead of the trail.
+        // When set, compute total length once and derive the cutoff
+        // distance; bail early if there isn't enough path to clear
+        // the trim.
+        let cutoff: CGFloat?
+        if trimTail > 0 {
+            var totalLen: CGFloat = 0
+            for i in 1..<pts.count {
+                totalLen += hypot(pts[i].x - pts[i - 1].x,
+                                  pts[i].y - pts[i - 1].y)
+            }
+            if totalLen <= trimTail { return }
+            cutoff = totalLen - trimTail
+        } else {
+            cutoff = nil
+        }
         // Tangent for the very first point: peek forward to the first
         // non-zero segment so the leading mark is oriented along the
         // path instead of an arbitrary axis. Defaults to (1, 0) until
@@ -820,6 +840,7 @@ private final class TrailView: NSView {
         }
         step(pts[0], lastTangent)
         var carry: CGFloat = 0
+        var traveled: CGFloat = 0
         for i in 1..<pts.count {
             let a = pts[i - 1]
             let b = pts[i]
@@ -832,16 +853,34 @@ private final class TrailView: NSView {
             lastTangent = CGPoint(x: ux, y: uy)
             var t = interval - carry
             while t <= segLen {
+                if let cutoff, traveled + t > cutoff {
+                    // Reached the trim boundary — emit the exact
+                    // cutoff position so callers (Pac-Man face) can
+                    // anchor against it, then stop. The final-sample
+                    // emit below is skipped because we never reached
+                    // the path end.
+                    let last = traveled + t - cutoff
+                    let tEnd = t - last
+                    step(CGPoint(x: a.x + ux * tEnd,
+                                  y: a.y + uy * tEnd),
+                         lastTangent)
+                    return
+                }
                 step(CGPoint(x: a.x + ux * t, y: a.y + uy * t),
                      lastTangent)
                 t += interval
             }
+            traveled += segLen
             carry = segLen - (t - interval)
         }
         // Always emit the final sample (== cursor for live strokes) so
         // the head of the trail is marked even when the last segment
-        // is shorter than `interval`.
-        if let last = pts.last { step(last, lastTangent) }
+        // is shorter than `interval`. Skipped when `cutoff` is in
+        // effect — callers that pass `trimTail` don't want the final
+        // sample because the trail is meant to end short of it.
+        if cutoff == nil, let last = pts.last {
+            step(last, lastTangent)
+        }
     }
 
     /// Fixed grid cell size for the `pixel` style (pt). Small enough
@@ -1038,30 +1077,50 @@ private final class TrailView: NSView {
     }
 
     /// Fixed sizes for the Pac-Man trail. Pellet = small dot lining
-    /// the path; face = larger wedge that follows the cursor with
-    /// its mouth open along the current tangent.
+    /// the path; face = larger wedge that lags behind the cursor by
+    /// `pacmanFaceLag` pt so it reads as Pac-Man running along the
+    /// trail rather than sitting flat on the cursor.
     private static let pacmanPelletDiameter: CGFloat = 4
     private static let pacmanPelletInterval: CGFloat = 14
     private static let pacmanFaceRadius: CGFloat = 10
     /// Half-angle of Pac-Man's mouth opening, in degrees.
     private static let pacmanMouthHalfAngleDeg: CGFloat = 35
+    /// How far back along the path Pac-Man's face sits behind the
+    /// live cursor (pt). Same value is passed to `walkPath` as
+    /// `trimTail`, so the trailing pellets stop at the face — no
+    /// pellets paint between the face and the cursor.
+    private static let pacmanFaceLag: CGFloat = 28
 
-    /// Pac-Man-themed trail: small pellet dots along the path with a
-    /// wedge-shaped Pac-Man face at the cursor whose mouth opens
-    /// along the current tangent. `strokeWidth` is re-purposed as
-    /// **pellet rows perpendicular to the path** — `width = 1` lays
-    /// down a single line of pellets (the classic look), higher
-    /// values stack additional rows.
+    /// Pac-Man-themed trail: the cursor lays a stream of pellet dots
+    /// along the whole path (origin → cursor), and the Pac-Man face
+    /// chases along that same path `pacmanFaceLag` pt behind the
+    /// cursor — so the cursor leads, the dots extend right up to it,
+    /// and Pac-Man visibly catches up from behind. `strokeWidth` is
+    /// re-purposed as **pellet rows perpendicular to the path** —
+    /// `width = 1` lays down a single line of pellets (the classic
+    /// look), higher values stack rows.
     private func drawPacmanPath(origin: CGPoint, cursor: CGPoint,
                                  color: NSColor) {
         let dot = Self.pacmanPelletDiameter
         let thickness = max(1, Int(strokeWidth.rounded()))
         let offsetBase = CGFloat(thickness - 1) / 2
         let rowSpacing = dot + 4
+
+        // 1) Locate where Pac-Man's face sits this frame: walk the
+        // path with the lag as `trimTail` — the final step the walker
+        // emits is exactly the cutoff point. Skip drawing in this
+        // pass; we only need the coordinate + tangent.
+        var faceAnchor: (point: CGPoint, tangent: CGPoint)?
+        walkPath(origin: origin,
+                 interval: Self.pacmanPelletInterval,
+                 trimTail: Self.pacmanFaceLag) { p, tangent in
+            faceAnchor = (p, tangent)
+        }
+
+        // 2) Draw the pellets across the full path (no trim) so the
+        // dot trail extends from origin all the way to the cursor.
         color.withAlphaComponent(0.9).setFill()
-        var lastTangent = CGPoint(x: 1, y: 0)
         let plot: (CGPoint, CGPoint) -> Void = { p, tangent in
-            lastTangent = tangent
             let nx = -tangent.y
             let ny =  tangent.x
             for i in 0..<thickness {
@@ -1076,7 +1135,18 @@ private final class TrailView: NSView {
         walkPath(origin: origin,
                  interval: Self.pacmanPelletInterval,
                  step: plot)
-        drawPacmanFace(at: cursor, tangent: lastTangent, color: color)
+
+        // 3) Draw the face. Path too short for a meaningful lag (just
+        // pressed the button) → fall back to the cursor so the face
+        // is visible immediately instead of hiding for the first
+        // ~28pt of motion.
+        if let anchor = faceAnchor {
+            drawPacmanFace(at: anchor.point, tangent: anchor.tangent,
+                            color: color)
+        } else {
+            drawPacmanFace(at: cursor, tangent: CGPoint(x: 1, y: 0),
+                            color: color)
+        }
     }
 
     /// Draw a closed pie wedge centred on `p`, with the mouth
