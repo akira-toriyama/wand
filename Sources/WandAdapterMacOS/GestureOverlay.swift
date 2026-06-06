@@ -1027,18 +1027,17 @@ private final class TrailView: NSView {
         let fontSize = Self.asciiFontSize
         let font = NSFont.monospacedSystemFont(ofSize: fontSize,
                                                 weight: .bold)
-        // Negative `.strokeWidth` with `.strokeColor` makes Cocoa
-        // paint each glyph as filled-with-outline (positive would
-        // be outline only). 4 ≈ 0.4pt outline at this font size —
-        // visible without losing glyph readability.
-        var attrs: [NSAttributedString.Key: Any] = [
+        // `color-outline` on ascii means **backing rect** (cmatrix
+        // feel), not glyph stroke: each glyph gets painted onto a
+        // solid block of the outline colour. A black outline + green
+        // accent gives the classic Matrix-rain look. Earlier this
+        // used `.strokeColor` for outlined characters, but that
+        // produced "outlined letters" rather than the terminal
+        // backdrop users actually expected.
+        let attrs: [NSAttributedString.Key: Any] = [
             .font: font,
             .foregroundColor: color.withAlphaComponent(0.95),
         ]
-        if let outline {
-            attrs[.strokeColor] = outline.withAlphaComponent(0.95)
-            attrs[.strokeWidth] = -4.0
-        }
         // Pre-build one NSAttributedString per palette entry — cheap
         // cache (~10 small strings) so the per-step draw doesn't
         // re-allocate.
@@ -1060,6 +1059,7 @@ private final class TrailView: NSView {
             (CACurrentMediaTime() * Self.asciiGlyphFlickerHz)
                 .rounded(.down))
         var index: UInt64 = 0
+        let backing = outline?.withAlphaComponent(0.95)
         let draw: (CGPoint, CGPoint) -> Void = { p, tangent in
             // Normal to the path: rotate tangent 90°.
             let nx = -tangent.y
@@ -1077,6 +1077,10 @@ private final class TrailView: NSView {
                                y: cy - glyphSize.height / 2,
                                width: glyphSize.width,
                                height: glyphSize.height)
+                if let backing {
+                    backing.setFill()
+                    NSBezierPath(rect: r).fill()
+                }
                 glyphs[pick].draw(in: r)
             }
         }

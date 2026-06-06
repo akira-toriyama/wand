@@ -275,7 +275,9 @@ color-no-match = "#ef4444"
 #   normal/dashed/dotted — wider underlay stroke beneath the trail
 #   pixel / rainbow-road — 1pt outline-colour frame inset into each
 #                          cell (every dot looks framed)
-#   ascii                — outlined glyphs (filled + stroked)
+#   ascii                — solid backing rect under each glyph
+#                          (terminal / cmatrix feel: green letters
+#                          on black blocks)
 #   pacman               — concentric outer ring on pellets + face
 color-outline = ""
 
