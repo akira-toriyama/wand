@@ -140,10 +140,21 @@ public final class BurstManager {
         emitter.emitterShape = .point
         emitter.emitterSize = .zero
         let dot = particleDot()
+        // Analogous palette around the accent: ±15° and ±30° hue
+        // shifts. The bug we're fixing: this used to be `color +
+        // hard-coded yellow/orange/pink/purple`, so 4/5 of the cells
+        // ignored the configured colour and the burst always read
+        // as warm regardless of theme. Hue-shifting derives the
+        // "adjacent hues" the comment already promised, so a red
+        // accent → reds/oranges, a blue accent → blues/cyans, etc.
+        // For monochrome accents (mono/paper themes) the shifts
+        // collapse to the same colour, leaving a clean tonal burst.
         let palette: [NSColor] = [
             color,
-            .systemYellow, .systemOrange,
-            .systemPink, .systemPurple,
+            hueShift(color, byDegrees: -30),
+            hueShift(color, byDegrees:  30),
+            hueShift(color, byDegrees: -15),
+            hueShift(color, byDegrees:  15),
         ]
         let k = Float(intensity)
         let cells: [CAEmitterCell] = palette.map { c in
@@ -168,6 +179,23 @@ public final class BurstManager {
         }
         emitter.emitterCells = cells
         return emitter
+    }
+
+    /// Return a new colour with its hue shifted by `degrees` in HSB
+    /// space, saturation / brightness / alpha preserved. Used to
+    /// derive the burst's analogous-hue palette from the configured
+    /// accent. Falls back to the input colour when conversion to a
+    /// hue-bearing colour space fails (e.g. pattern colours), so
+    /// burst rendering never breaks on an exotic accent.
+    private static func hueShift(_ color: NSColor,
+                                  byDegrees degrees: CGFloat) -> NSColor {
+        guard let rgb = color.usingColorSpace(.sRGB) else { return color }
+        var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        rgb.getHue(&h, saturation: &s, brightness: &b, alpha: &a)
+        var newH = h + degrees / 360
+        // Wrap into [0, 1).
+        newH = newH - floor(newH)
+        return NSColor(hue: newH, saturation: s, brightness: b, alpha: a)
     }
 
     /// Tiny soft-edged white circle — the base sprite tinted via
