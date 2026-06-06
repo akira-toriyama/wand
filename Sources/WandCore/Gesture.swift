@@ -205,12 +205,12 @@ public struct GestureOverlayTrailSpec: Sendable, Equatable {
     /// Named preset bundling width × glow × dash. Shape only — colour
     /// always comes from `color` / `colorNoMatch`.
     public let style: TrailStyle
-    /// Draw an arrowhead tip at the cursor in the last-committed
-    /// direction. Independent of `style` (a `comet` or `dashed`
-    /// trail can still have or omit the tip) so the directional
-    /// indicator is its own axis. Defaults to `true` — preserves
-    /// the original hard-coded behaviour.
-    public let arrowhead: Bool
+    // Note: an `arrowhead` (cursor-tip glyph) field lived here
+    // through #115 but was retired in favour of the `arrow`
+    // TrailStyle, which draws a continuous chevron chain along the
+    // whole path. The cursor-only tip wasn't expressive enough and
+    // duplicated direction information the path itself already
+    // carried.
     /// How long (ms) the trail lingers after a gesture fires.
     /// Clamped 0..2000; `0` = instant clear.
     public let finalHoldMs: Int
@@ -229,7 +229,6 @@ public struct GestureOverlayTrailSpec: Sendable, Equatable {
                 colorOutline: String = "",
                 width: Int = 3,
                 style: TrailStyle = .normal,
-                arrowhead: Bool = true,
                 finalHoldMs: Int = 400,
                 straightenOnTurn: Bool = false) {
         self.color = color
@@ -237,7 +236,6 @@ public struct GestureOverlayTrailSpec: Sendable, Equatable {
         self.colorOutline = colorOutline
         self.width = width
         self.style = style
-        self.arrowhead = arrowhead
         self.finalHoldMs = finalHoldMs
         self.straightenOnTurn = straightenOnTurn
     }

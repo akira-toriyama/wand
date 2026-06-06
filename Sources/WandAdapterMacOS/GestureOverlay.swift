@@ -114,7 +114,6 @@ public final class GestureOverlay {
         view.colorCyclePeriod = TimeInterval(ov.colorCycleMs) / 1000.0
         view.strokeWidth = CGFloat(ov.trail.width)
         view.trailStyle = ov.trail.style
-        view.arrowheadEnabled = ov.trail.arrowhead
         view.straightenOnTurn = ov.trail.straightenOnTurn
         view.badgeEnabled = ov.badge.enabled
         view.badgeSize = CGFloat(ov.badge.size)
@@ -196,12 +195,9 @@ private final class TrailView: NSView {
     /// (`brush` / `splatoon` / …) are reserved for follow-up PRs of #63
     /// and not represented in this enum yet.
     var trailStyle: TrailStyle = .normal
-    /// Draw the arrowhead tip at the cursor in the last-committed
-    /// direction. Independent of `trailStyle` so the directional
-    /// indicator is its own knob — a `dashed` / `comet` trail can
-    /// still opt out of the tip, and a plain `normal` trail can keep
-    /// it. Set live from `[cast.overlay.trail].arrowhead`.
-    var arrowheadEnabled: Bool = true
+    // `arrowheadEnabled` was retired in #115 — the cursor-only tip
+    // is gone; `style = .arrow` provides direction along the whole
+    // path instead.
     /// When `true` (default), every committed turn snaps the
     /// just-completed segment onto its axis so the trail reads as a
     /// clean orthogonal polyline — the historical hard-coded
@@ -692,14 +688,9 @@ private final class TrailView: NSView {
         case .pacman:
             drawPacmanPath(origin: origin, cursor: cursor,
                             color: color, outline: outlineColor)
-        }
-
-        // Arrowhead at the raw cursor in the last-committed direction.
-        // Skipped until a direction has been committed (no axis to
-        // point along yet), or when `[cast.overlay.trail].arrowhead`
-        // is `false` — the tip is its own axis, not a style detail.
-        if arrowheadEnabled, let dir = lastDir {
-            drawArrowhead(at: cursor, direction: dir, color: color)
+        case .arrow:
+            drawArrowChainPath(origin: origin, cursor: cursor,
+                                color: color, outline: outlineColor)
         }
         NSGraphicsContext.restoreGraphicsState()
     }
@@ -821,7 +812,7 @@ private final class TrailView: NSView {
         case .dotted:
             return TrailStyleParams(width: base, glowRadius: 7,
                                      lineDash: [base * 0.6, base * 2])
-        case .pixel, .ascii, .rainbowRoad, .pacman:
+        case .pixel, .ascii, .rainbowRoad, .pacman, .arrow:
             // Unused — these styles route through their own
             // renderers and never call `drawSinglePath`. Returning a
             // safe baseline keeps the switch exhaustive without
@@ -1300,34 +1291,59 @@ private final class TrailView: NSView {
         }
     }
 
-    /// Filled triangle pointing along `direction`, with its tip at
-    /// `tip`. Sized off `strokeWidth` so it scales with the trail.
-    private func drawArrowhead(at tip: CGPoint, direction: Direction,
-                                color: NSColor) {
-        let len = strokeWidth * 4
-        let half = strokeWidth * 2.5
-        let path = NSBezierPath()
-        let p1: CGPoint, p2: CGPoint
-        switch direction {
-        case .right:
-            p1 = CGPoint(x: tip.x - len, y: tip.y - half)
-            p2 = CGPoint(x: tip.x - len, y: tip.y + half)
-        case .left:
-            p1 = CGPoint(x: tip.x + len, y: tip.y - half)
-            p2 = CGPoint(x: tip.x + len, y: tip.y + half)
-        case .up:
-            p1 = CGPoint(x: tip.x - half, y: tip.y - len)
-            p2 = CGPoint(x: tip.x + half, y: tip.y - len)
-        case .down:
-            p1 = CGPoint(x: tip.x - half, y: tip.y + len)
-            p2 = CGPoint(x: tip.x + half, y: tip.y + len)
+    /// Continuous arrow chain along the path — filled chevron glyphs
+    /// (`>`) rotated to follow the local tangent, so the trail reads
+    /// as `-->-->-->` pointing toward the cursor. Each chevron is
+    /// rendered as a small NSBezierPath (two strokes that meet at a
+    /// point) instead of a text glyph so the rotation is per-pixel
+    /// crisp at any angle and the size scales cleanly with
+    /// `strokeWidth`.
+    private func drawArrowChainPath(origin: CGPoint, cursor: CGPoint,
+                                     color: NSColor,
+                                     outline: NSColor?) {
+        // Geometry scales with `strokeWidth`: a `width = 3` (the
+        // default) chevron is ~12pt long with a ~9pt half-height,
+        // and chevrons sit ~14pt apart. Higher widths grow
+        // proportionally; the chain density stays the same.
+        let len = max(8, strokeWidth * 4)
+        let half = max(5, strokeWidth * 3)
+        let lineWidth = max(1.5, strokeWidth * 0.8)
+        let interval = max(len * 1.4, strokeWidth * 5)
+        let stroke = color.withAlphaComponent(0.95)
+        let outlineStroke = outline?.withAlphaComponent(0.95)
+        let drawChevron: (CGPoint, CGPoint) -> Void = { p, tangent in
+            // Tangent gives the forward direction (the open side of
+            // the `>`). The chevron's two arms reach BACK from the
+            // tip, each at a fixed angle to the tangent.
+            let tx = tangent.x, ty = tangent.y
+            // Perpendicular (90° CCW): (-ty, tx).
+            let nx = -ty, ny = tx
+            // Tip = a bit ahead of `p`; back-corners are length `len`
+            // behind the tip, ±`half` along the normal.
+            let tipX = p.x + tx * (len * 0.4)
+            let tipY = p.y + ty * (len * 0.4)
+            let backCenterX = p.x - tx * (len * 0.6)
+            let backCenterY = p.y - ty * (len * 0.6)
+            let p1 = CGPoint(x: backCenterX + nx * half,
+                             y: backCenterY + ny * half)
+            let p2 = CGPoint(x: backCenterX - nx * half,
+                             y: backCenterY - ny * half)
+            let path = NSBezierPath()
+            path.move(to: p1)
+            path.line(to: CGPoint(x: tipX, y: tipY))
+            path.line(to: p2)
+            path.lineCapStyle = .round
+            path.lineJoinStyle = .round
+            if let outlineStroke {
+                outlineStroke.setStroke()
+                path.lineWidth = lineWidth + 2
+                path.stroke()
+            }
+            stroke.setStroke()
+            path.lineWidth = lineWidth
+            path.stroke()
         }
-        path.move(to: tip)
-        path.line(to: p1)
-        path.line(to: p2)
-        path.close()
-        color.withAlphaComponent(0.95).setFill()
-        path.fill()
+        walkPath(origin: origin, interval: interval, step: drawChevron)
     }
 
     // MARK: - HUD layout

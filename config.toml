@@ -323,14 +323,12 @@ width = 3
 #               current direction. Always a single line of pellets
 #               (the arcade look); `width` scales pellet / face size
 #               + spacing.
+#   "arrow"   — continuous chevron chain along the whole path
+#               (`-->-->-->`), each `>` rotated to match the local
+#               tangent so the direction reads at every point — not
+#               just at the cursor tip. Replaces the retired
+#               `arrowhead = true` knob.
 style = "normal"
-
-# Draw an arrowhead tip at the cursor in the last-committed direction
-# — a directional indicator pointing where the gesture's last segment
-# went. Independent of `style` (a `dashed` trail can still opt in or
-# out of the tip), so the indicator is its own axis, not bundled into
-# the line-shape preset. `false` for a plain line.
-arrowhead = true
 
 # How long (ms) the trail lingers after a gesture fires. The
 # in-progress segment is first snapped onto its axis so the whole

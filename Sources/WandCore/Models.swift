@@ -265,6 +265,15 @@ public enum TrailStyle: String, Sendable, Hashable, CaseIterable {
     /// flows from the trail colour just like the other styles —
     /// match-vs-no-match signal preserved.
     case pacman
+    /// Continuous arrow chain along the entire path — repeated
+    /// chevron glyphs (`>`) rotated to match the path tangent so the
+    /// trail reads as `-->-->-->` flowing toward the cursor.
+    /// Replaces the cursor-only `arrowhead = true` indicator (its
+    /// retired knob); use `arrow` whenever the goal is "show
+    /// direction along the whole path", and any other style with
+    /// the arrowhead-on-cursor look in mind needs to switch to
+    /// `arrow` explicitly.
+    case arrow
 }
 
 /// The window the stroke acts on. Resolved at *button-down* time —

@@ -182,7 +182,10 @@ public struct WandConfig: Sendable {
         let trailStyle: TrailStyle = parseEnum(
             tr, key: "style", section: "cast.overlay.trail",
             default: .normal)
-        let trailArrowhead = tr.bool("arrowhead", true)
+        // `arrowhead` knob was retired in #115 (replaced by
+        // `style = "arrow"` for direction-along-the-whole-path).
+        // Any stale `arrowhead = true / false` line in a user config
+        // silently drops, per wand's clamp-to-default policy.
         let trailFinalHoldMs = clampInt(tr, key: "final-hold-ms",
                                         default: 400, lo: 0, hi: 2000)
         let trailStraightenOnTurn = tr.bool("straighten-on-turn", false)
@@ -194,7 +197,6 @@ public struct WandConfig: Sendable {
             colorOutline: trailColorOutline,
             width: trailWidth,
             style: trailStyle,
-            arrowhead: trailArrowhead,
             finalHoldMs: trailFinalHoldMs,
             straightenOnTurn: trailStraightenOnTurn)
 
