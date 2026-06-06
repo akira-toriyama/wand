@@ -1378,30 +1378,35 @@ private final class TrailView: NSView {
     // MARK: - Paws style constants
 
     /// Spacing between paw prints along the path (pt at scale=1).
-    /// Wide enough for the pad + toes to read as discrete prints
-    /// without bleeding into each other.
-    private static let pawsSpacing: CGFloat = 26
-    /// Main heel-pad radius (pt at scale=1). The pad is the focal
-    /// blob of each print; toes are smaller satellites ahead of it.
-    private static let pawsPadRadius: CGFloat = 3.2
-    /// Toe radius (pt at scale=1). ~half the pad so the print reads
-    /// as "pad + smaller toes" rather than uniform dots.
-    private static let pawsToeRadius: CGFloat = 1.6
+    /// Has to clear the pad + forward-toe extent (~16pt at scale=1)
+    /// with visible gap, otherwise prints bleed together and the
+    /// trail reads as a continuous line rather than discrete paws.
+    private static let pawsSpacing: CGFloat = 42
+    /// Main heel-pad radius (pt at scale=1). Sized so the pad is
+    /// the obvious anchor of each print at HUD viewing distance —
+    /// smaller than this and the pad + toes merge into a blob.
+    private static let pawsPadRadius: CGFloat = 6
+    /// Toe radius (pt at scale=1). ~half the pad so the print
+    /// reads as "pad + smaller toes" rather than four uniform dots.
+    private static let pawsToeRadius: CGFloat = 3
     /// How far the toes sit forward of the pad along the tangent
-    /// direction (pt at scale=1).
-    private static let pawsToeForward: CGFloat = 4.5
+    /// direction (pt at scale=1). Big enough that the toes clearly
+    /// lead the pad rather than overlap it.
+    private static let pawsToeForward: CGFloat = 9
     /// Lateral half-spread of the outer two toes from the centre
     /// toe (pt at scale=1). The 3-toe row sits perpendicular to
-    /// the tangent.
-    private static let pawsToeSpread: CGFloat = 3.0
+    /// the tangent; bigger spread reads more clearly as multiple
+    /// distinct toes vs. a single elongated mark.
+    private static let pawsToeSpread: CGFloat = 5.5
     /// How far the centre toe sits forward of the side toes
-    /// (pt at scale=1). Small forward offset turns the row from a
-    /// straight line into a subtle arc — reads more like a real paw.
-    private static let pawsToeArc: CGFloat = 0.6
+    /// (pt at scale=1). Forward offset turns the 3-toe row from
+    /// a straight line into a `∩` arch — reads as a real paw.
+    private static let pawsToeArc: CGFloat = 1.5
     /// How far each paw print drifts off the path centreline,
-    /// alternating left/right (pt at scale=1). Mimics footprints
-    /// from a creature walking on alternating feet.
-    private static let pawsSideOffset: CGFloat = 2.2
+    /// alternating left/right (pt at scale=1). Big enough that the
+    /// L/R alternation is obvious — small offsets read as path
+    /// jitter rather than alternating feet.
+    private static let pawsSideOffset: CGFloat = 5
 
     /// Stylised paw prints walking along the path: a pad (heel)
     /// with 3 toes ahead of it, drawn at `pawsSpacing` intervals.
