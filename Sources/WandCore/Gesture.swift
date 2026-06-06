@@ -65,6 +65,7 @@ public enum CastTheme: String, Sendable, CaseIterable {
     case rainbow
     case mono
     case vapor
+    case pacman
 
     // Note: a `paper` (light-background) theme lived here through
     // #115 but was retired — wand's HUD overlays a dark blur on
@@ -136,6 +137,19 @@ public enum CastTheme: String, Sendable, CaseIterable {
                 cardsBorderColor: "#ff79c6",
                 cardsBodyColor: "#282a36",
                 cardsTextColor: "#f8f8f2")
+        case .pacman:
+            // Pac-Man arcade palette: yellow Pac-Man on a black
+            // backdrop, red-ghost no-match. The yellow accent pairs
+            // particularly well with `style = "pacman"`, where the
+            // wedge face inherits the trail colour and ends up the
+            // canonical arcade yellow.
+            return CastThemePalette(
+                trailColor: "#ffea00",
+                trailColorNoMatch: "#ff0000",
+                trailColorOutline: "#000000",
+                cardsBorderColor: "#ffea00",
+                cardsBodyColor: "#000000",
+                cardsTextColor: "#ffea00")
         }
     }
 }

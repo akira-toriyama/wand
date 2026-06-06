@@ -159,6 +159,10 @@ intensity = "normal"
 #                is monochrome.
 #   "vapor"    — synthwave: pink trail, lime no-match, slate
 #                outline, Dracula-style dark card.
+#   "pacman"   — Pac-Man arcade palette: yellow trail on black,
+#                red-ghost no-match. Pairs with
+#                `style = "pacman"` for the canonical arcade
+#                yellow wedge.
 #
 # Unknown names clamp to "default". Validate with `wand --validate`.
 theme = "default"
