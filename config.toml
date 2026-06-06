@@ -276,6 +276,20 @@ anim-enabled = true
 match = "none"        # the firing card, on button-up
 unmatch = "none"      # cards that became unreachable mid-gesture
 
+# Card-text base font size in points. The arrow column rides at
+# `font-size + 1` so directional glyphs stay a hair taller than
+# rule names. The card padding is fixed in pt, so a bigger font
+# expands the card naturally rather than just changing typography.
+# Clamped 8..32.
+font-size = 13
+
+# Border stroke colour for assist cards. Empty falls back to the
+# historical 18%-alpha white hairline (which reads against the
+# blurred backing). Accepts the same hex / named grammar as
+# `[cast.overlay.trail].color` — supports an alpha byte
+# (`#RRGGBBAA`) so callers can dial in opacity without losing hue.
+border-color = ""
+
 
 # -----------------------------------------------------------------
 # Cast fire-moment effects — at the cursor when a rule fires

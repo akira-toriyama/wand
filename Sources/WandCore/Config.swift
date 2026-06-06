@@ -188,8 +188,13 @@ public struct WandConfig: Sendable {
             cd, key: "match", section: "cast.overlay.cards", default: .none)
         let cardsUnmatch: Effect = parseEnum(
             cd, key: "unmatch", section: "cast.overlay.cards", default: .none)
+        let cardsFontSize = clampInt(
+            cd, key: "font-size", default: 13, lo: 8, hi: 32)
+        let cardsBorderColor = cd.string("border-color")
         let cards = GestureOverlayCardsSpec(
-            match: cardsMatch, unmatch: cardsUnmatch)
+            match: cardsMatch, unmatch: cardsUnmatch,
+            fontSize: cardsFontSize,
+            borderColor: cardsBorderColor)
 
         let overlay = GestureOverlaySpec(
             enabled: overlayEnabled,

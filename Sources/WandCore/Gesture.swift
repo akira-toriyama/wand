@@ -125,11 +125,28 @@ public struct GestureOverlayCardsSpec: Sendable, Equatable {
     public let match: Effect
     /// Animation when a card becomes unreachable mid-gesture.
     public let unmatch: Effect
+    /// Card-text base font size in points. The arrow column rides at
+    /// `fontSize + 1` so the directional glyphs stay a hair taller
+    /// than the rule name (legibility on dense layouts). The card's
+    /// padding is fixed in pt, so a larger font expands the card
+    /// naturally rather than just changing typography. Clamped 8..32.
+    public let fontSize: Int
+    /// Card border colour. Empty falls back to the historical
+    /// `NSColor.white.withAlphaComponent(0.18)` (a 1pt hairline that
+    /// reads against the blurred backing). Accepts the same hex /
+    /// named grammar as `[cast.overlay.trail].color`; supports an
+    /// alpha byte (`#RRGGBBAA`) so callers can dial in opacity
+    /// without losing the hue.
+    public let borderColor: String
 
     public init(match: Effect = .none,
-                unmatch: Effect = .none) {
+                unmatch: Effect = .none,
+                fontSize: Int = 13,
+                borderColor: String = "") {
         self.match = match
         self.unmatch = unmatch
+        self.fontSize = fontSize
+        self.borderColor = borderColor
     }
 
     public static let `default` = GestureOverlayCardsSpec()

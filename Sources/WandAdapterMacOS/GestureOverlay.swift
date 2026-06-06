@@ -114,6 +114,9 @@ public final class GestureOverlay {
         view.setBlurEnabled(ov.blurEnabled)
         view.effectUnmatch = ov.cards.unmatch
         view.effectMatch = ov.cards.match
+        view.cardFontSize = CGFloat(ov.cards.fontSize)
+        view.cardBorderColor = NSColorParse.nsColor(ov.cards.borderColor)
+            ?? NSColor.white.withAlphaComponent(0.18)
         view.effectIntensity = cfg.intensity.multiplier
         view.minStrokePx = CGFloat(cfg.recognition.minStrokePx)
         view.finalHoldDuration = TimeInterval(ov.trail.finalHoldMs) / 1000.0
@@ -178,6 +181,17 @@ private final class TrailView: NSView {
     /// on init + hot-reload.
     var effectUnmatch: Effect = .none
     var effectMatch: Effect = .none
+    /// Base font size for assist-card text (set live from
+    /// `[cast.overlay.cards].font-size`). The arrow column rides at
+    /// `cardFontSize + 1` so directional glyphs stay a hair taller
+    /// than rule names. The card padding is fixed in pt, so a bigger
+    /// font expands the card naturally.
+    var cardFontSize: CGFloat = 13
+    /// Border stroke for assist cards (set live from
+    /// `[cast.overlay.cards].border-color`). Falls back at the
+    /// `applyConfig` site to the historical 18%-alpha white hairline
+    /// when the user leaves the knob empty.
+    var cardBorderColor: NSColor = NSColor.white.withAlphaComponent(0.18)
     /// Pre-resolved multiplier from `Intensity.multiplier` — scales
     /// translation distance, scale deltas, vibration amplitude, and
     /// particle birth-rate / velocity.
@@ -1023,7 +1037,7 @@ private final class TrailView: NSView {
     /// no arrows left, so it drops the tab — its accent-tinted fill
     /// (set in `layoutHUD`) does the "firing" signal; text stays white.
     fileprivate func cardText(_ rows: [GestureHint.Row]) -> NSAttributedString {
-        let arrowFont = Self.mono(14, .semibold)
+        let arrowFont = Self.mono(cardFontSize + 1, .semibold)
         var arrowMax: CGFloat = 0
         for r in rows {
             let w = (r.suffix as NSString).size(withAttributes: [.font: arrowFont]).width
@@ -1044,7 +1058,7 @@ private final class TrailView: NSView {
                     .font: arrowFont, .foregroundColor: NSColor.white]))
             }
             s.append(NSAttributedString(string: (useTab ? "\t" : "") + r.name, attributes: [
-                .font: Self.mono(13, .regular),
+                .font: Self.mono(cardFontSize, .regular),
                 .foregroundColor: NSColor.white]))
         }
         s.addAttribute(.paragraphStyle, value: para,
@@ -1146,7 +1160,7 @@ private final class HUDContentView: NSView {
             fill.setFill()
             bg.fill()
         }
-        NSColor.white.withAlphaComponent(0.18).setStroke()
+        o.cardBorderColor.setStroke()
         bg.lineWidth = 1
         bg.stroke()
         c.text.draw(with: c.rect.insetBy(dx: o.cardPadX, dy: o.cardPadY),
