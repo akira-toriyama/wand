@@ -198,11 +198,13 @@ public struct WandConfig: Sendable {
             cd, key: "font-size", default: 13, lo: 8, hi: 32)
         let cardsBorderColor = cd.string("border-color")
         let cardsBodyColor = cd.string("body-color")
+        let cardsTextColor = cd.string("text-color")
         let cards = GestureOverlayCardsSpec(
             match: cardsMatch, unmatch: cardsUnmatch,
             fontSize: cardsFontSize,
             borderColor: cardsBorderColor,
-            bodyColor: cardsBodyColor)
+            bodyColor: cardsBodyColor,
+            textColor: cardsTextColor)
 
         let overlay = GestureOverlaySpec(
             enabled: overlayEnabled,

@@ -356,6 +356,13 @@ border-color = ""
 # `border-color` above; dynamic modes work here too.
 body-color = ""
 
+# Text colour for card labels (rule name + direction arrows).
+# Empty falls back to white — the historical hard-coded value.
+# Same grammar as `border-color` / `body-color`; dynamic modes
+# work here too. Useful when `body-color` is light enough that
+# white text washes out (set `text-color = "#000000"` etc.).
+text-color = ""
+
 
 # -----------------------------------------------------------------
 # Cast fire-moment effects — at the cursor when a rule fires

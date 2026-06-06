@@ -126,6 +126,10 @@ public final class GestureOverlay {
             ? nil
             : TrailColorMode.parse(ov.cards.bodyColor,
                                     fallback: .clear)
+        view.cardTextMode = ov.cards.textColor.isEmpty
+            ? .static(.white)
+            : TrailColorMode.parse(ov.cards.textColor,
+                                    fallback: .white)
         view.effectIntensity = cfg.intensity.multiplier
         view.minStrokePx = CGFloat(cfg.recognition.minStrokePx)
         view.finalHoldDuration = TimeInterval(ov.trail.finalHoldMs) / 1000.0
@@ -233,6 +237,13 @@ private final class TrailView: NSView {
     /// trail-accent tint regardless of this — so the "fires on
     /// release" signal stays loud.
     var cardBodyMode: TrailColorMode? = nil
+    /// Text colour mode for assist-card labels (rule name + direction
+    /// arrows). Set live from `[cast.overlay.cards].text-color`;
+    /// `.static(.white)` is the fallback for the historical
+    /// hard-coded white. Dynamic tokens (`rainbow` / `neon` /
+    /// `splatoon`) animate alongside the trail using the same cycle
+    /// period and stroke seed.
+    var cardTextMode: TrailColorMode = .static(.white)
     /// Pre-resolved multiplier from `Intensity.multiplier` — scales
     /// translation distance, scale deltas, vibration amplitude, and
     /// particle birth-rate / velocity.
@@ -1551,16 +1562,24 @@ private final class TrailView: NSView {
             para.tabStops = [NSTextTab(textAlignment: .left, location: arrowMax + 12)]
         }
 
+        // Resolve current text colour from the configured mode —
+        // honours dynamic tokens (`rainbow` / `neon` / `splatoon`)
+        // alongside static hex / named values.
+        let textColor = cardTextMode.currentColor(
+            at: CACurrentMediaTime(),
+            strokeSeed: strokeSeed,
+            cyclePeriod: colorCyclePeriod)
+
         let s = NSMutableAttributedString()
         for (i, r) in rows.enumerated() {
             if i > 0 { s.append(NSAttributedString(string: "\n")) }
             if !r.suffix.isEmpty {
                 s.append(NSAttributedString(string: r.suffix, attributes: [
-                    .font: arrowFont, .foregroundColor: NSColor.white]))
+                    .font: arrowFont, .foregroundColor: textColor]))
             }
             s.append(NSAttributedString(string: (useTab ? "\t" : "") + r.name, attributes: [
                 .font: Self.mono(cardFontSize, .regular),
-                .foregroundColor: NSColor.white]))
+                .foregroundColor: textColor]))
         }
         s.addAttribute(.paragraphStyle, value: para,
                        range: NSRange(location: 0, length: s.length))

@@ -165,17 +165,24 @@ public struct GestureOverlayCardsSpec: Sendable, Equatable {
     /// "this rule fires on release" signal stays visible. Same
     /// grammar as `borderColor`; dynamic modes work here too.
     public let bodyColor: String
+    /// Card text colour (rule name + direction arrows). Empty falls
+    /// back to white — the historical hard-coded value. Same grammar
+    /// as `borderColor` / `bodyColor`: named / hex / dynamic tokens
+    /// (`rainbow` / `neon` / `splatoon`).
+    public let textColor: String
 
     public init(match: Effect = .none,
                 unmatch: Effect = .none,
                 fontSize: Int = 13,
                 borderColor: String = "",
-                bodyColor: String = "") {
+                bodyColor: String = "",
+                textColor: String = "") {
         self.match = match
         self.unmatch = unmatch
         self.fontSize = fontSize
         self.borderColor = borderColor
         self.bodyColor = bodyColor
+        self.textColor = textColor
     }
 
     public static let `default` = GestureOverlayCardsSpec()
