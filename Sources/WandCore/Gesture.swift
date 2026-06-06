@@ -31,9 +31,14 @@ public struct CastThemePalette: Sendable, Equatable {
     public let cardsTextColor: String
     /// Body fill for the **firing** card. Empty = inherit the trail
     /// accent (the historical behaviour). Themes that want a
-    /// distinct firing-card flash (e.g. `pacman`'s power-pellet
-    /// rainbow) override this without touching the trail colour.
+    /// distinct firing-card flash override this without touching
+    /// the trail colour.
     public let cardsFiresColor: String
+    /// Text colour for the **firing** card only. Empty = inherit
+    /// `cardsTextColor`. Lets a theme invert the firing card cleanly
+    /// — e.g. directional cards use yellow-on-black, firing card
+    /// flips to black-on-yellow.
+    public let cardsFiresTextColor: String
     /// Burst particle colour. Empty = inherit `trail.color`. Same
     /// grammar as the trail colour fields.
     public let burstColor: String
@@ -47,6 +52,7 @@ public struct CastThemePalette: Sendable, Equatable {
                 cardsBorderColor: String, cardsBodyColor: String,
                 cardsTextColor: String,
                 cardsFiresColor: String = "",
+                cardsFiresTextColor: String = "",
                 burstColor: String = "") {
         self.trailColor = trailColor
         self.trailColorNoMatch = trailColorNoMatch
@@ -55,6 +61,7 @@ public struct CastThemePalette: Sendable, Equatable {
         self.cardsBodyColor = cardsBodyColor
         self.cardsTextColor = cardsTextColor
         self.cardsFiresColor = cardsFiresColor
+        self.cardsFiresTextColor = cardsFiresTextColor
         self.burstColor = burstColor
     }
 }
@@ -151,10 +158,12 @@ public enum CastTheme: String, Sendable, CaseIterable {
             // wedge face inherits the trail colour and ends up the
             // canonical arcade yellow.
             //
-            // Card scheme: yellow pellet-coloured body with black
-            // text on every directional card. The firing card flips
-            // to rainbow — Pac-Man eating the power pellet and
-            // entering the invincible flashing state.
+            // Card scheme is a deliberate two-state design:
+            //   directional cards — yellow pellet body + black text
+            //   firing card       — INVERTED (black body + yellow
+            //                       text), so the "fires on release"
+            //                       moment reads as a sharp colour
+            //                       flip rather than a flashy effect.
             return CastThemePalette(
                 trailColor: "#ffea00",
                 trailColorNoMatch: "#ff0000",
@@ -162,7 +171,8 @@ public enum CastTheme: String, Sendable, CaseIterable {
                 cardsBorderColor: "#ffea00",
                 cardsBodyColor: "#ffea00",
                 cardsTextColor: "#000000",
-                cardsFiresColor: "rainbow")
+                cardsFiresColor: "#000000",
+                cardsFiresTextColor: "#ffea00")
         }
     }
 }
@@ -331,10 +341,14 @@ public struct GestureOverlayCardsSpec: Sendable, Equatable {
     /// the historical "this card fires on release" tint. Same
     /// grammar as the other colour fields, including dynamic tokens.
     /// Useful for themes that want the firing card to flash
-    /// differently from the trail (e.g. the `pacman` theme's
-    /// power-pellet rainbow flash while the trail itself stays
-    /// arcade yellow).
+    /// differently from the trail.
     public let firesColor: String
+    /// Text colour for the **firing** card only. Empty falls back
+    /// to `textColor` (= the same text colour as directional
+    /// cards). Lets a theme invert the firing card cleanly — e.g.
+    /// directional cards use yellow-on-black, firing card uses
+    /// black-on-yellow.
+    public let firesTextColor: String
 
     public init(match: Effect = .none,
                 unmatch: Effect = .none,
@@ -342,7 +356,8 @@ public struct GestureOverlayCardsSpec: Sendable, Equatable {
                 borderColor: String = "",
                 bodyColor: String = "",
                 textColor: String = "",
-                firesColor: String = "") {
+                firesColor: String = "",
+                firesTextColor: String = "") {
         self.match = match
         self.unmatch = unmatch
         self.fontSize = fontSize
@@ -350,6 +365,7 @@ public struct GestureOverlayCardsSpec: Sendable, Equatable {
         self.bodyColor = bodyColor
         self.textColor = textColor
         self.firesColor = firesColor
+        self.firesTextColor = firesTextColor
     }
 
     public static let `default` = GestureOverlayCardsSpec()

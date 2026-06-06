@@ -134,7 +134,8 @@ intensity = "normal"
 # Coordinated colour palette for the cast HUD + fire-moment
 # effects. Sets defaults for:
 #   trail   — color / color-no-match / color-outline
-#   cards   — border-color / body-color / text-color / fires-color
+#   cards   — border-color / body-color / text-color /
+#             fires-color / fires-text-color
 #   fire    — burst.color
 # Pick a vibe and the colours are guaranteed to read well together.
 # (Decal is intentionally not themed — it always uses the Splatoon
@@ -162,9 +163,11 @@ intensity = "normal"
 #   "pacman"   — Pac-Man arcade palette: yellow trail on black,
 #                red-ghost no-match. Pairs with
 #                `style = "pacman"` for the canonical arcade
-#                yellow wedge. Cards are yellow pellets with
-#                black text; the firing card flips to rainbow —
-#                the power-pellet invincible flash.
+#                yellow wedge. Cards use a two-state design —
+#                directional cards are yellow pellets with black
+#                text; the firing card is the inverted pair
+#                (black body + yellow text) so "fires on release"
+#                lands as a sharp colour flip.
 #
 # Unknown names clamp to "default". Validate with `wand --validate`.
 theme = "default"
@@ -429,10 +432,16 @@ text-color = ""
 # release). Empty falls back to the trail accent — the historical
 # "this fires on release" tint. Set to a different colour or a
 # dynamic token to make the firing card flash distinctly from
-# the trail. Used by the `pacman` theme to render the firing
-# card as `rainbow` (power-pellet invincible flash) while the
-# rest of the cards / trail stay arcade yellow.
+# the trail. Used by the `pacman` theme to invert the firing
+# card body (black) against the yellow-pellet directional cards.
 fires-color = ""
+
+# Text colour for the **firing** card only. Empty falls back to
+# `text-color` (= the same colour as directional-card text).
+# Lets a theme invert the firing card cleanly — e.g. pacman uses
+# this to flip the firing card's text to yellow against its
+# black body, the opposite of directional cards' black-on-yellow.
+fires-text-color = ""
 
 
 # -----------------------------------------------------------------

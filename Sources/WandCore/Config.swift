@@ -227,13 +227,16 @@ public struct WandConfig: Sendable {
             return c.isEmpty ? palette.cardsTextColor : c }()
         let cardsFiresColor = { let c = cd.string("fires-color")
             return c.isEmpty ? palette.cardsFiresColor : c }()
+        let cardsFiresTextColor = { let c = cd.string("fires-text-color")
+            return c.isEmpty ? palette.cardsFiresTextColor : c }()
         let cards = GestureOverlayCardsSpec(
             match: cardsMatch, unmatch: cardsUnmatch,
             fontSize: cardsFontSize,
             borderColor: cardsBorderColor,
             bodyColor: cardsBodyColor,
             textColor: cardsTextColor,
-            firesColor: cardsFiresColor)
+            firesColor: cardsFiresColor,
+            firesTextColor: cardsFiresTextColor)
 
         let overlay = GestureOverlaySpec(
             enabled: overlayEnabled,

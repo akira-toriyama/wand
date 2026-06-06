@@ -137,6 +137,10 @@ public final class GestureOverlay {
             ? nil
             : TrailColorMode.parse(ov.cards.firesColor,
                                     fallback: .systemBlue)
+        view.cardFiresTextMode = ov.cards.firesTextColor.isEmpty
+            ? nil
+            : TrailColorMode.parse(ov.cards.firesTextColor,
+                                    fallback: .white)
         view.effectIntensity = cfg.intensity.multiplier
         view.minStrokePx = CGFloat(cfg.recognition.minStrokePx)
         view.finalHoldDuration = TimeInterval(ov.trail.finalHoldMs) / 1000.0
@@ -255,11 +259,16 @@ private final class TrailView: NSView {
     var cardTextMode: TrailColorMode = .static(.white)
     /// Body fill mode for the **firing** card (`nil` = inherit the
     /// trail accent, the historical default). Set live from
-    /// `[cast.overlay.cards].fires-color`. Themes like `pacman`
-    /// use this to flash the firing card in a different palette
-    /// from the trail (e.g. rainbow over an arcade-yellow trail —
-    /// the power-pellet invincible look).
+    /// `[cast.overlay.cards].fires-color`. Themes can flash the
+    /// firing card in a different palette from the trail.
     var cardFiresMode: TrailColorMode? = nil
+    /// Text colour mode for the firing card only (`nil` = inherit
+    /// `cardTextMode`, the same text colour as directional cards).
+    /// Set live from `[cast.overlay.cards].fires-text-color`. Lets
+    /// a theme invert the firing card cleanly — e.g. directional
+    /// cards run yellow-on-black and the firing card flips to
+    /// black-on-yellow.
+    var cardFiresTextMode: TrailColorMode? = nil
     /// Pre-resolved multiplier from `Intensity.multiplier` — scales
     /// translation distance, scale deltas, vibration amplitude, and
     /// particle birth-rate / velocity.
@@ -1389,7 +1398,7 @@ private final class TrailView: NSView {
             }
             let gap: CGFloat = 24
             for (arrow, rows) in byDir {
-                let s = cardText(rows)
+                let s = cardText(rows, textMode: cardTextMode)
                 let size = cardSize(s)
                 let o: CGPoint
                 switch arrow {
@@ -1405,7 +1414,9 @@ private final class TrailView: NSView {
                     text: s, fill: nil))
             }
             if !fires.isEmpty {
-                let s = cardText(fires)
+                let s = cardText(fires,
+                                  textMode: cardFiresTextMode
+                                    ?? cardTextMode)
                 let size = cardSize(s)
                 // Fires card fill: accent on its own over blur (alpha
                 // 0.5 lets the frost show through). Without blur the
@@ -1671,8 +1682,12 @@ private final class TrailView: NSView {
     /// One card's text. Directional cards (`fires == false` rows)
     /// stay tab-aligned past the widest arrows. The firing card has
     /// no arrows left, so it drops the tab — its accent-tinted fill
-    /// (set in `layoutHUD`) does the "firing" signal; text stays white.
-    fileprivate func cardText(_ rows: [GestureHint.Row]) -> NSAttributedString {
+    /// (set in `layoutHUD`) does the "firing" signal. `textMode`
+    /// lets the caller pick a different colour for the firing card
+    /// (`cardFiresTextMode`) from the directional cards
+    /// (`cardTextMode`).
+    fileprivate func cardText(_ rows: [GestureHint.Row],
+                               textMode: TrailColorMode) -> NSAttributedString {
         let arrowFont = Self.mono(cardFontSize + 1, .semibold)
         var arrowMax: CGFloat = 0
         for r in rows {
@@ -1686,10 +1701,10 @@ private final class TrailView: NSView {
             para.tabStops = [NSTextTab(textAlignment: .left, location: arrowMax + 12)]
         }
 
-        // Resolve current text colour from the configured mode —
+        // Resolve current text colour from the supplied mode —
         // honours dynamic tokens (`rainbow` / `neon` / `splatoon`)
         // alongside static hex / named values.
-        let textColor = cardTextMode.currentColor(
+        let textColor = textMode.currentColor(
             at: CACurrentMediaTime(),
             strokeSeed: strokeSeed,
             cyclePeriod: colorCyclePeriod)
