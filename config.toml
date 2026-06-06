@@ -219,22 +219,31 @@ blur-enabled = true
 color = "#3b82f6"
 color-no-match = "#ef4444"
 
-# Stroke width in points. Clamped 1..40. Style presets below may
-# override this — `thin` halves it (with a 1.5pt floor), `thick`
-# doubles it, `dashed`/`dotted` use it as the dash unit.
+# Trail width. Clamped 1..40. Meaning depends on `style`:
+#   normal / dashed / dotted — stroke width in points
+#   pixel                    — thickness in fixed-size cells
+#                              (5pt cell; `width = 3` lays down a
+#                              3-cell-wide stripe)
+#   ascii                    — thickness in fixed-size glyphs
+#                              (11pt font; `width = 3` lays down a
+#                              3-glyph-wide band)
+# So in pixel / ascii, raising `width` adds more small marks across
+# the path rather than scaling each mark up — a denser cluster of
+# small glyphs / cells, not bigger ones.
 width = 3
 
 # Trail dash pattern preset. **Shape only — the trail's colour is
 # always sourced from `color` / `color-no-match` above**, so the
-# match-vs-no-match signal isn't lost when the style changes. Width
-# comes from `width` above; glow is fixed.
+# match-vs-no-match signal isn't lost when the style changes.
 #
 #   "normal"  — single solid stroke (default)
 #   "dashed"  — broken line (3:2 dash:gap, sized off `width`)
 #   "dotted"  — short-dash dotted line (0.6:2 dash:gap)
-#   "pixel"   — 8-bit / pixel-art: trail rasterised to a coarse grid
-#               and filled cell-by-cell (chunky stepped look)
-#   "ascii"   — AA-art: monospaced `*` glyphs placed along the path
+#   "pixel"   — 8-bit / pixel-art: fixed 5pt cells stepped along the
+#               path; `width` = cells across the path (thickness)
+#   "ascii"   — AA-art: 11pt monospaced glyphs (`* + x o # . : = ~ ^`)
+#               picked randomly per stroke; `width` = glyphs across
+#               the path (thickness)
 style = "normal"
 
 # Draw an arrowhead tip at the cursor in the last-committed direction

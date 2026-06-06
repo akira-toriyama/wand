@@ -790,14 +790,30 @@ private final class TrailView: NSView {
     /// at a fixed spacing regardless of original sample density.
     private func walkPath(origin: CGPoint,
                            interval: CGFloat,
-                           step: (CGPoint) -> Void) {
+                           step: (CGPoint, CGPoint) -> Void) {
         // Freehand mode walks the raw sample stream; straightened
         // mode walks the snapped corner polyline + active freehand.
         let pts: [CGPoint] = straightenOnTurn
             ? ([origin] + corners + Array(freehandPoints.dropFirst()))
             : rawTrail
         guard !pts.isEmpty, interval > 0 else { return }
-        step(pts[0])
+        // Tangent for the very first point: peek forward to the first
+        // non-zero segment so the leading mark is oriented along the
+        // path instead of an arbitrary axis. Defaults to (1, 0) until
+        // a real direction is available.
+        var lastTangent = CGPoint(x: 1, y: 0)
+        if pts.count > 1 {
+            for i in 1..<pts.count {
+                let dx = pts[i].x - pts[i - 1].x
+                let dy = pts[i].y - pts[i - 1].y
+                let len = hypot(dx, dy)
+                if len > 0 {
+                    lastTangent = CGPoint(x: dx / len, y: dy / len)
+                    break
+                }
+            }
+        }
+        step(pts[0], lastTangent)
         var carry: CGFloat = 0
         for i in 1..<pts.count {
             let a = pts[i - 1]
@@ -808,41 +824,63 @@ private final class TrailView: NSView {
             if segLen <= 0 { continue }
             let ux = dx / segLen
             let uy = dy / segLen
+            lastTangent = CGPoint(x: ux, y: uy)
             var t = interval - carry
             while t <= segLen {
-                step(CGPoint(x: a.x + ux * t, y: a.y + uy * t))
+                step(CGPoint(x: a.x + ux * t, y: a.y + uy * t),
+                     lastTangent)
                 t += interval
             }
             carry = segLen - (t - interval)
         }
+        // Always emit the final sample (== cursor for live strokes) so
+        // the head of the trail is marked even when the last segment
+        // is shorter than `interval`.
+        if let last = pts.last { step(last, lastTangent) }
     }
 
-    /// 8-bit / pixel-art style: quantise the path to a coarse square
-    /// grid and fill one solid cell per occupied grid square. Colour
-    /// comes from the resolved trail colour (match-vs-no-match still
-    /// reads). De-duplicated via a Set so re-entering the same cell
-    /// on the freehand tail doesn't overdraw.
+    /// Fixed grid cell size for the `pixel` style (pt). Small enough
+    /// to read as ドット絵 rather than a chunky bar. `strokeWidth`
+    /// no longer drives this — it drives the thickness (cells across
+    /// the path) instead.
+    private static let pixelCellSize: CGFloat = 5
+
+    /// 8-bit / pixel-art style: quantise the path to a fixed-size
+    /// square grid and fill cells along the path. `strokeWidth` is
+    /// re-purposed here as **thickness in cells**: a `width = 3`
+    /// trail lays down a 3-cell-wide stripe perpendicular to the
+    /// path. Colour comes from the resolved trail colour. Cells are
+    /// de-duplicated via a Set so overlapping stripes never overdraw.
     private func drawPixelPath(origin: CGPoint, cursor: CGPoint,
                                 color: NSColor) {
-        let cell = max(6, strokeWidth * 2)
+        let cell = Self.pixelCellSize
+        let thickness = max(1, Int(strokeWidth.rounded()))
+        let offsetBase = CGFloat(thickness - 1) / 2
         var seen = Set<UInt64>()
         color.withAlphaComponent(0.95).setFill()
-        let plot: (CGPoint) -> Void = { p in
-            let gx = Int((p.x / cell).rounded(.down))
-            let gy = Int((p.y / cell).rounded(.down))
-            // Pack two Int32 into UInt64 for set key.
-            let key = (UInt64(bitPattern: Int64(Int32(gx))) << 32)
-                | UInt64(UInt32(bitPattern: Int32(gy)))
-            guard seen.insert(key).inserted else { return }
-            let rect = NSRect(x: CGFloat(gx) * cell, y: CGFloat(gy) * cell,
-                              width: cell, height: cell)
-            NSBezierPath(rect: rect).fill()
+        let plot: (CGPoint, CGPoint) -> Void = { p, tangent in
+            // Normal to the path: rotate tangent 90°.
+            let nx = -tangent.y
+            let ny =  tangent.x
+            for i in 0..<thickness {
+                let d = (CGFloat(i) - offsetBase) * cell
+                let cx = p.x + nx * d
+                let cy = p.y + ny * d
+                let gx = Int((cx / cell).rounded(.down))
+                let gy = Int((cy / cell).rounded(.down))
+                // Pack two Int32 into UInt64 for set key.
+                let key = (UInt64(bitPattern: Int64(Int32(gx))) << 32)
+                    | UInt64(UInt32(bitPattern: Int32(gy)))
+                guard seen.insert(key).inserted else { continue }
+                let rect = NSRect(x: CGFloat(gx) * cell,
+                                  y: CGFloat(gy) * cell,
+                                  width: cell, height: cell)
+                NSBezierPath(rect: rect).fill()
+            }
         }
-        // Sample slightly finer than the cell to fill diagonals
-        // without leaving gaps; the dedupe set absorbs the redundant
-        // samples.
+        // Sample slightly finer than the cell so diagonal segments
+        // don't leave gaps; the dedupe set absorbs the redundancy.
         walkPath(origin: origin, interval: cell * 0.5, step: plot)
-        plot(cursor)
     }
 
     /// Palette of ASCII glyphs used by `drawAsciiPath`. Chosen for
@@ -865,15 +903,22 @@ private final class TrailView: NSView {
         return z ^ (z >> 31)
     }
 
-    /// ASCII-art style: place varied glyphs at a fixed interval
-    /// along the path, tinted with the resolved trail colour.
-    /// Monospaced font so the rhythm reads as text. Glyph at each
-    /// step is picked deterministically from `asciiGlyphs` via
-    /// `strokeSeed`, giving each stroke its own randomised mix of
-    /// `*` / `+` / `o` / `#` / etc.
+    /// Fixed monospaced font size for the `ascii` style (pt). Kept
+    /// small so the trail reads as a collection of glyphs rather
+    /// than oversized characters. `strokeWidth` is re-purposed as
+    /// the thickness (glyph count perpendicular to the path).
+    private static let asciiFontSize: CGFloat = 11
+
+    /// ASCII-art style: place varied glyphs along the path, tinted
+    /// with the resolved trail colour. Monospaced font so the
+    /// rhythm reads as text. Glyph at each position is picked
+    /// deterministically from `asciiGlyphs` via `strokeSeed`,
+    /// giving each stroke its own randomised mix. `strokeWidth` is
+    /// re-purposed as **thickness in glyphs**: a `width = 3` trail
+    /// lays down a 3-glyph-wide band perpendicular to the path.
     private func drawAsciiPath(origin: CGPoint, cursor: CGPoint,
                                 color: NSColor) {
-        let fontSize = max(10, strokeWidth * 2.4)
+        let fontSize = Self.asciiFontSize
         let font = NSFont.monospacedSystemFont(ofSize: fontSize,
                                                 weight: .bold)
         let attrs: [NSAttributedString.Key: Any] = [
@@ -889,23 +934,31 @@ private final class TrailView: NSView {
         // Monospaced font → every glyph reports the same width, so a
         // single size value is correct for placement.
         let glyphSize = glyphs[0].size()
-        let interval = max(fontSize * 0.9, strokeWidth * 2)
+        let interval = fontSize * 0.9
+        let thickness = max(1, Int(strokeWidth.rounded()))
+        let offsetBase = CGFloat(thickness - 1) / 2
         let seed = strokeSeed
         var index: UInt64 = 0
-        let draw: (CGPoint) -> Void = { p in
-            let pick = Int(Self.splitmix(seed &+ index)
-                            % UInt64(glyphs.count))
-            index &+= 1
-            // Centre the glyph on the path point so the trail tracks
-            // the actual stroke rather than offsetting up-right.
-            let r = NSRect(x: p.x - glyphSize.width / 2,
-                           y: p.y - glyphSize.height / 2,
-                           width: glyphSize.width,
-                           height: glyphSize.height)
-            glyphs[pick].draw(in: r)
+        let draw: (CGPoint, CGPoint) -> Void = { p, tangent in
+            // Normal to the path: rotate tangent 90°.
+            let nx = -tangent.y
+            let ny =  tangent.x
+            for i in 0..<thickness {
+                let d = (CGFloat(i) - offsetBase) * glyphSize.width
+                let cx = p.x + nx * d
+                let cy = p.y + ny * d
+                let pick = Int(Self.splitmix(seed &+ index)
+                                % UInt64(glyphs.count))
+                index &+= 1
+                // Centre the glyph on the offset point.
+                let r = NSRect(x: cx - glyphSize.width / 2,
+                               y: cy - glyphSize.height / 2,
+                               width: glyphSize.width,
+                               height: glyphSize.height)
+                glyphs[pick].draw(in: r)
+            }
         }
         walkPath(origin: origin, interval: interval, step: draw)
-        draw(cursor)
     }
 
     /// Snap `p` onto the axis defined by `dir` and the point `from` —
