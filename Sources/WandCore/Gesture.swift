@@ -69,6 +69,17 @@ public struct GestureOverlayTrailSpec: Sendable, Equatable {
     /// Named preset bundling width × glow × dash. Shape only — colour
     /// always comes from `color` / `colorNoMatch`.
     public let style: TrailStyle
+    /// Draw an arrowhead tip at the cursor in the last-committed
+    /// direction. Independent of `style` (a `comet` or `dashed`
+    /// trail can still have or omit the tip) so the directional
+    /// indicator is its own axis. Defaults to `true` — preserves
+    /// the original hard-coded behaviour.
+    public let arrowhead: Bool
+    /// Cycle period in milliseconds for the dynamic colour modes
+    /// (`rainbow` / `neon`). Smaller = faster strobe; larger =
+    /// slower drift. Clamped 100..10000. Ignored by static and
+    /// `splatoon` modes (the latter is per-stroke fixed).
+    public let colorCycleMs: Int
     /// How long (ms) the trail lingers after a gesture fires.
     /// Clamped 0..2000; `0` = instant clear.
     public let finalHoldMs: Int
@@ -77,11 +88,15 @@ public struct GestureOverlayTrailSpec: Sendable, Equatable {
                 colorNoMatch: String = "#ef4444",
                 width: Int = 3,
                 style: TrailStyle = .normal,
+                arrowhead: Bool = true,
+                colorCycleMs: Int = 2000,
                 finalHoldMs: Int = 400) {
         self.color = color
         self.colorNoMatch = colorNoMatch
         self.width = width
         self.style = style
+        self.arrowhead = arrowhead
+        self.colorCycleMs = colorCycleMs
         self.finalHoldMs = finalHoldMs
     }
 
@@ -117,11 +132,39 @@ public struct GestureOverlayCardsSpec: Sendable, Equatable {
     public let match: Effect
     /// Animation when a card becomes unreachable mid-gesture.
     public let unmatch: Effect
+    /// Card-text base font size in points. The arrow column rides at
+    /// `fontSize + 1` so the directional glyphs stay a hair taller
+    /// than the rule name (legibility on dense layouts). The card's
+    /// padding is fixed in pt, so a larger font expands the card
+    /// naturally rather than just changing typography. Clamped 8..32.
+    public let fontSize: Int
+    /// Card border colour. Empty falls back to the historical
+    /// `NSColor.white.withAlphaComponent(0.18)` (a 1pt hairline that
+    /// reads against the blurred backing). Accepts the same grammar
+    /// as `[cast.overlay.trail].color` — hex / named, plus the
+    /// dynamic tokens `"rainbow"` / `"neon"` / `"splatoon"`. Dynamic
+    /// modes share `[cast.overlay.trail].color-cycle-ms` for cadence
+    /// and the trail's per-stroke seed for `splatoon` (so the trail
+    /// and the card borders pick the same team colour each stroke).
+    public let borderColor: String
+    /// Card body fill colour for the **non-firing** (directional)
+    /// cards. Empty leaves the body transparent over the blurred
+    /// backing (historical behaviour). The firing card is always
+    /// tinted with the trail accent regardless of this knob — so the
+    /// "this rule fires on release" signal stays visible. Same
+    /// grammar as `borderColor`; dynamic modes work here too.
+    public let bodyColor: String
 
     public init(match: Effect = .none,
-                unmatch: Effect = .none) {
+                unmatch: Effect = .none,
+                fontSize: Int = 13,
+                borderColor: String = "",
+                bodyColor: String = "") {
         self.match = match
         self.unmatch = unmatch
+        self.fontSize = fontSize
+        self.borderColor = borderColor
+        self.bodyColor = bodyColor
     }
 
     public static let `default` = GestureOverlayCardsSpec()
@@ -179,15 +222,22 @@ public struct GestureFireDecalSpec: Sendable, Equatable {
     /// How long the decal stays visible. Clamped 0..10000;
     /// `0` collapses to `.off` regardless of `kind`.
     public let durationMs: Int
-    /// Decal footprint in points. Clamped 10..200.
+    /// Decal footprint in points. Clamped 10..500.
     public let size: Int
+    /// Colour source for the decal. Empty / `"trail"` inherits
+    /// `[cast.overlay.trail].color`; `"splatoon"` picks a random hue
+    /// from the built-in Splatoon ink palette on every fire; anything
+    /// else parses as a hex / named colour like `trail.color` itself.
+    public let color: String
 
     public init(kind: DecalKind = .off,
                 durationMs: Int = 3000,
-                size: Int = 60) {
+                size: Int = 60,
+                color: String = "") {
         self.kind = kind
         self.durationMs = durationMs
         self.size = size
+        self.color = color
     }
 
     public static let `default` = GestureFireDecalSpec()

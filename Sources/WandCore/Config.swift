@@ -160,6 +160,10 @@ public struct WandConfig: Sendable {
         let trailStyle: TrailStyle = parseEnum(
             tr, key: "style", section: "cast.overlay.trail",
             default: .normal)
+        let trailArrowhead = tr.bool("arrowhead", true)
+        let trailColorCycleMs = clampInt(
+            tr, key: "color-cycle-ms",
+            default: 2000, lo: 100, hi: 10000)
         let trailFinalHoldMs = clampInt(tr, key: "final-hold-ms",
                                         default: 400, lo: 0, hi: 2000)
         let trail = GestureOverlayTrailSpec(
@@ -167,6 +171,8 @@ public struct WandConfig: Sendable {
             colorNoMatch: trailColorNoMatch,
             width: trailWidth,
             style: trailStyle,
+            arrowhead: trailArrowhead,
+            colorCycleMs: trailColorCycleMs,
             finalHoldMs: trailFinalHoldMs)
 
         // [cast.overlay.badge]
@@ -186,8 +192,15 @@ public struct WandConfig: Sendable {
             cd, key: "match", section: "cast.overlay.cards", default: .none)
         let cardsUnmatch: Effect = parseEnum(
             cd, key: "unmatch", section: "cast.overlay.cards", default: .none)
+        let cardsFontSize = clampInt(
+            cd, key: "font-size", default: 13, lo: 8, hi: 32)
+        let cardsBorderColor = cd.string("border-color")
+        let cardsBodyColor = cd.string("body-color")
         let cards = GestureOverlayCardsSpec(
-            match: cardsMatch, unmatch: cardsUnmatch)
+            match: cardsMatch, unmatch: cardsUnmatch,
+            fontSize: cardsFontSize,
+            borderColor: cardsBorderColor,
+            bodyColor: cardsBodyColor)
 
         let overlay = GestureOverlaySpec(
             enabled: overlayEnabled,
@@ -208,11 +221,13 @@ public struct WandConfig: Sendable {
             de, key: "duration-ms",
             default: 3000, lo: 0, hi: 10000)
         let decalSize = clampInt(
-            de, key: "size", default: 60, lo: 10, hi: 200)
+            de, key: "size", default: 60, lo: 10, hi: 500)
+        let decalColor = de.string("color")
         let decal = GestureFireDecalSpec(
             kind: decalKind,
             durationMs: decalDurationMs,
-            size: decalSize)
+            size: decalSize,
+            color: decalColor)
 
         let fire = GestureFireSpec(burst: burst, decal: decal)
 

@@ -200,9 +200,22 @@ blur-enabled = true
 #                     moved enough to recognise any direction)
 #   color-no-match  — once the shape matches no rule (e.g. you set
 #                     up "RD" but drew "RL")
-# Either a name (blue red green orange purple pink yellow white
-# black, or "accent" for the system accent color) or a hex string
-# ("#rgb", "#rrggbb", "#rrggbbaa").
+# Accepts a name (blue red green orange purple pink yellow white
+# black, or "accent" for the system accent color), a hex string
+# ("#rgb" / "#rrggbb" / "#rrggbbaa"), or a reserved dynamic token:
+#
+#   "rainbow"   — smooth hue cycle (~3s period). The whole trail
+#                 shifts colour as the cursor moves; static cursors
+#                 freeze on whatever frame they're on.
+#   "neon"      — electric palette (cyan / magenta / lime / hot
+#                 pink / sky / violet) interpolated on a ~2s cycle.
+#   "splatoon"  — pick a random hue from the Splatoon ink palette
+#                 at the start of each stroke. The whole drag stays
+#                 in one team's colour; next stroke re-rolls.
+#
+# `color` and `color-no-match` are independent — fine to set one to
+# a dynamic token and the other to a static hex (e.g. `rainbow`
+# while matching, solid red when off-track).
 color = "#3b82f6"
 color-no-match = "#ef4444"
 
@@ -211,21 +224,33 @@ color-no-match = "#ef4444"
 # doubles it, `dashed`/`dotted` use it as the dash unit.
 width = 3
 
-# Trail style preset — bundles width × glow × dash. **Shape only —
-# the trail's colour is always sourced from `color` / `color-no-match`
-# above**, so the match-vs-no-match signal isn't lost when the style
-# changes. Colour-decoration variants live on a different axis (see
-# `[tome.decoration].border`).
+# Trail dash pattern preset. **Shape only — the trail's colour is
+# always sourced from `color` / `color-no-match` above**, so the
+# match-vs-no-match signal isn't lost when the style changes. Width
+# comes from `width` above; glow is fixed.
 #
-#   "normal"  — single stroke at `width` with a soft glow (default)
-#   "thin"    — `width * 0.5` (1.5pt floor) + reduced glow
-#   "thick"   — `width * 2` + amplified glow
-#   "glow"    — `width` with an exaggerated 18pt bloom; neon vibe
+#   "normal"  — single solid stroke (default)
 #   "dashed"  — broken line (3:2 dash:gap, sized off `width`)
 #   "dotted"  — short-dash dotted line (0.6:2 dash:gap)
-#   "comet"   — width tapers from origin (thin) to cursor (thick),
-#               like a meteor's tail. Corner smoothing skipped.
 style = "normal"
+
+# Draw an arrowhead tip at the cursor in the last-committed direction
+# — a directional indicator pointing where the gesture's last segment
+# went. Independent of `style` (a `dashed` trail can still opt in or
+# out of the tip), so the indicator is its own axis, not bundled into
+# the line-shape preset. `false` for a plain line.
+arrowhead = true
+
+# Cycle period in milliseconds for the dynamic colour modes
+# (`rainbow` / `neon`). Smaller = faster strobe; larger = slower
+# drift. Ignored by static and `splatoon` modes (`splatoon` is
+# per-stroke fixed). Clamped 100..10000.
+#
+#   500   — strobing (very fast colour churn)
+#   1000  — flicker
+#   2000  — default; visible cycle in a typical short stroke
+#   5000  — slow drift, almost-solid feel
+color-cycle-ms = 2000
 
 # How long (ms) the trail lingers after a gesture fires. The
 # in-progress segment is first snapped onto its axis so the whole
@@ -275,6 +300,31 @@ anim-enabled = true
 match = "none"        # the firing card, on button-up
 unmatch = "none"      # cards that became unreachable mid-gesture
 
+# Card-text base font size in points. The arrow column rides at
+# `font-size + 1` so directional glyphs stay a hair taller than
+# rule names. The card padding is fixed in pt, so a bigger font
+# expands the card naturally rather than just changing typography.
+# Clamped 8..32.
+font-size = 13
+
+# Border stroke colour for assist cards. Empty falls back to the
+# historical 18%-alpha white hairline (which reads against the
+# blurred backing). Accepts the same grammar as
+# `[cast.overlay.trail].color` — hex / named (with optional alpha
+# byte `#RRGGBBAA`), plus the dynamic tokens `"rainbow"` /
+# `"neon"` / `"splatoon"`. Dynamic modes share trail's
+# `color-cycle-ms` cadence and per-stroke seed, so the trail line
+# and the card borders cycle in lockstep.
+border-color = ""
+
+# Body fill colour for **non-firing** (directional) assist cards.
+# Empty leaves the body transparent over the blurred backing
+# (historical behaviour). The firing card is always tinted with
+# the trail accent regardless of this knob — so the "this rule
+# fires on release" signal stays loud. Same grammar as
+# `border-color` above; dynamic modes work here too.
+body-color = ""
+
 
 # -----------------------------------------------------------------
 # Cast fire-moment effects — at the cursor when a rule fires
@@ -293,24 +343,43 @@ unmatch = "none"      # cards that became unreachable mid-gesture
 kind = "off"
 
 
-# Post-fire ink decal — a Splatoon-style splatter / blob / scorch /
-# star left at the cursor when a gesture fires.
+# Post-fire ink decal — a Splatoon-style splatter left at the
+# cursor when a gesture fires.
 [cast.fire.decal]
 
 #   "off"           — no decal (default)
-#   "ink-splatter"  — main blob + 3-6 satellite spatters; vivid
-#   "paint-blob"    — single irregular paint stamp
-#   "scorch"        — radial gradient burn mark
-#   "star"          — 5-pointed sparkle
-# Color comes from `[cast.overlay.trail].color`.
+#   "ink-splatter"  — Splatoon-style splat: 2-3 independent splat
+#                     units at random offsets. Each unit is a
+#                     classic SVG ink-splat silhouette — round body
+#                     with radial tendril spikes + a darker ink-ring
+#                     underlayer + 3-6 detached droplet specks.
+#                     With `color = "splatoon"` each unit can land a
+#                     different team colour (the Splatoon multi-shot
+#                     feel — one decal, multiple ink hits).
 kind = "off"
 
 # How long (ms) the decal stays visible before fading out.
 # Clamped 0..10000. 0 collapses to "off" regardless of `kind` above.
 duration-ms = 3000
 
-# Decal footprint in points (width = height). Clamped 10..200.
+# Decal footprint in points (width = height). Clamped 10..500.
 size = 60
+
+# Ink colour. Three modes:
+#   ""        — empty / unset: inherit `[cast.overlay.trail].color`.
+#               This is the historical default (the splat matches
+#               the trail accent).
+#   "trail"   — explicit form of the above.
+#   "splatoon" — pick a random hue from a 10-colour Splatoon-style
+#                ink palette on every fire (orange / yellow / lime /
+#                neon green / peppermint / sapphire / purple /
+#                magenta / pink / coral, sourced from a Turf War
+#                colour-pair compilation). The deliberate Turf War
+#                feel — each fire is a different team's ink.
+#   <hex / named> — anything `[cast.overlay.trail].color` accepts
+#                   (e.g. `"#ff00ff"` / `"systemPink"`) overrides
+#                   with that fixed colour.
+color = ""
 
 
 # -----------------------------------------------------------------

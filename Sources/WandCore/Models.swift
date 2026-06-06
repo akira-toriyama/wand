@@ -215,15 +215,14 @@ public enum LauncherCloseAnim: String, Sendable, Hashable, CaseIterable {
 public enum DecalKind: String, Sendable, Hashable, CaseIterable {
     case off
     case inkSplatter = "ink-splatter"
-    case paintBlob = "paint-blob"
-    case scorch
-    case star
 }
 
-/// Named preset that bundles `width × glow × dash` for the gesture
-/// trail. **Line shape only — colour is always sourced from
-/// `[gesture.overlay].color` / `color-no-match`**, so the trail's
-/// match-vs-no-match signal isn't lost when the style changes.
+/// Named preset for the gesture trail's dash pattern. **Line shape
+/// only — colour is always sourced from `[cast.overlay.trail].color`
+/// / `color-no-match`**, so the trail's match-vs-no-match signal
+/// isn't lost when the style changes. Width comes from
+/// `[cast.overlay.trail].width`; glow is fixed (was previously
+/// per-style on the retired `thin` / `thick` / `glow` presets).
 ///
 /// Colour-decoration variants (rainbow / vapor / pencil) belong to a
 /// separate axis applied to *other surfaces* (launcher panel border,
@@ -237,12 +236,8 @@ public enum DecalKind: String, Sendable, Hashable, CaseIterable {
 /// Unknown values clamp to `.normal` (wand's typo-tolerant policy).
 public enum TrailStyle: String, Sendable, Hashable, CaseIterable {
     case normal
-    case thin
-    case thick
-    case glow
     case dashed
     case dotted
-    case comet
 }
 
 /// The window the stroke acts on. Resolved at *button-down* time —

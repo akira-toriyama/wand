@@ -103,16 +103,28 @@ public final class GestureOverlay {
     /// the next flip back.
     public func applyConfig(_ cfg: WandConfig) {
         let ov = cfg.overlay
-        view.matchColor = NSColorParse.nsColor(ov.trail.color) ?? .systemBlue
-        view.noMatchColor = NSColorParse.nsColor(ov.trail.colorNoMatch) ?? .systemRed
+        view.matchMode = TrailColorMode.parse(
+            ov.trail.color, fallback: .systemBlue)
+        view.noMatchMode = TrailColorMode.parse(
+            ov.trail.colorNoMatch, fallback: .systemRed)
+        view.colorCyclePeriod = TimeInterval(ov.trail.colorCycleMs) / 1000.0
         view.strokeWidth = CGFloat(ov.trail.width)
         view.trailStyle = ov.trail.style
+        view.arrowheadEnabled = ov.trail.arrowhead
         view.badgeEnabled = ov.badge.enabled
         view.badgeSize = CGFloat(ov.badge.size)
         view.animEnabled = ov.badge.animEnabled
         view.setBlurEnabled(ov.blurEnabled)
         view.effectUnmatch = ov.cards.unmatch
         view.effectMatch = ov.cards.match
+        view.cardFontSize = CGFloat(ov.cards.fontSize)
+        view.cardBorderMode = TrailColorMode.parse(
+            ov.cards.borderColor,
+            fallback: NSColor.white.withAlphaComponent(0.18))
+        view.cardBodyMode = ov.cards.bodyColor.isEmpty
+            ? nil
+            : TrailColorMode.parse(ov.cards.bodyColor,
+                                    fallback: .clear)
         view.effectIntensity = cfg.intensity.multiplier
         view.minStrokePx = CGFloat(cfg.recognition.minStrokePx)
         view.finalHoldDuration = TimeInterval(ov.trail.finalHoldMs) / 1000.0
@@ -145,8 +157,23 @@ public final class GestureOverlay {
 
 
 private final class TrailView: NSView {
-    var matchColor: NSColor = .systemBlue
-    var noMatchColor: NSColor = .systemRed
+    /// Resolved trail-colour mode for the matching side. `.static` is
+    /// the historical hex/named-colour path; reserved tokens
+    /// (`rainbow`, `neon`, `splatoon`) drive dynamic resolution at
+    /// `draw(_:)` time. Set live from `[cast.overlay.trail].color`.
+    var matchMode: TrailColorMode = .static(.systemBlue)
+    /// Same as `matchMode`, but for the no-match side
+    /// (`[cast.overlay.trail].color-no-match`).
+    var noMatchMode: TrailColorMode = .static(.systemRed)
+    /// Per-stroke random seed used by `splatoon` mode so the trail
+    /// stays one team's colour through the whole drag. Re-rolled at
+    /// the start of each stroke (via `reset()`).
+    var strokeSeed: UInt64 = UInt64.random(in: 0..<UInt64.max)
+    /// Cycle period in seconds for the dynamic modes (`rainbow` /
+    /// `neon`). Smaller = faster strobe; larger = slower drift. Set
+    /// live from `[cast.overlay.trail].color-cycle-ms` divided by
+    /// 1000. Ignored by static and `splatoon` modes.
+    var colorCyclePeriod: TimeInterval = 2.0
     var strokeWidth: CGFloat = 3
     /// Named preset that swaps the trail's whole personality (width,
     /// glow, dash, per-segment color). Resolved from
@@ -155,6 +182,12 @@ private final class TrailView: NSView {
     /// (`brush` / `splatoon` / …) are reserved for follow-up PRs of #63
     /// and not represented in this enum yet.
     var trailStyle: TrailStyle = .normal
+    /// Draw the arrowhead tip at the cursor in the last-committed
+    /// direction. Independent of `trailStyle` so the directional
+    /// indicator is its own knob — a `dashed` / `comet` trail can
+    /// still opt out of the tip, and a plain `normal` trail can keep
+    /// it. Set live from `[cast.overlay.trail].arrowhead`.
+    var arrowheadEnabled: Bool = true
     /// Cocoa-global origin of the window; subtracted to get view-local
     /// coords from a global point.
     var originOffset: CGPoint = .zero
@@ -171,6 +204,25 @@ private final class TrailView: NSView {
     /// on init + hot-reload.
     var effectUnmatch: Effect = .none
     var effectMatch: Effect = .none
+    /// Base font size for assist-card text (set live from
+    /// `[cast.overlay.cards].font-size`). The arrow column rides at
+    /// `cardFontSize + 1` so directional glyphs stay a hair taller
+    /// than rule names. The card padding is fixed in pt, so a bigger
+    /// font expands the card naturally.
+    var cardFontSize: CGFloat = 13
+    /// Border stroke mode for assist cards (set live from
+    /// `[cast.overlay.cards].border-color`). `.static` covers the
+    /// historical hex/named path; dynamic tokens (`rainbow` / `neon`
+    /// / `splatoon`) animate alongside the trail using the same
+    /// cycle period and stroke seed.
+    var cardBorderMode: TrailColorMode = .static(
+        NSColor.white.withAlphaComponent(0.18))
+    /// Body fill mode for **non-firing** assist cards (set live from
+    /// `[cast.overlay.cards].body-color`). `nil` = transparent
+    /// (historical behaviour). The firing card always gets the
+    /// trail-accent tint regardless of this — so the "fires on
+    /// release" signal stays loud.
+    var cardBodyMode: TrailColorMode? = nil
     /// Pre-resolved multiplier from `Intensity.multiplier` — scales
     /// translation distance, scale deltas, vibration amplitude, and
     /// particle birth-rate / velocity.
@@ -503,6 +555,12 @@ private final class TrailView: NSView {
         badgeAppearedAt = nil
         cardLayouts.removeAll()
         badgeLayout = nil
+        // Re-roll the stroke seed so the NEXT stroke's `splatoon`-
+        // mode trail picks a different team colour. The seed is also
+        // ignored by static / rainbow / neon modes (they read time
+        // or the literal colour), so the cost is one cheap roll per
+        // stroke end across the board.
+        strokeSeed = UInt64.random(in: 0..<UInt64.max)
         layoutHUD()
         needsDisplay = true
         hudContent.needsDisplay = true
@@ -541,7 +599,15 @@ private final class TrailView: NSView {
         guard let origin, let cursor,
               origin != cursor || !corners.isEmpty
         else { return }
-        let color = valid ? matchColor : noMatchColor
+        // Resolve the current frame's colour from the active mode.
+        // For dynamic modes (`rainbow` / `neon`) `CACurrentMediaTime`
+        // drives the cycle; for `splatoon` the per-stroke seed picks
+        // one team's colour and holds it. Static modes are a no-op
+        // lookup.
+        let mode = valid ? matchMode : noMatchMode
+        let color = mode.currentColor(at: CACurrentMediaTime(),
+                                       strokeSeed: strokeSeed,
+                                       cyclePeriod: colorCyclePeriod)
 
         // While holding the post-fire snapped polyline, fade the trail
         // out over the last third of the hold so it doesn't pop off.
@@ -560,24 +626,23 @@ private final class TrailView: NSView {
             NSGraphicsContext.current?.cgContext.setAlpha(alpha)
         }
 
-        // Per-style dispatch. Most styles share the hybrid corner +
-        // freehand polyline and only swap width / glow / dash, always
-        // colouring with the resolved `color` so match-vs-no-match
-        // stays legible. `comet` needs per-segment width modulation
-        // so it walks the polyline itself (and sacrifices the
-        // corner-smoothing bezier — small visual concession for a
-        // much simpler implementation).
+        // Every remaining style shares the hybrid corner + freehand
+        // polyline and only swaps the dash pattern. Colour always
+        // comes from the resolved `color` so the match-vs-no-match
+        // signal stays legible regardless of dash. Width / glow /
+        // taper variants (`thin` / `thick` / `glow` / `comet`) were
+        // retired — `width` and the future neon/rainbow colour
+        // modes cover their use cases without a separate axis.
         switch trailStyle {
-        case .comet:
-            drawComet(origin: origin, cursor: cursor, color: color)
-        case .normal, .thin, .thick, .glow, .dashed, .dotted:
+        case .normal, .dashed, .dotted:
             drawSinglePath(origin: origin, cursor: cursor, color: color)
         }
 
         // Arrowhead at the raw cursor in the last-committed direction.
         // Skipped until a direction has been committed (no axis to
-        // point along yet).
-        if let dir = lastDir {
+        // point along yet), or when `[cast.overlay.trail].arrowhead`
+        // is `false` — the tip is its own axis, not a style detail.
+        if arrowheadEnabled, let dir = lastDir {
             drawArrowhead(at: cursor, direction: dir, color: color)
         }
         NSGraphicsContext.restoreGraphicsState()
@@ -649,48 +714,10 @@ private final class TrailView: NSView {
         path.stroke()
     }
 
-    /// Comet: width tapers from origin (thin) to cursor (thick) so the
-    /// trail reads like a meteor's tail. Like `rainbow` this gives up
-    /// corner smoothing — we stroke each segment with a per-segment
-    /// lineWidth, which a smoothed bezier can't carry cleanly.
-    private func drawComet(origin: CGPoint, cursor: CGPoint,
-                            color: NSColor) {
-        let points = polylinePoints(origin: origin)
-        guard points.count >= 2 else { return }
-        let p = styleParams(base: strokeWidth)
-        let glow = NSShadow()
-        glow.shadowColor = color.withAlphaComponent(0.5)
-        glow.shadowBlurRadius = p.glowRadius
-        glow.set()
-        color.withAlphaComponent(0.95).setStroke()
-        let n = points.count - 1
-        for i in 0..<n {
-            // 0.3× at origin → 1.6× at cursor. Smooth-ish ramp.
-            let t = CGFloat(i + 1) / CGFloat(max(n, 1))
-            let w = p.width * (0.3 + 1.3 * t)
-            let seg = NSBezierPath()
-            seg.lineWidth = w
-            seg.lineCapStyle = .round
-            seg.move(to: points[i])
-            seg.line(to: points[i + 1])
-            seg.stroke()
-        }
-    }
-
-    /// Flatten the hybrid polyline into a straight sequence of points
-    /// for per-segment styles (`comet`). Skips the corner smoothing —
-    /// interior corners come through as their raw `B` point.
-    private func polylinePoints(origin: CGPoint) -> [CGPoint] {
-        var out: [CGPoint] = [origin]
-        out.append(contentsOf: corners)
-        // Freehand[0] duplicates `corners.last ?? origin`, so drop it.
-        out.append(contentsOf: freehandPoints.dropFirst())
-        return out
-    }
-
-    /// Per-style stroke parameters. Centralised so the dispatcher in
-    /// `draw(_:)` and the helpers in `drawSinglePath` / `drawRainbow`
-    /// / `drawComet` agree on width / glow / dash.
+    /// Per-style stroke parameters. The remaining styles all share the
+    /// same width and glow; only the dash pattern differs. Kept as a
+    /// struct (rather than inlined) so adding a future style only
+    /// touches one switch.
     private struct TrailStyleParams {
         let width: CGFloat
         let glowRadius: CGFloat
@@ -702,27 +729,12 @@ private final class TrailView: NSView {
         case .normal:
             return TrailStyleParams(width: base, glowRadius: 7,
                                      lineDash: [])
-        case .thin:
-            return TrailStyleParams(width: max(1.5, base * 0.5),
-                                     glowRadius: 3, lineDash: [])
-        case .thick:
-            return TrailStyleParams(width: base * 2.0, glowRadius: 12,
-                                     lineDash: [])
-        case .glow:
-            return TrailStyleParams(width: base, glowRadius: 18,
-                                     lineDash: [])
         case .dashed:
             return TrailStyleParams(width: base, glowRadius: 7,
                                      lineDash: [base * 3, base * 2])
         case .dotted:
             return TrailStyleParams(width: base, glowRadius: 7,
                                      lineDash: [base * 0.6, base * 2])
-        case .comet:
-            // The per-segment drawer manages its own lineWidth modulation
-            // for the taper, but still reads `width` (base scale) and
-            // `glowRadius` from here.
-            return TrailStyleParams(width: base, glowRadius: 7,
-                                     lineDash: [])
         }
     }
 
@@ -781,7 +793,13 @@ private final class TrailView: NSView {
         cardLayouts.removeAll()
         badgeLayout = nil
 
-        let accent = valid ? matchColor : noMatchColor
+        // Same resolver the trail uses — dynamic modes get the current
+        // time + the stroke seed + the cycle period; static modes pass
+        // through.
+        let mode = valid ? matchMode : noMatchMode
+        let accent = mode.currentColor(at: CACurrentMediaTime(),
+                                        strokeSeed: strokeSeed,
+                                        cyclePeriod: colorCyclePeriod)
 
         if let hint, let cursor = cursor {
             var byDir: [Character: [GestureHint.Row]] = [:]
@@ -1070,7 +1088,7 @@ private final class TrailView: NSView {
     /// no arrows left, so it drops the tab — its accent-tinted fill
     /// (set in `layoutHUD`) does the "firing" signal; text stays white.
     fileprivate func cardText(_ rows: [GestureHint.Row]) -> NSAttributedString {
-        let arrowFont = Self.mono(14, .semibold)
+        let arrowFont = Self.mono(cardFontSize + 1, .semibold)
         var arrowMax: CGFloat = 0
         for r in rows {
             let w = (r.suffix as NSString).size(withAttributes: [.font: arrowFont]).width
@@ -1091,7 +1109,7 @@ private final class TrailView: NSView {
                     .font: arrowFont, .foregroundColor: NSColor.white]))
             }
             s.append(NSAttributedString(string: (useTab ? "\t" : "") + r.name, attributes: [
-                .font: Self.mono(13, .regular),
+                .font: Self.mono(cardFontSize, .regular),
                 .foregroundColor: NSColor.white]))
         }
         s.addAttribute(.paragraphStyle, value: para,
@@ -1189,11 +1207,27 @@ private final class HUDContentView: NSView {
             tx.translateX(by: -cx, yBy: -cy)
             tx.concat()
         }
-        if let fill = c.fill {
+        // Resolve cycle-driven colours once per card draw. Trail's
+        // strobe period + stroke seed feed cards too, so trail and
+        // borders cycle in lockstep (and splatoon picks the same
+        // team colour each stroke).
+        let now = CACurrentMediaTime()
+        // Fill priority: firing card's accent > body-color knob >
+        // transparent (historical). The firing accent stays loud so
+        // the "fires on release" signal isn't lost when body-color
+        // is set.
+        let bodyFill = c.fill
+            ?? o.cardBodyMode?.currentColor(at: now,
+                                             strokeSeed: o.strokeSeed,
+                                             cyclePeriod: o.colorCyclePeriod)
+        if let fill = bodyFill {
             fill.setFill()
             bg.fill()
         }
-        NSColor.white.withAlphaComponent(0.18).setStroke()
+        let border = o.cardBorderMode.currentColor(
+            at: now, strokeSeed: o.strokeSeed,
+            cyclePeriod: o.colorCyclePeriod)
+        border.setStroke()
         bg.lineWidth = 1
         bg.stroke()
         c.text.draw(with: c.rect.insetBy(dx: o.cardPadX, dy: o.cardPadY),
