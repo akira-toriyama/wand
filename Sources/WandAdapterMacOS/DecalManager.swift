@@ -269,23 +269,50 @@ private final class DecalView: NSView {
         }
     }
 
-    /// Closed polygon path radiating from `centre`, with each vertex
-    /// pushed outward from `baseRadius` by a `±jitter` factor (in
-    /// units of the radius). Used as the building block for the main
-    /// splatter blob + satellite spatter.
+    /// Closed smooth-curve path radiating from `centre`, with each
+    /// vertex pushed outward from `baseRadius` by a `±jitter` factor
+    /// (in units of the radius). The vertices are then connected by
+    /// Catmull-Rom-derived cubic bezier segments so the silhouette
+    /// reads as a rounded blob (real ink puddle) rather than a hard-
+    /// angled polygon — the difference is most visible on the large
+    /// primary blobs and the ink-ring underlayers. Used as the
+    /// building block for every layer of the splatter.
     private func irregularBlobPath(at centre: CGPoint,
                                     baseRadius r: CGFloat,
                                     jitter: CGFloat,
                                     points: Int,
                                     rng: inout SplitMix64) -> NSBezierPath {
-        let path = NSBezierPath()
+        // Vertex positions — same jittered-circle layout as before.
+        var verts: [CGPoint] = []
+        verts.reserveCapacity(points)
         for i in 0..<points {
             let angle = CGFloat(i) * (.pi * 2 / CGFloat(points))
             let jitterAmt = (CGFloat(rng.nextUnit()) - 0.5) * 2 * jitter
             let actualR = r * (1 + jitterAmt)
-            let p = CGPoint(x: centre.x + cos(angle) * actualR,
-                             y: centre.y + sin(angle) * actualR)
-            if i == 0 { path.move(to: p) } else { path.line(to: p) }
+            verts.append(CGPoint(x: centre.x + cos(angle) * actualR,
+                                  y: centre.y + sin(angle) * actualR))
+        }
+
+        // Connect with Catmull-Rom-to-bezier curves so adjacent
+        // segments share C1 continuity. The 1/6 tension factor is the
+        // standard "uniform Catmull-Rom → cubic bezier" conversion —
+        // tighter values give a more polygon-like look, looser values
+        // can overshoot when consecutive vertices have very different
+        // radii (jitter > ~0.5).
+        let path = NSBezierPath()
+        guard !verts.isEmpty else { return path }
+        path.move(to: verts[0])
+        let n = verts.count
+        for i in 0..<n {
+            let p1 = verts[i]
+            let p2 = verts[(i + 1) % n]
+            let p0 = verts[(i - 1 + n) % n]
+            let p3 = verts[(i + 2) % n]
+            let cp1 = CGPoint(x: p1.x + (p2.x - p0.x) / 6.0,
+                               y: p1.y + (p2.y - p0.y) / 6.0)
+            let cp2 = CGPoint(x: p2.x - (p3.x - p1.x) / 6.0,
+                               y: p2.y - (p3.y - p1.y) / 6.0)
+            path.curve(to: p2, controlPoint1: cp1, controlPoint2: cp2)
         }
         path.close()
         return path
