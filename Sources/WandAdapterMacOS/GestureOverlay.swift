@@ -1083,8 +1083,16 @@ private final class TrailView: NSView {
     private static let pacmanPelletDiameter: CGFloat = 4
     private static let pacmanPelletInterval: CGFloat = 14
     private static let pacmanFaceRadius: CGFloat = 10
-    /// Half-angle of Pac-Man's mouth opening, in degrees.
-    private static let pacmanMouthHalfAngleDeg: CGFloat = 35
+    /// Mouth half-angle bounds (degrees). The face animates between
+    /// these via `cos`, giving the classic open-close chomp.
+    /// `min` is just above zero so the mouth doesn't fully close
+    /// (a sealed circle reads as "not Pac-Man anymore").
+    private static let pacmanMouthHalfAngleMinDeg: CGFloat = 5
+    private static let pacmanMouthHalfAngleMaxDeg: CGFloat = 45
+    /// Chomp frequency (Hz). The cosine drive makes one full
+    /// open→close→open cycle per period; ~4 Hz lands near the feel
+    /// of the original arcade animation.
+    private static let pacmanChompHz: Double = 4
     /// How far back along the path Pac-Man's face sits behind the
     /// live cursor (pt). Tuned by feel — too small reads as
     /// "Pac-Man sitting on the cursor" (no chase), too large feels
@@ -1152,14 +1160,21 @@ private final class TrailView: NSView {
 
     /// Draw a closed pie wedge centred on `p`, with the mouth
     /// opening (an angular slice cut out) facing along `tangent`.
-    /// Angles are converted to degrees for `NSBezierPath.appendArc`,
-    /// which uses degrees. The wedge sweeps the long way around
-    /// (counter-clockwise from `+mouthHalf` to `-mouthHalf`) so the
-    /// "closed" portion of the face fills.
+    /// The mouth half-angle oscillates between
+    /// `pacmanMouthHalfAngleMin/MaxDeg` at `pacmanChompHz` so the
+    /// face chomps as it travels. Angles are in degrees for
+    /// `NSBezierPath.appendArc`; the wedge sweeps the long way
+    /// around (counter-clockwise from `+mouthHalf` to `-mouthHalf`)
+    /// so the "closed" portion of the face fills.
     private func drawPacmanFace(at p: CGPoint, tangent: CGPoint,
                                  color: NSColor) {
         let radius = Self.pacmanFaceRadius
-        let mouthHalf = Self.pacmanMouthHalfAngleDeg
+        // Cosine remap to [0, 1]: 0 at min mouth, 1 at max mouth.
+        let phase = (1 - cos(CACurrentMediaTime() * 2 * .pi
+                              * Self.pacmanChompHz)) / 2
+        let mouthHalf = Self.pacmanMouthHalfAngleMinDeg
+            + (Self.pacmanMouthHalfAngleMaxDeg
+                - Self.pacmanMouthHalfAngleMinDeg) * CGFloat(phase)
         let dirDeg = atan2(tangent.y, tangent.x) * 180 / .pi
         let startDeg = dirDeg + mouthHalf
         let endDeg = dirDeg - mouthHalf
