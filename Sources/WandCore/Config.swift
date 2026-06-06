@@ -166,7 +166,7 @@ public struct WandConfig: Sendable {
             default: 2000, lo: 100, hi: 10000)
         let trailFinalHoldMs = clampInt(tr, key: "final-hold-ms",
                                         default: 400, lo: 0, hi: 2000)
-        let trailStraightenOnTurn = tr.bool("straighten-on-turn", true)
+        let trailStraightenOnTurn = tr.bool("straighten-on-turn", false)
         let trail = GestureOverlayTrailSpec(
             color: trailColor,
             colorNoMatch: trailColorNoMatch,

@@ -83,14 +83,14 @@ public struct GestureOverlayTrailSpec: Sendable, Equatable {
     /// How long (ms) the trail lingers after a gesture fires.
     /// Clamped 0..2000; `0` = instant clear.
     public let finalHoldMs: Int
-    /// When `true` (default): each time a turn is detected (e.g.
-    /// `D` → `L` in `DLD`), the just-completed segment snaps onto
-    /// its axis so it renders as an orthogonal straight line — the
-    /// trail looks like a Figma diagram of the gesture.
-    /// When `false`: every segment stays as the raw freehand
-    /// polyline through the actual mouse samples — the trail looks
-    /// like a hand-drawn sketch. Recognition is unaffected either
-    /// way; this is a render-only knob.
+    /// When `true`: each time a turn is detected (e.g. `D` → `L`
+    /// in `DLD`), the just-completed segment snaps onto its axis
+    /// so it renders as an orthogonal straight line — the trail
+    /// looks like a Figma diagram of the gesture.
+    /// When `false` (default): every segment stays as the raw
+    /// freehand polyline through the actual mouse samples — the
+    /// trail looks like a hand-drawn sketch. Recognition is
+    /// unaffected either way; this is a render-only knob.
     public let straightenOnTurn: Bool
 
     public init(color: String = "#3b82f6",
@@ -100,7 +100,7 @@ public struct GestureOverlayTrailSpec: Sendable, Equatable {
                 arrowhead: Bool = true,
                 colorCycleMs: Int = 2000,
                 finalHoldMs: Int = 400,
-                straightenOnTurn: Bool = true) {
+                straightenOnTurn: Bool = false) {
         self.color = color
         self.colorNoMatch = colorNoMatch
         self.width = width
