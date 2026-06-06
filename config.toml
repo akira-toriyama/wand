@@ -294,17 +294,16 @@ unmatch = "none"      # cards that became unreachable mid-gesture
 kind = "off"
 
 
-# Post-fire ink decal — a Splatoon-style splatter / blob / scorch /
-# star left at the cursor when a gesture fires.
+# Post-fire ink decal — a Splatoon-style splatter left at the
+# cursor when a gesture fires.
 [cast.fire.decal]
 
 #   "off"           — no decal (default)
-#   "ink-splatter"  — Splatoon-style splat: 3-layer stack centre-out
-#                     (1 main blob + 5-9 satellites + 10-17 droplet
-#                     specks), each layer's alpha steps down so the
-#                     main reads as the impact point and the specks
-#                     fade outward.
-# Color comes from `[cast.overlay.trail].color`.
+#   "ink-splatter"  — Splatoon-style splat: 4-layer stack centre-out
+#                     (darker ink ring + main blob + 5-9 satellites
+#                     + 10-17 droplet specks). The ring sells the
+#                     "wet ink with a pooled edge" cue from in-game
+#                     ink puddles.
 kind = "off"
 
 # How long (ms) the decal stays visible before fading out.
@@ -313,6 +312,21 @@ duration-ms = 3000
 
 # Decal footprint in points (width = height). Clamped 10..200.
 size = 60
+
+# Ink colour. Three modes:
+#   ""        — empty / unset: inherit `[cast.overlay.trail].color`.
+#               This is the historical default (the splat matches
+#               the trail accent).
+#   "trail"   — explicit form of the above.
+#   "splatoon" — pick a random hue from a 10-colour Splatoon-style
+#                ink palette on every fire (pink / green / sapphire /
+#                orange / purple / pansy / mustard / peppermint /
+#                yellow / magenta). The deliberate Turf War feel —
+#                each fire is a different team's ink.
+#   <hex / named> — anything `[cast.overlay.trail].color` accepts
+#                   (e.g. `"#ff00ff"` / `"systemPink"`) overrides
+#                   with that fixed colour.
+color = ""
 
 
 # -----------------------------------------------------------------

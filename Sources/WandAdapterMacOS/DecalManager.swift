@@ -152,8 +152,12 @@ private final class DecalView: NSView {
         }
     }
 
-    /// Splatoon-style splatter, three layers stacked centre-out:
+    /// Splatoon-style splatter, four layers stacked centre-out:
     ///
+    ///   0. ink ring    — slightly larger darkened underlayer behind
+    ///                    the main blob, so the splat reads as "wet
+    ///                    ink with a darker pooled edge" (the visual
+    ///                    cue from in-game ink puddles).
     ///   1. main blob   — 1 big irregular polygon, jitter 0.42 so the
     ///                    silhouette reads as a thrown ink mark.
     ///   2. satellites  — 5-9 mid-tier blobs ringing the perimeter,
@@ -162,14 +166,26 @@ private final class DecalView: NSView {
     ///                    ink, droplets fly outward" polish that sells
     ///                    the Splatoon feel.
     ///
-    /// Each layer's alpha steps down (0.95 / 0.88 / 0.78) so the
-    /// main blob reads as the impact point and the specks fade
-    /// outward. All distances are capped at ~1.55× baseR (= ~0.46
-    /// of the view) so the splatter stays inside the configured
-    /// `size` footprint rather than clipping against the view bounds.
+    /// Each layer's alpha and shade steps so the main blob reads as
+    /// the impact point, the ring frames it, and the specks fade
+    /// outward. All distances are capped at ~1.55× baseR (= ~0.46 of
+    /// the view) so the splatter stays inside the configured `size`
+    /// footprint rather than clipping against the view bounds.
     private func drawInkSplatter(in rect: CGRect, rng: inout SplitMix64) {
         let centre = CGPoint(x: rect.midX, y: rect.midY)
         let baseR = rect.width * 0.30
+
+        // Layer 0 — ink ring (darker rim). `blended(withFraction:of:)`
+        // mixes 45% black into the team colour for the "pooled wet
+        // edge" shade. The ring blob is ~10% larger and uses a
+        // slightly different jitter profile so its silhouette doesn't
+        // exactly match the main blob — that way the rim peeks out
+        // around the main blob's outline.
+        let ring = NSColor.black.blended(withFraction: 0.45, of: color)?
+            .withAlphaComponent(0.80) ?? color
+        ring.setFill()
+        irregularBlobPath(at: centre, baseRadius: baseR * 1.10,
+                           jitter: 0.36, points: 22, rng: &rng).fill()
 
         // Layer 1 — main blob.
         color.withAlphaComponent(0.95).setFill()

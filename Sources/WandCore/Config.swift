@@ -211,10 +211,12 @@ public struct WandConfig: Sendable {
             default: 3000, lo: 0, hi: 10000)
         let decalSize = clampInt(
             de, key: "size", default: 60, lo: 10, hi: 200)
+        let decalColor = de.string("color")
         let decal = GestureFireDecalSpec(
             kind: decalKind,
             durationMs: decalDurationMs,
-            size: decalSize)
+            size: decalSize,
+            color: decalColor)
 
         let fire = GestureFireSpec(burst: burst, decal: decal)
 

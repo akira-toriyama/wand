@@ -189,13 +189,20 @@ public struct GestureFireDecalSpec: Sendable, Equatable {
     public let durationMs: Int
     /// Decal footprint in points. Clamped 10..200.
     public let size: Int
+    /// Colour source for the decal. Empty / `"trail"` inherits
+    /// `[cast.overlay.trail].color`; `"splatoon"` picks a random hue
+    /// from the built-in Splatoon ink palette on every fire; anything
+    /// else parses as a hex / named colour like `trail.color` itself.
+    public let color: String
 
     public init(kind: DecalKind = .off,
                 durationMs: Int = 3000,
-                size: Int = 60) {
+                size: Int = 60,
+                color: String = "") {
         self.kind = kind
         self.durationMs = durationMs
         self.size = size
+        self.color = color
     }
 
     public static let `default` = GestureFireDecalSpec()

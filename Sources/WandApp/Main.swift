@@ -409,8 +409,24 @@ enum WandApp {
                     ?? .systemBlue
                 let decalSpec = cfg.fire.decal
                 if decalSpec.kind != .off, decalSpec.durationMs > 0 {
+                    // Resolve the decal colour from its own knob,
+                    // falling back to the trail colour when unset.
+                    // `"splatoon"` re-rolls the hue per-fire from the
+                    // built-in palette (the deliberate Turf War feel
+                    // — each fire is a different team's ink).
+                    let decalColor: NSColor
+                    switch decalSpec.color.trimmingCharacters(
+                        in: .whitespaces).lowercased() {
+                    case "", "trail":
+                        decalColor = color
+                    case "splatoon":
+                        decalColor = NSColorParse.randomSplatoonInk()
+                    default:
+                        decalColor = NSColorParse.nsColor(decalSpec.color)
+                            ?? color
+                    }
                     decalManager.emit(
-                        at: cocoaPoint, color: color,
+                        at: cocoaPoint, color: decalColor,
                         kind: decalSpec.kind,
                         durationSec: TimeInterval(decalSpec.durationMs)
                             / 1000.0,
