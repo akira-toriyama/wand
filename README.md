@@ -236,6 +236,13 @@ design. The `curl` line above drops the template at
 silently to defaults — a typo can never break the daemon. Validate
 explicitly with `wand --validate`.
 
+> **`[failsafe]` is mandatory.** It defines the safety nets that
+> catch a stuck click / drag (button-hold timeout, Esc emergency
+> release). The bundled template ships it; **don't delete the
+> block** — `wand --validate` and daemon startup both refuse to
+> run without it. See the `[failsafe]` block in
+> [`config.toml`](config.toml) for the knobs.
+
 A rule looks like this:
 
 ```toml
@@ -350,7 +357,7 @@ WAND_DEBUG=1 wand       # verbose log to /tmp/wand.log + stderr
 wand --validate         # parse config.toml, exit 0/2.  Warnings
                           # (clamps, retired keys, collisions, typos)
                           # print to stderr.
-wand --validate --items <PATH>   # also validate an [[item]] file
+wand --validate --items <PATH>   # also validate an [[tome.item]] file
                                   # intended for --show-menu
 wand --doctor           # health check: Accessibility, config, daemon, tap
 wand --test DR [app]    # dry-run: which rule fires for a pattern

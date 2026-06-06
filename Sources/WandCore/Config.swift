@@ -32,6 +32,12 @@ public struct WandConfig: Sendable {
     /// `[tome]` and sub-blocks — trigger + items + row /
     /// animation / decoration cosmetics.
     public var launcher: LauncherSpec
+    /// `[failsafe]` — mandatory safety-net block. See CLAUDE.md
+    /// "Safety invariants" for the WHY of the missing-block policy.
+    public var failsafe: FailsafeConfig
+    /// `false` when the `[failsafe]` block was absent in the parsed
+    /// TOML. The App layer refuses to start in that case.
+    public var failsafeBlockPresent: Bool
 
     public static let `default` = WandConfig(
         trigger: Trigger(button: .right, modifiers: []),
@@ -41,7 +47,9 @@ public struct WandConfig: Sendable {
         rules: [],
         overlay: .default,
         fire: .default,
-        launcher: .default
+        launcher: .default,
+        failsafe: .default,
+        failsafeBlockPresent: true
     )
 
     /// The single source-of-truth path. Shared by `load()` and the
@@ -341,6 +349,21 @@ public struct WandConfig: Sendable {
                             action: action)
             }
 
+        // [failsafe] — mandatory; absence signalled via
+        // `failsafeBlockPresent`. See CLAUDE.md "Safety invariants".
+        let fs = doc.tables["failsafe"] ?? [:]
+        let mouseHoldTimeoutSec = clampInt(
+            fs, key: "mouse-hold-timeout-sec",
+            default: 30, lo: 5, hi: 300)
+        let emergencyReleaseKey: String = {
+            let raw = fs.string("emergency-release-key").lowercased()
+            return raw.isEmpty ? "esc" : raw
+        }()
+        let failsafe = FailsafeConfig(
+            mouseHoldTimeoutSec: mouseHoldTimeoutSec,
+            emergencyReleaseKey: emergencyReleaseKey)
+        let failsafeBlockPresent = doc.tables["failsafe"] != nil
+
         return WandConfig(
             trigger: gestureTrigger,
             intensity: intensity,
@@ -349,7 +372,9 @@ public struct WandConfig: Sendable {
             rules: rules,
             overlay: overlay,
             fire: fire,
-            launcher: launcher
+            launcher: launcher,
+            failsafe: failsafe,
+            failsafeBlockPresent: failsafeBlockPresent
         )
     }
 

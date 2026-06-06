@@ -207,6 +207,7 @@ enum WandApp {
             mirrorLineToStderr = true
             let cfg = WandConfig.load()
             let cfgWarnings = Log.lineCount
+            requireFailsafeBlock(cfg)
             let tomeLine = cfg.launcher.enabled
                 ? ", tome=\(cfg.launcher.trigger.button.rawValue) "
                   + "(\(cfg.launcher.items.count) item(s))"
@@ -254,9 +255,28 @@ enum WandApp {
     }
 
 
+    /// Exit fatally when `[failsafe]` is missing — same policy for
+    /// both `--validate` and `runServer()` so they don't drift.
+    /// See CLAUDE.md "Safety invariants" for the WHY of the
+    /// mandatory-block rule.
+    private static func requireFailsafeBlock(_ cfg: WandConfig) {
+        guard !cfg.failsafeBlockPresent else { return }
+        let msg = "wand: FATAL: config.toml is missing the required "
+            + "[failsafe] block. wand refuses to start without it "
+            + "(low-level mouse interception needs the safety net "
+            + "configured explicitly). Copy the [failsafe] block "
+            + "from the bundled template:\n"
+            + "  https://raw.githubusercontent.com/akira-toriyama/"
+            + "wand/main/config.toml\n"
+        FileHandle.standardError.write(Data(msg.utf8))
+        Log.line("startup: [failsafe] block missing — refusing to start")
+        exit(2)
+    }
+
     @MainActor
     private static func runServer() -> Never {
         let cfg = WandConfig.load()
+        requireFailsafeBlock(cfg)
 
         let app = NSApplication.shared
         app.setActivationPolicy(.accessory)            // LSUIElement: no Dock icon
@@ -416,6 +436,9 @@ enum WandApp {
             controller.reload(cause: "file-change")
         }
         watcher.start()
+
+        let failsafe = FailsafeMonitor(config: cfg.failsafe)
+        failsafe.start()
 
         app.run()
         exit(0)
