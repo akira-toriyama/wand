@@ -845,10 +845,32 @@ private final class TrailView: NSView {
         plot(cursor)
     }
 
-    /// ASCII-art style: place a `*` glyph at a fixed interval along
-    /// the path, tinted with the resolved trail colour. Monospaced
-    /// font so the rhythm reads as text. No glow — the glyphs carry
-    /// the look on their own.
+    /// Palette of ASCII glyphs used by `drawAsciiPath`. Chosen for
+    /// visual variety while staying readable as text — mixes solid
+    /// (`*` / `#` / `@`), open (`o` / `+`), and punctuation (`.` /
+    /// `:` / `=`) shapes so the trail reads as scattered ASCII art
+    /// rather than a single repeating mark.
+    private static let asciiGlyphs: [String] = [
+        "*", "+", "x", "o", "#", ".", ":", "=", "~", "^",
+    ]
+
+    /// Cheap deterministic 64-bit hash (SplitMix64). Combined with
+    /// `strokeSeed` so each stroke gets its own glyph sequence but
+    /// the sequence is stable across redraws within a stroke (no
+    /// flicker as the trail extends frame to frame).
+    private static func splitmix(_ x: UInt64) -> UInt64 {
+        var z = x &+ 0x9E3779B97F4A7C15
+        z = (z ^ (z >> 30)) &* 0xBF58476D1CE4E5B9
+        z = (z ^ (z >> 27)) &* 0x94D049BB133111EB
+        return z ^ (z >> 31)
+    }
+
+    /// ASCII-art style: place varied glyphs at a fixed interval
+    /// along the path, tinted with the resolved trail colour.
+    /// Monospaced font so the rhythm reads as text. Glyph at each
+    /// step is picked deterministically from `asciiGlyphs` via
+    /// `strokeSeed`, giving each stroke its own randomised mix of
+    /// `*` / `+` / `o` / `#` / etc.
     private func drawAsciiPath(origin: CGPoint, cursor: CGPoint,
                                 color: NSColor) {
         let fontSize = max(10, strokeWidth * 2.4)
@@ -858,17 +880,29 @@ private final class TrailView: NSView {
             .font: font,
             .foregroundColor: color.withAlphaComponent(0.95),
         ]
-        let glyph = NSAttributedString(string: "*", attributes: attrs)
-        let glyphSize = glyph.size()
+        // Pre-build one NSAttributedString per palette entry — cheap
+        // cache (~10 small strings) so the per-step draw doesn't
+        // re-allocate.
+        let glyphs = Self.asciiGlyphs.map {
+            NSAttributedString(string: $0, attributes: attrs)
+        }
+        // Monospaced font → every glyph reports the same width, so a
+        // single size value is correct for placement.
+        let glyphSize = glyphs[0].size()
         let interval = max(fontSize * 0.9, strokeWidth * 2)
+        let seed = strokeSeed
+        var index: UInt64 = 0
         let draw: (CGPoint) -> Void = { p in
+            let pick = Int(Self.splitmix(seed &+ index)
+                            % UInt64(glyphs.count))
+            index &+= 1
             // Centre the glyph on the path point so the trail tracks
             // the actual stroke rather than offsetting up-right.
             let r = NSRect(x: p.x - glyphSize.width / 2,
                            y: p.y - glyphSize.height / 2,
                            width: glyphSize.width,
                            height: glyphSize.height)
-            glyph.draw(in: r)
+            glyphs[pick].draw(in: r)
         }
         walkPath(origin: origin, interval: interval, step: draw)
         draw(cursor)
