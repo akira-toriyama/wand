@@ -140,24 +140,26 @@ public enum TrailColorMode: Equatable {
         }
     }
 
-    /// Resolve the mode to a concrete colour at the given time. For
-    /// `splatoon` the colour is determined entirely by `strokeSeed`
-    /// (time has no effect — one team's ink for the whole stroke).
-    /// For `rainbow` and `neon` the time drives a cycle, and
-    /// `strokeSeed` is ignored.
+    /// Resolve the mode to a concrete colour at the given time.
+    /// `cyclePeriod` (in seconds) controls how fast the dynamic
+    /// modes (`rainbow` / `neon`) cycle — smaller = faster strobe,
+    /// larger = slower drift. `splatoon` is determined entirely by
+    /// `strokeSeed` (time and period have no effect — one team's
+    /// ink for the whole stroke). Static modes ignore both.
     public func currentColor(at time: TimeInterval,
-                              strokeSeed: UInt64) -> NSColor {
+                              strokeSeed: UInt64,
+                              cyclePeriod: TimeInterval) -> NSColor {
         switch self {
         case .static(let c):
             return c
         case .rainbow:
-            let period: TimeInterval = 3.0
-            let h = (time / period).truncatingRemainder(dividingBy: 1.0)
+            let h = (time / cyclePeriod)
+                .truncatingRemainder(dividingBy: 1.0)
             return NSColor(hue: CGFloat(h), saturation: 0.90,
                            brightness: 1.0, alpha: 1.0)
         case .neon:
             return Self.cycle(NSColorParse.neonInks,
-                              at: time, period: 2.0)
+                              at: time, period: cyclePeriod)
         case .splatoon:
             let pal = NSColorParse.splatoonInks
             return pal.isEmpty

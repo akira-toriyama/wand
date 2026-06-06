@@ -75,6 +75,11 @@ public struct GestureOverlayTrailSpec: Sendable, Equatable {
     /// indicator is its own axis. Defaults to `true` — preserves
     /// the original hard-coded behaviour.
     public let arrowhead: Bool
+    /// Cycle period in milliseconds for the dynamic colour modes
+    /// (`rainbow` / `neon`). Smaller = faster strobe; larger =
+    /// slower drift. Clamped 100..10000. Ignored by static and
+    /// `splatoon` modes (the latter is per-stroke fixed).
+    public let colorCycleMs: Int
     /// How long (ms) the trail lingers after a gesture fires.
     /// Clamped 0..2000; `0` = instant clear.
     public let finalHoldMs: Int
@@ -84,12 +89,14 @@ public struct GestureOverlayTrailSpec: Sendable, Equatable {
                 width: Int = 3,
                 style: TrailStyle = .normal,
                 arrowhead: Bool = true,
+                colorCycleMs: Int = 2000,
                 finalHoldMs: Int = 400) {
         self.color = color
         self.colorNoMatch = colorNoMatch
         self.width = width
         self.style = style
         self.arrowhead = arrowhead
+        self.colorCycleMs = colorCycleMs
         self.finalHoldMs = finalHoldMs
     }
 

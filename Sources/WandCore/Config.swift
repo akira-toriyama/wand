@@ -161,6 +161,9 @@ public struct WandConfig: Sendable {
             tr, key: "style", section: "cast.overlay.trail",
             default: .normal)
         let trailArrowhead = tr.bool("arrowhead", true)
+        let trailColorCycleMs = clampInt(
+            tr, key: "color-cycle-ms",
+            default: 2000, lo: 100, hi: 10000)
         let trailFinalHoldMs = clampInt(tr, key: "final-hold-ms",
                                         default: 400, lo: 0, hi: 2000)
         let trail = GestureOverlayTrailSpec(
@@ -169,6 +172,7 @@ public struct WandConfig: Sendable {
             width: trailWidth,
             style: trailStyle,
             arrowhead: trailArrowhead,
+            colorCycleMs: trailColorCycleMs,
             finalHoldMs: trailFinalHoldMs)
 
         // [cast.overlay.badge]

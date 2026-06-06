@@ -241,6 +241,17 @@ style = "normal"
 # the line-shape preset. `false` for a plain line.
 arrowhead = true
 
+# Cycle period in milliseconds for the dynamic colour modes
+# (`rainbow` / `neon`). Smaller = faster strobe; larger = slower
+# drift. Ignored by static and `splatoon` modes (`splatoon` is
+# per-stroke fixed). Clamped 100..10000.
+#
+#   500   — strobing (very fast colour churn)
+#   1000  — flicker
+#   2000  — default; visible cycle in a typical short stroke
+#   5000  — slow drift, almost-solid feel
+color-cycle-ms = 2000
+
 # How long (ms) the trail lingers after a gesture fires. The
 # in-progress segment is first snapped onto its axis so the whole
 # path reads as a clean orthogonal polyline, held at full alpha,

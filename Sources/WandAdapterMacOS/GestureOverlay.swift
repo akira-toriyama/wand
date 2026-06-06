@@ -107,6 +107,7 @@ public final class GestureOverlay {
             ov.trail.color, fallback: .systemBlue)
         view.noMatchMode = TrailColorMode.parse(
             ov.trail.colorNoMatch, fallback: .systemRed)
+        view.colorCyclePeriod = TimeInterval(ov.trail.colorCycleMs) / 1000.0
         view.strokeWidth = CGFloat(ov.trail.width)
         view.trailStyle = ov.trail.style
         view.arrowheadEnabled = ov.trail.arrowhead
@@ -163,6 +164,11 @@ private final class TrailView: NSView {
     /// stays one team's colour through the whole drag. Re-rolled at
     /// the start of each stroke (via `reset()`).
     var strokeSeed: UInt64 = UInt64.random(in: 0..<UInt64.max)
+    /// Cycle period in seconds for the dynamic modes (`rainbow` /
+    /// `neon`). Smaller = faster strobe; larger = slower drift. Set
+    /// live from `[cast.overlay.trail].color-cycle-ms` divided by
+    /// 1000. Ignored by static and `splatoon` modes.
+    var colorCyclePeriod: TimeInterval = 2.0
     var strokeWidth: CGFloat = 3
     /// Named preset that swaps the trail's whole personality (width,
     /// glow, dash, per-segment color). Resolved from
@@ -587,7 +593,8 @@ private final class TrailView: NSView {
         // lookup.
         let mode = valid ? matchMode : noMatchMode
         let color = mode.currentColor(at: CACurrentMediaTime(),
-                                       strokeSeed: strokeSeed)
+                                       strokeSeed: strokeSeed,
+                                       cyclePeriod: colorCyclePeriod)
 
         // While holding the post-fire snapped polyline, fade the trail
         // out over the last third of the hold so it doesn't pop off.
@@ -774,10 +781,12 @@ private final class TrailView: NSView {
         badgeLayout = nil
 
         // Same resolver the trail uses — dynamic modes get the current
-        // time + the stroke seed; static modes pass through.
+        // time + the stroke seed + the cycle period; static modes pass
+        // through.
         let mode = valid ? matchMode : noMatchMode
         let accent = mode.currentColor(at: CACurrentMediaTime(),
-                                        strokeSeed: strokeSeed)
+                                        strokeSeed: strokeSeed,
+                                        cyclePeriod: colorCyclePeriod)
 
         if let hint, let cursor = cursor {
             var byDir: [Character: [GestureHint.Row]] = [:]
