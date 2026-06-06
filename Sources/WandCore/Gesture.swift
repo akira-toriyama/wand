@@ -69,6 +69,12 @@ public struct GestureOverlayTrailSpec: Sendable, Equatable {
     /// Named preset bundling width × glow × dash. Shape only — colour
     /// always comes from `color` / `colorNoMatch`.
     public let style: TrailStyle
+    /// Draw an arrowhead tip at the cursor in the last-committed
+    /// direction. Independent of `style` (a `comet` or `dashed`
+    /// trail can still have or omit the tip) so the directional
+    /// indicator is its own axis. Defaults to `true` — preserves
+    /// the original hard-coded behaviour.
+    public let arrowhead: Bool
     /// How long (ms) the trail lingers after a gesture fires.
     /// Clamped 0..2000; `0` = instant clear.
     public let finalHoldMs: Int
@@ -77,11 +83,13 @@ public struct GestureOverlayTrailSpec: Sendable, Equatable {
                 colorNoMatch: String = "#ef4444",
                 width: Int = 3,
                 style: TrailStyle = .normal,
+                arrowhead: Bool = true,
                 finalHoldMs: Int = 400) {
         self.color = color
         self.colorNoMatch = colorNoMatch
         self.width = width
         self.style = style
+        self.arrowhead = arrowhead
         self.finalHoldMs = finalHoldMs
     }
 

@@ -160,6 +160,7 @@ public struct WandConfig: Sendable {
         let trailStyle: TrailStyle = parseEnum(
             tr, key: "style", section: "cast.overlay.trail",
             default: .normal)
+        let trailArrowhead = tr.bool("arrowhead", true)
         let trailFinalHoldMs = clampInt(tr, key: "final-hold-ms",
                                         default: 400, lo: 0, hi: 2000)
         let trail = GestureOverlayTrailSpec(
@@ -167,6 +168,7 @@ public struct WandConfig: Sendable {
             colorNoMatch: trailColorNoMatch,
             width: trailWidth,
             style: trailStyle,
+            arrowhead: trailArrowhead,
             finalHoldMs: trailFinalHoldMs)
 
         // [cast.overlay.badge]

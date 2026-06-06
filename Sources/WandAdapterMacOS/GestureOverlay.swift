@@ -107,6 +107,7 @@ public final class GestureOverlay {
         view.noMatchColor = NSColorParse.nsColor(ov.trail.colorNoMatch) ?? .systemRed
         view.strokeWidth = CGFloat(ov.trail.width)
         view.trailStyle = ov.trail.style
+        view.arrowheadEnabled = ov.trail.arrowhead
         view.badgeEnabled = ov.badge.enabled
         view.badgeSize = CGFloat(ov.badge.size)
         view.animEnabled = ov.badge.animEnabled
@@ -155,6 +156,12 @@ private final class TrailView: NSView {
     /// (`brush` / `splatoon` / …) are reserved for follow-up PRs of #63
     /// and not represented in this enum yet.
     var trailStyle: TrailStyle = .normal
+    /// Draw the arrowhead tip at the cursor in the last-committed
+    /// direction. Independent of `trailStyle` so the directional
+    /// indicator is its own knob — a `dashed` / `comet` trail can
+    /// still opt out of the tip, and a plain `normal` trail can keep
+    /// it. Set live from `[cast.overlay.trail].arrowhead`.
+    var arrowheadEnabled: Bool = true
     /// Cocoa-global origin of the window; subtracted to get view-local
     /// coords from a global point.
     var originOffset: CGPoint = .zero
@@ -576,8 +583,9 @@ private final class TrailView: NSView {
 
         // Arrowhead at the raw cursor in the last-committed direction.
         // Skipped until a direction has been committed (no axis to
-        // point along yet).
-        if let dir = lastDir {
+        // point along yet), or when `[cast.overlay.trail].arrowhead`
+        // is `false` — the tip is its own axis, not a style detail.
+        if arrowheadEnabled, let dir = lastDir {
             drawArrowhead(at: cursor, direction: dir, color: color)
         }
         NSGraphicsContext.restoreGraphicsState()

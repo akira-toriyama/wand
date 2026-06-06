@@ -227,6 +227,13 @@ width = 3
 #               like a meteor's tail. Corner smoothing skipped.
 style = "normal"
 
+# Draw an arrowhead tip at the cursor in the last-committed direction
+# — a directional indicator pointing where the gesture's last segment
+# went. Independent of `style` (a `comet` / `dashed` / etc. trail can
+# still opt in or out of the tip), so the indicator is its own axis,
+# not bundled into the line-shape preset. `false` for a plain line.
+arrowhead = true
+
 # How long (ms) the trail lingers after a gesture fires. The
 # in-progress segment is first snapped onto its axis so the whole
 # path reads as a clean orthogonal polyline, held at full alpha,
@@ -298,10 +305,14 @@ kind = "off"
 [cast.fire.decal]
 
 #   "off"           — no decal (default)
-#   "ink-splatter"  — main blob + 3-6 satellite spatters; vivid
-#   "paint-blob"    — single irregular paint stamp
-#   "scorch"        — radial gradient burn mark
-#   "star"          — 5-pointed sparkle
+#   "ink-splatter"  — busy splatter: main blob + 3-6 satellite
+#                     spatters (most ragged shape of the four)
+#   "paint-blob"    — single stamp, larger and smoother than
+#                     ink-splatter — reads as a paintbrush mark
+#   "scorch"        — radial gradient burn mark (opaque core,
+#                     transparent edges; no jitter)
+#   "star"          — 5-pointed sparkle (classic outer/inner 2.4
+#                     ratio, single solid colour)
 # Color comes from `[cast.overlay.trail].color`.
 kind = "off"
 
