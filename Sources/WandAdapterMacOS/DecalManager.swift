@@ -152,53 +152,103 @@ private final class DecalView: NSView {
         }
     }
 
-    /// Splatoon-style splatter, four layers stacked centre-out:
+    /// Splatoon-style splatter, four layers stacked centre-out. The
+    /// composition is deliberately scattered — 3-5 **primary** blobs
+    /// of varying size + position fill the splat region instead of
+    /// one big centred blob, mirroring how an in-game ink shot
+    /// scatters across multiple impact points. Smaller satellites
+    /// and droplet specks fill the gaps and the outer fringe.
     ///
-    ///   0. ink ring    — slightly larger darkened underlayer behind
-    ///                    the main blob, so the splat reads as "wet
-    ///                    ink with a darker pooled edge" (the visual
-    ///                    cue from in-game ink puddles).
-    ///   1. main blob   — 1 big irregular polygon, jitter 0.42 so the
-    ///                    silhouette reads as a thrown ink mark.
-    ///   2. satellites  — 5-9 mid-tier blobs ringing the perimeter,
-    ///                    each its own ragged shape.
-    ///   3. specks      — 10-17 tiny droplets farther out, the "wet
-    ///                    ink, droplets fly outward" polish that sells
-    ///                    the Splatoon feel.
+    ///   0. ink rings   — one darkened underlayer per primary blob,
+    ///                    so each primary reads as a "wet ink puddle
+    ///                    with a darker pooled edge" rather than a
+    ///                    flat sticker.
+    ///   1. primaries   — 3-5 mid/large irregular polygons. The first
+    ///                    one sits near (but not exactly at) the
+    ///                    splat centre and is slightly larger so it
+    ///                    reads as the lead splat; the rest orbit at
+    ///                    random angles with random size + jitter.
+    ///   2. satellites  — 5-9 smaller blobs filling gaps between
+    ///                    primaries and out to the perimeter.
+    ///   3. specks      — 10-17 tiny droplets in the outer fringe,
+    ///                    the "wet ink, droplets fly outward" polish.
     ///
-    /// Each layer's alpha and shade steps so the main blob reads as
-    /// the impact point, the ring frames it, and the specks fade
-    /// outward. All distances are capped at ~1.55× baseR (= ~0.46 of
-    /// the view) so the splatter stays inside the configured `size`
-    /// footprint rather than clipping against the view bounds.
+    /// All distances are bounded so the splatter stays inside the
+    /// configured `size` footprint rather than clipping against the
+    /// view bounds. The frozen per-decal seed governs every layer so
+    /// the shape doesn't re-roll on each `needsDisplay`.
     private func drawInkSplatter(in rect: CGRect, rng: inout SplitMix64) {
         let centre = CGPoint(x: rect.midX, y: rect.midY)
         let baseR = rect.width * 0.30
 
-        // Layer 0 — ink ring (darker rim). `blended(withFraction:of:)`
-        // mixes 45% black into the team colour for the "pooled wet
-        // edge" shade. The ring blob is ~10% larger and uses a
-        // slightly different jitter profile so its silhouette doesn't
-        // exactly match the main blob — that way the rim peeks out
-        // around the main blob's outline.
+        // Pre-compute the primary blob positions so the ink-ring pass
+        // (Layer 0) and the primary fill pass (Layer 1) agree on where
+        // each puddle sits — we want the ring painted UNDER each
+        // primary, not in a separate pre-computed grid.
+        struct Primary {
+            let centre: CGPoint
+            let radius: CGFloat
+            let jitter: CGFloat
+            let points: Int
+        }
+        var primaries: [Primary] = []
+
+        // Lead primary — near (not exactly at) centre, slightly bigger
+        // than the orbiters so it still reads as the impact focus.
+        do {
+            let r = baseR * (0.55 + CGFloat(rng.nextUnit()) * 0.20)
+            let dx = (CGFloat(rng.nextUnit()) - 0.5) * baseR * 0.30
+            let dy = (CGFloat(rng.nextUnit()) - 0.5) * baseR * 0.30
+            primaries.append(Primary(
+                centre: CGPoint(x: centre.x + dx, y: centre.y + dy),
+                radius: r, jitter: 0.42, points: 20))
+        }
+
+        // 2..4 additional primaries orbiting the centre.
+        let extras = 2 + Int(rng.next() % 3)
+        for _ in 0..<extras {
+            let angle = CGFloat(rng.nextUnit()) * .pi * 2
+            let dist = baseR * (0.40 + CGFloat(rng.nextUnit()) * 0.45)
+            let r = baseR * (0.20 + CGFloat(rng.nextUnit()) * 0.25)
+            let jitter: CGFloat = 0.42 + CGFloat(rng.nextUnit()) * 0.08
+            let pts = 16 + Int(rng.next() % 6)
+            primaries.append(Primary(
+                centre: CGPoint(x: centre.x + cos(angle) * dist,
+                                 y: centre.y + sin(angle) * dist),
+                radius: r, jitter: jitter, points: pts))
+        }
+
+        // Layer 0 — ink rings under each primary (darker rim).
+        // `blended(withFraction:of:)` mixes 45% black into the team
+        // colour for the "pooled wet edge" shade.
         let ring = NSColor.black.blended(withFraction: 0.45, of: color)?
-            .withAlphaComponent(0.80) ?? color
+            .withAlphaComponent(0.78) ?? color
         ring.setFill()
-        irregularBlobPath(at: centre, baseRadius: baseR * 1.10,
-                           jitter: 0.36, points: 22, rng: &rng).fill()
+        for p in primaries {
+            irregularBlobPath(at: p.centre,
+                               baseRadius: p.radius * 1.10,
+                               jitter: p.jitter * 0.85,
+                               points: p.points + 2,
+                               rng: &rng).fill()
+        }
 
-        // Layer 1 — main blob.
+        // Layer 1 — primary blobs.
         color.withAlphaComponent(0.95).setFill()
-        irregularBlobPath(at: centre, baseRadius: baseR,
-                           jitter: 0.42, points: 20, rng: &rng).fill()
+        for p in primaries {
+            irregularBlobPath(at: p.centre,
+                               baseRadius: p.radius,
+                               jitter: p.jitter,
+                               points: p.points,
+                               rng: &rng).fill()
+        }
 
-        // Layer 2 — mid-tier satellites (5..9).
+        // Layer 2 — mid-tier satellites filling gaps (5..9).
         let satelliteCount = 5 + Int(rng.next() % 5)
         color.withAlphaComponent(0.88).setFill()
         for _ in 0..<satelliteCount {
             let angle = CGFloat(rng.nextUnit()) * .pi * 2
-            let dist = baseR * (0.75 + CGFloat(rng.nextUnit()) * 0.55)
-            let r = baseR * (0.12 + CGFloat(rng.nextUnit()) * 0.28)
+            let dist = baseR * (0.55 + CGFloat(rng.nextUnit()) * 0.80)
+            let r = baseR * (0.08 + CGFloat(rng.nextUnit()) * 0.16)
             let c = CGPoint(x: centre.x + cos(angle) * dist,
                              y: centre.y + sin(angle) * dist)
             irregularBlobPath(at: c, baseRadius: r,
@@ -210,7 +260,7 @@ private final class DecalView: NSView {
         color.withAlphaComponent(0.78).setFill()
         for _ in 0..<speckCount {
             let angle = CGFloat(rng.nextUnit()) * .pi * 2
-            let dist = baseR * (1.1 + CGFloat(rng.nextUnit()) * 0.45)
+            let dist = baseR * (1.05 + CGFloat(rng.nextUnit()) * 0.50)
             let r = baseR * (0.04 + CGFloat(rng.nextUnit()) * 0.08)
             let c = CGPoint(x: centre.x + cos(angle) * dist,
                              y: centre.y + sin(angle) * dist)

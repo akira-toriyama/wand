@@ -299,11 +299,13 @@ kind = "off"
 [cast.fire.decal]
 
 #   "off"           — no decal (default)
-#   "ink-splatter"  — Splatoon-style splat: 4-layer stack centre-out
-#                     (darker ink ring + main blob + 5-9 satellites
-#                     + 10-17 droplet specks). The ring sells the
-#                     "wet ink with a pooled edge" cue from in-game
-#                     ink puddles.
+#   "ink-splatter"  — Splatoon-style scatter: 3-5 primary blobs of
+#                     varying size + position (one near centre, the
+#                     rest orbiting at random angles), each with its
+#                     own darker ink-ring underlayer. 5-9 satellites
+#                     fill the gaps and 10-17 droplet specks land in
+#                     the outer fringe. Each fire re-rolls the
+#                     scatter pattern so no two splats look alike.
 kind = "off"
 
 # How long (ms) the decal stays visible before fading out.
@@ -319,10 +321,11 @@ size = 60
 #               the trail accent).
 #   "trail"   — explicit form of the above.
 #   "splatoon" — pick a random hue from a 10-colour Splatoon-style
-#                ink palette on every fire (pink / green / sapphire /
-#                orange / purple / pansy / mustard / peppermint /
-#                yellow / magenta). The deliberate Turf War feel —
-#                each fire is a different team's ink.
+#                ink palette on every fire (orange / yellow / lime /
+#                neon green / peppermint / sapphire / purple /
+#                magenta / pink / coral, sourced from a Turf War
+#                colour-pair compilation). The deliberate Turf War
+#                feel — each fire is a different team's ink.
 #   <hex / named> — anything `[cast.overlay.trail].color` accepts
 #                   (e.g. `"#ff00ff"` / `"systemPink"`) overrides
 #                   with that fixed colour.

@@ -59,25 +59,25 @@ public enum NSColorParse {
                        blue: pair(4), alpha: pair(6))
     }
 
-    /// Splatoon-style ink palette — 10 saturated, vivid hues mirroring
-    /// the Turf War colour pairings (sapphire vs orange, pink vs
-    /// green, purple vs orange, pansy vs mustard, orange vs peppermint
-    /// — Splatoon 3 set). All at saturation ≈ 100% so each reads as a
-    /// distinct team colour against the cursor-anchored fire point's
-    /// surroundings. Sourced from observation of in-game splats — exact
-    /// hex codes aren't published, so these are visual approximations
-    /// that lean on hue diversity rather than pixel-perfect matches.
+    /// Splatoon-style ink palette — 10 saturated, vivid hues sourced
+    /// from a Turf War colour-pair compilation
+    /// (https://uto-room.com/color/character/splatoon/). All at near-
+    /// 100% saturation so each reads as a distinct team colour against
+    /// whatever surface the cursor-anchored fire point lands on. The
+    /// set was de-duped from 17 published pairs down to 10 maximally-
+    /// distinct hues so consecutive `splatoon` rolls actually look
+    /// different.
     public static let splatoonInks: [NSColor] = [
-        NSColor(srgbRed: 1.00, green: 0.18, blue: 0.50, alpha: 1),   // pink
-        NSColor(srgbRed: 0.40, green: 0.86, blue: 0.30, alpha: 1),   // green
-        NSColor(srgbRed: 0.22, green: 0.38, blue: 1.00, alpha: 1),   // sapphire blue
-        NSColor(srgbRed: 1.00, green: 0.42, blue: 0.10, alpha: 1),   // orange
-        NSColor(srgbRed: 0.65, green: 0.27, blue: 1.00, alpha: 1),   // purple
-        NSColor(srgbRed: 0.50, green: 0.27, blue: 0.80, alpha: 1),   // pansy
-        NSColor(srgbRed: 0.96, green: 0.78, blue: 0.10, alpha: 1),   // mustard
-        NSColor(srgbRed: 0.20, green: 0.92, blue: 0.78, alpha: 1),   // peppermint
-        NSColor(srgbRed: 1.00, green: 0.85, blue: 0.00, alpha: 1),   // yellow
-        NSColor(srgbRed: 0.95, green: 0.18, blue: 0.85, alpha: 1),   // magenta
+        NSColor(srgbRed: 0xFA/255.0, green: 0x5B/255.0, blue: 0x00/255.0, alpha: 1),   // orange       #FA5B00
+        NSColor(srgbRed: 0xF6/255.0, green: 0xFC/255.0, blue: 0x0B/255.0, alpha: 1),   // yellow       #F6FC0B
+        NSColor(srgbRed: 0xA9/255.0, green: 0xDE/255.0, blue: 0x00/255.0, alpha: 1),   // lime         #A9DE00
+        NSColor(srgbRed: 0x40/255.0, green: 0xF7/255.0, blue: 0x3E/255.0, alpha: 1),   // neon green   #40F73E
+        NSColor(srgbRed: 0x1A/255.0, green: 0xC8/255.0, blue: 0xB4/255.0, alpha: 1),   // peppermint   #1AC8B4
+        NSColor(srgbRed: 0x00/255.0, green: 0x32/255.0, blue: 0xFE/255.0, alpha: 1),   // sapphire     #0032FE
+        NSColor(srgbRed: 0x60/255.0, green: 0x3B/255.0, blue: 0xFD/255.0, alpha: 1),   // purple       #603BFD
+        NSColor(srgbRed: 0xDA/255.0, green: 0x18/255.0, blue: 0xAD/255.0, alpha: 1),   // magenta      #DA18AD
+        NSColor(srgbRed: 0xFD/255.0, green: 0x2A/255.0, blue: 0x96/255.0, alpha: 1),   // pink         #FD2A96
+        NSColor(srgbRed: 0xE6/255.0, green: 0x40/255.0, blue: 0x72/255.0, alpha: 1),   // coral        #E64072
     ]
 
     /// Pick a random ink colour from `splatoonInks`. Re-rolls on each
