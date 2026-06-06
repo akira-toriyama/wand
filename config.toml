@@ -157,8 +157,6 @@ intensity = "normal"
 #   "mono"     — white trail / black outline / red no-match
 #                only — failure stays loud, everything else
 #                is monochrome.
-#   "paper"    — light theme: dark trail on white card body,
-#                no outline (the white backing doesn't need it).
 #   "vapor"    — synthwave: pink trail, lime no-match, slate
 #                outline, Dracula-style dark card.
 #

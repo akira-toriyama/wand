@@ -64,8 +64,15 @@ public enum CastTheme: String, Sendable, CaseIterable {
     case splatoon
     case rainbow
     case mono
-    case paper
     case vapor
+
+    // Note: a `paper` (light-background) theme lived here through
+    // #115 but was retired — wand's HUD overlays a dark blur on
+    // whatever's behind, so a light theme's dark trail blended into
+    // the dark backing and the bright cards floated as detached
+    // patches. Light themes need a different overlay model than what
+    // wand ships, so dropping the option beats shipping one that
+    // reads as broken.
 
     public var palette: CastThemePalette {
         switch self {
@@ -121,14 +128,6 @@ public enum CastTheme: String, Sendable, CaseIterable {
                 cardsBorderColor: "#ffffff",
                 cardsBodyColor: "#000000",
                 cardsTextColor: "#ffffff")
-        case .paper:
-            return CastThemePalette(
-                trailColor: "#0f172a",
-                trailColorNoMatch: "#dc2626",
-                trailColorOutline: "",
-                cardsBorderColor: "#0f172a",
-                cardsBodyColor: "#ffffff",
-                cardsTextColor: "#0f172a")
         case .vapor:
             return CastThemePalette(
                 trailColor: "#ff79c6",
