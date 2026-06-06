@@ -344,6 +344,13 @@ width = 3
 #               Path = the ground line. `width` scales the whole
 #               skyline (building size + spacing), not the count
 #               per unit length.
+#   "cat-run" — RunCat tribute: 🐈 chases the cursor along a line
+#               of 🐾 paw prints, bouncing on a sine wave at the
+#               gait frequency. Style-specific exception to the
+#               "shape-only, not colour" invariant — emoji glyphs
+#               are pre-coloured, so the no-match signal swaps the
+#               head to 😿 instead of recolouring. `width` scales
+#               emoji size + spacing.
 style = "normal"
 
 # How long (ms) the trail lingers after a gesture fires. The

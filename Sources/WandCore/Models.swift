@@ -282,6 +282,15 @@ public enum TrailStyle: String, Sendable, Hashable, CaseIterable {
     /// match-vs-no-match signal stays legible. `width` is
     /// re-purposed as the per-building scale multiplier.
     case city
+    /// Cat-run (RunCat tribute): a 🐈 chases the cursor along a
+    /// trail of 🐾 paw prints, bouncing on a sine wave at the
+    /// gait frequency. **Style-specific exception to the
+    /// "shape-only, not colour" invariant** — emoji glyphs are
+    /// pre-coloured and ignore the trail tint, so the match-vs-
+    /// no-match signal is carried by swapping the head emoji
+    /// (🐈 → 😿) instead of recolouring. `width` is re-purposed
+    /// as a scale multiplier on emoji size + spacing.
+    case catRun = "cat-run"
 }
 
 /// The window the stroke acts on. Resolved at *button-down* time —

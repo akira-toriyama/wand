@@ -719,6 +719,9 @@ private final class TrailView: NSView {
         case .city:
             drawCityPath(origin: origin, cursor: cursor,
                           color: color, outline: outlineColor)
+        case .catRun:
+            drawCatRunPath(origin: origin, cursor: cursor,
+                            color: color, outline: outlineColor)
         }
         NSGraphicsContext.restoreGraphicsState()
     }
@@ -840,7 +843,8 @@ private final class TrailView: NSView {
         case .dotted:
             return TrailStyleParams(width: base, glowRadius: 7,
                                      lineDash: [base * 0.6, base * 2])
-        case .pixel, .ascii, .rainbowRoad, .pacman, .arrow, .city:
+        case .pixel, .ascii, .rainbowRoad, .pacman, .arrow, .city,
+             .catRun:
             // Unused — these styles route through their own
             // renderers and never call `drawSinglePath`. Returning a
             // safe baseline keeps the switch exhaustive without
@@ -1454,6 +1458,115 @@ private final class TrailView: NSView {
             // roof >= 4 → flat top, nothing extra drawn.
         }
         walkPath(origin: origin, interval: bw, step: plot)
+    }
+
+    // MARK: - Cat-run style constants
+
+    /// Paw-print emoji used along the trail body.
+    private static let catRunPawGlyph = "🐾"
+    /// Head emoji while the gesture still matches a rule.
+    private static let catRunHeadGlyph = "🐈"
+    /// Head emoji once the gesture can no longer reach any rule —
+    /// emoji can't carry the trail-tint signal, so we swap the
+    /// head glyph to signal failure instead.
+    private static let catRunHeadFailGlyph = "😿"
+    /// Spacing between paw prints (pt at scale=1). Wide enough for
+    /// each paw to read individually; matches pacman's pellet feel.
+    private static let catRunPawSpacing: CGFloat = 30
+    /// Base point size for the paw glyph (pt at scale=1).
+    private static let catRunPawFontSize: CGFloat = 14
+    /// Base point size for the cat-head glyph (pt at scale=1).
+    private static let catRunHeadFontSize: CGFloat = 28
+    /// How far back along the path the cat sits behind the live
+    /// cursor (pt at scale=1). Same role as `pacmanFaceLag` — large
+    /// enough to read as "chasing", small enough not to lose the
+    /// connection between cursor and head.
+    private static let catRunHeadLag: CGFloat = 45
+    /// Cat-head vertical bounce frequency (Hz). ~6 Hz reads as a
+    /// running gallop without looking jittery.
+    private static let catRunBounceHz: Double = 6
+    /// Cat-head vertical bounce amplitude (pt at scale=1). Tuned so
+    /// the bounce is felt but doesn't lift the cat off the trail.
+    private static let catRunBounceAmp: CGFloat = 4
+
+    /// Cat-run (RunCat tribute): the cursor lays down a single line
+    /// of 🐾 paw prints along the path; a 🐈 chases `catRunHeadLag`
+    /// pt behind the cursor, bouncing on a sine wave at the gait
+    /// frequency. When the in-progress gesture can no longer reach
+    /// any rule, the head glyph swaps to 😿 — emoji glyphs are
+    /// pre-coloured and ignore the trail tint, so the match-vs-
+    /// no-match signal has to ride on the glyph itself rather than
+    /// colour. `strokeWidth` is re-purposed as a scale multiplier
+    /// on emoji size + spacing (matches pacman's "scale, don't
+    /// stack" treatment). `colorOutline` has no effect — emoji
+    /// rendering can't honour stroke colour either.
+    private func drawCatRunPath(origin: CGPoint, cursor: CGPoint,
+                                 color: NSColor, outline: NSColor?) {
+        let scale = max(1, strokeWidth / 3)
+        let pawSize = Self.catRunPawFontSize * scale
+        let headSize = Self.catRunHeadFontSize * scale
+        let pawSpacing = Self.catRunPawSpacing * scale
+        let headLag = Self.catRunHeadLag * scale
+        let bounceAmp = Self.catRunBounceAmp * scale
+
+        // Emoji ignore foreground tint — pass it through anyway so
+        // the (very unlikely) monochrome fallback would honour the
+        // match colour. No harm in normal rendering.
+        let pawAttrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: pawSize),
+            .foregroundColor: color,
+        ]
+        let headAttrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: headSize),
+            .foregroundColor: color,
+        ]
+        let pawStr = NSAttributedString(
+            string: Self.catRunPawGlyph, attributes: pawAttrs)
+        let headGlyph = valid
+            ? Self.catRunHeadGlyph
+            : Self.catRunHeadFailGlyph
+        let headStr = NSAttributedString(
+            string: headGlyph, attributes: headAttrs)
+        let pawMeasure = pawStr.size()
+        let headMeasure = headStr.size()
+
+        // 1) Locate the cat's anchor point this frame by walking
+        // the path with `headLag` as `trimTail`. Same trick as
+        // `drawPacmanPath` — the final walker emit is exactly the
+        // cutoff coordinate.
+        var headAnchor: (point: CGPoint, tangent: CGPoint)?
+        walkPath(origin: origin,
+                 interval: pawSpacing,
+                 trimTail: headLag) { p, tangent in
+            headAnchor = (p, tangent)
+        }
+
+        // 2) Draw the paw line across the full path (no trim) so
+        // prints reach all the way to the live cursor.
+        let drawPaw: (CGPoint, CGPoint) -> Void = { p, _ in
+            let r = NSRect(
+                x: p.x - pawMeasure.width / 2,
+                y: p.y - pawMeasure.height / 2,
+                width: pawMeasure.width,
+                height: pawMeasure.height)
+            pawStr.draw(in: r)
+        }
+        walkPath(origin: origin, interval: pawSpacing, step: drawPaw)
+
+        // 3) Draw the cat head with the gait bounce. Phase is taken
+        // straight from `CACurrentMediaTime()` so the bounce reads
+        // smoothly across the 60 FPS redraw schedule.
+        let phase = sin(CACurrentMediaTime() * 2 * .pi
+                         * Self.catRunBounceHz)
+        let bounceY = bounceAmp * CGFloat(phase)
+        let headPoint: CGPoint = headAnchor?.point ?? cursor
+        let headRect = NSRect(
+            x: headPoint.x - headMeasure.width / 2,
+            y: headPoint.y - headMeasure.height / 2 + bounceY,
+            width: headMeasure.width,
+            height: headMeasure.height)
+        headStr.draw(in: headRect)
+        _ = outline  // unused — emoji rendering can't carry outline.
     }
 
     // MARK: - HUD layout
