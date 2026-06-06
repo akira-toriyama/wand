@@ -100,9 +100,19 @@ action-cmd = "echo name"
 ```
 
 Item `icon` syntax: `"🌐"` (emoji / 1-2 char text glyph), `"SF:globe"`
-(SF Symbol — macOS 11+), `"~/icons/foo.png"` / `"icons/foo.png"`
+(SF Symbol — macOS 11+), `"app:com.apple.Safari"` (the running app's
+icon for that bundle id), `"~/icons/foo.png"` / `"icons/foo.png"`
 (path; relative paths resolve against `~/.config/wand/`), or
-`"/abs/path.png"`. Unrecognised values fall back to no icon.
+`"/abs/path.png"`. Unrecognised values fall back to no icon and log
+once to `/tmp/wand.log`.
+
+Each row also accepts `subtitle`, a `header` separator, and
+`tint` / `tint-colors` / `icon-anim` for SF-Symbol icons — see
+[`config.toml`](config.toml) for the full per-row vocabulary. Panel-
+wide visual settings live in `[launcher.row]`, `[launcher.animation]`
+(`open` / `close` ∈ `off | fade | pop`), and `[launcher.decoration]`
+(`border ∈ off | rainbow`). `[launcher].layout` switches the panel
+between `list`, `toolbar`, and `labeled-toolbar`.
 
 Items can also produce **dynamic submenus**. Set `dynamic` to a
 shell command and provide `template-*` fields; each stdout line
@@ -261,16 +271,27 @@ exists) **and no `!` entry matches**. Case-insensitive. Examples:
 | `["*", "!*.chrome.beta*"]` | every app except Chrome's beta channel |
 | `["*chrome*", "*safari*"]` | Chrome OR Safari |
 
-`[gesture] max-segment-ms` caps how long any one segment may
-take — the clock resets on every turn, so a multi-segment gesture
+Globally suppress gestures and launcher in specific apps via
+`[exclude].apps` (e.g. block wand inside a remote-desktop client).
+The list short-circuits both trigger families before rule / item
+matching runs.
+
+Trail style, origin-badge size, blur on the overlay, final-hold
+fade time, and many more visual knobs live in
+`[gesture.overlay.trail]`, `[gesture.overlay.badge]`, and
+`[gesture.overlay]` — see [`config.toml`](config.toml) for the
+complete annotated list.
+
+`[gesture.recognition].max-segment-ms` caps how long any one segment
+may take — the clock resets on every turn, so a multi-segment gesture
 gets the full budget per leg and only a stalled single direction (an
 ordinary deliberate right-drag) runs past it and is abandoned. `0`
 (default) = no limit; the trail turns the no-match color once a
 segment runs past the budget.
 
-`[gesture] cancel-reversals` is the escape hatch: scribble the
-cursor back and forth and the in-progress gesture is abandoned on the
-spot — no waiting for a timeout, and releasing fires nothing. It
+`[gesture.recognition].cancel-reversals` is the escape hatch: scribble
+the cursor back and forth and the in-progress gesture is abandoned on
+the spot — no waiting for a timeout, and releasing fires nothing. It
 counts 180° direction reversals; the default `2` catches a deliberate
 back-and-forth without tripping on real gestures. `0` = off.
 `cancel-window-ms` (default `500`) gates it on *speed* — the reversals
@@ -299,10 +320,10 @@ their own click-through windows:
 
 ```toml
 [gesture.fire.burst]
-kind = "burst"          # omnidirectional particle burst at the cursor
+kind = "burst"          # off | burst
 
 [gesture.fire.decal]
-kind = "ink-splatter"   # Splatoon-style splatter that lingers
+kind = "ink-splatter"   # off | ink-splatter | paint-blob | scorch | star
 duration-ms = 3000
 size = 60
 ```
@@ -326,7 +347,11 @@ intensity = "wild"      # subtle | normal | bold | wild
 wand                    # run as agent (CGEventTap loop)
 WAND_DEBUG=1 wand       # verbose log to /tmp/wand.log + stderr
 
-wand --validate         # parse config.toml, exit 0/2
+wand --validate         # parse config.toml, exit 0/2.  Warnings
+                          # (clamps, retired keys, collisions, typos)
+                          # print to stderr.
+wand --validate --items <PATH>   # also validate an [[item]] file
+                                  # intended for --show-menu
 wand --doctor           # health check: Accessibility, config, daemon, tap
 wand --test DR [app]    # dry-run: which rule fires for a pattern
 wand --record           # interactive recorder — draw a gesture, get a
@@ -335,15 +360,33 @@ wand --record           # interactive recorder — draw a gesture, get a
 wand --status           # rule count, trigger, last gesture
 wand --reload           # re-read config.toml (also automatic on save)
 wand --quit             # terminate the running daemon
+wand --resign           # re-sign the installed Wand.app with the
+                          # stable self-signed identity + restart
+                          # (run once after `brew install` / upgrade
+                          # if the TCC grant drops)
+wand --show-menu --items <PATH> --at <X> <Y> [--selection <TEXT>] \
+                 [--title <TEXT>]
+                        # external trigger: pop the launcher with a
+                          # caller-supplied [[item]] file at <X> <Y>
+                          # (Cocoa screen coords, Y-up).  Used by
+                          # event-driven daemons (eventfx etc).
+                          # --selection populates $SELECTION for
+                          # shell items; --title overrides the
+                          # frontmost window title for
+                          # $WAND_TARGET_TITLE.
 wand --help
 ```
 
+Combining incompatible actions (e.g. `wand --reload --quit`) or
+attaching a modifier to the wrong action (e.g. `--items` with
+`--reload`) exits `2` — there is no silent fallback.
+
 The daemon **auto-reloads `config.toml` on save** — `--reload` is the
-manual trigger if you need it. `--reload` / `--status` / `--quit` are
-client commands — they exit 3 with a
-helpful message if the daemon isn't running. `--record` is the
-reverse — it refuses if the daemon *is* running, because both
-would fight over the same CGEventTap.
+manual trigger if you need it. `--reload` / `--status` / `--quit` /
+`--show-menu` are client commands — they exit 3 with a helpful
+message if the daemon isn't running. `--record` is the reverse — it
+refuses if the daemon *is* running, because both would fight over the
+same CGEventTap.
 
 **Two transitions need a daemon restart** — everything else hot-reloads:
 - `[gesture]` (button / modifiers) — baked into the running tap's

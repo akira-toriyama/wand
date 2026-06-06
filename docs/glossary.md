@@ -40,8 +40,9 @@ wand を構成する各パーツの **正規の呼び名** をまとめた規範
 ### assist card
 カーソル周囲に配置される小さなカード。**今この瞬間ここから到達可能な方向**
 を 1 方向 = 1 カードで提示する。現在マッチしているルールに対応する
-カードは match color で強調される。
-- 設定: `[gesture.overlay]`
+カードは match color で強調される。退場アニメは `[gesture.overlay.cards]`
+の `unmatch` / `match` で個別に指定する。
+- 設定: `[gesture.overlay]` / `[gesture.overlay.cards]`
 - コード: `WandAdapterMacOS` overlay
 - **Don't call it:** tooltip, popup, hint, chip, balloon, label, ツールチップ, ポップアップ, ヒント
 
@@ -56,13 +57,14 @@ wand を構成する各パーツの **正規の呼び名** をまとめた規範
 ジェスチャー開始点に固定表示される小さなマーカー。**ターゲットアプリの
 アイコン** を表示し、キーボードフォーカスが別ウィンドウにあっても
 「wand がどのウィンドウに作用するのか」を一目で示す。
-- 設定: `[gesture.overlay]` の `badge` トグル
+- 設定: `[gesture.overlay.badge]`（`enabled` / `size` / `anim-enabled`）
 - **Don't call it:** icon, indicator, marker, anchor, アイコン, インジケータ
 
 ### trail
 ジェスチャー描画中にカーソルを追従する半透明の軌跡。これまでに描いた
 形がルールにマッチしていれば match color、マッチしなければ no-match color。
-- 設定: `[gesture.overlay]`
+- 設定: `[gesture.overlay.trail]`（`color` / `color-no-match` /
+  `width` / `style` / `final-hold-ms`）
 - **Don't call it:** path, stroke, line, ink, パス, 軌跡（説明文中の比喩を除く）
 
 ### gesture rule
@@ -78,6 +80,23 @@ wand を構成する各パーツの **正規の呼び名** をまとめた規範
 ため）。
 - 例: `DR`, `URD`, `L`
 - **Don't call it:** shape, sequence, path, motion, 形, 軌跡
+
+### fire burst
+ジェスチャーが発動した瞬間にカーソル位置でパーティクルを放射する
+クリックスルー演出。`[gesture.overlay].enabled = false` でも独立に
+動作する。`kind = "burst"` で有効、`kind = "off"` で無効。
+- 設定: `[gesture.fire.burst]`
+- コード: `WandAdapterMacOS/BurstManager`
+- **Don't call it:** particles, explosion, effect, flare, パーティクル, エフェクト
+
+### fire decal
+ジェスチャー発動の瞬間にカーソル位置へ描かれ、しばらく残留してから
+フェードアウトする痕跡。`ink-splatter` / `paint-blob` / `scorch` /
+`star` から選ぶ（`off` で無効）。trail と違って描画中ではなく
+**発動の瞬間に一度だけ**置かれる。
+- 設定: `[gesture.fire.decal]`(`kind` / `duration-ms` / `size`)
+- コード: `WandAdapterMacOS/DecalManager`
+- **Don't call it:** splash, stain, mark, sticker, スタンプ, シール
 
 ### match color / no-match color
 [[assist card]] の枠色および [[trail]] の線色を切り替える 2 色のペア。
@@ -122,9 +141,36 @@ match color、まだマッチしていなければ no-match color。同時に表
 - 設定: `[[launcher.item]]` で `dynamic` 指定時
 - **Don't call it:** generated submenu, shell submenu, computed menu, 動的メニュー
 
+### launcher layout
+[[non-activating panel]] の並びモード。`list`（縦並び、デフォルト）/
+`toolbar`（横並び、アイコンのみ）/ `labeled-toolbar`（横並び、ラベル付き）
+の 3 つ。`[launcher].layout` でデーモン全体、`--show-menu --items`
+のファイル内の `[launcher].layout` でその呼び出し限定に切り替えられる。
+- 設定: `[launcher].layout`
+- **Don't call it:** orientation, mode, panel style, 並び順, レイアウト
+
+### excludes
+ジェスチャーとランチャーを **特定のアプリ内で完全に無効化** する
+グローバルブロックリスト。bundle id の glob 配列で、トリガー判定の
+最初に短絡するためルール / アイテム個別の `apps` よりも上位で効く。
+- 設定: `[exclude].apps`
+- **Don't call it:** blacklist, blocklist, denylist, ignore list,
+  ブラックリスト, 除外リスト
+
 ---
 
 ## ターゲティング
+
+### external trigger
+他のデーモン（例: `eventfx` のテキスト選択監視）が
+`wand --show-menu --items <PATH> --at <X> <Y>` 経由でランチャーを
+呼び出す経路。ボタン押下に紐付かないため [[AX target]] では解決
+できず、**フロントモストアプリを対象**として spine の例外扱い
+となる。`--selection` で `$SELECTION`、`--title` で
+`WAND_TARGET_TITLE` を呼び出し側から上書きできる。
+- コード: `Sources/WandApp/Controller.swift` の `handleShowMenu`
+- **Don't call it:** remote menu, ipc menu, dnc menu,
+  リモートメニュー, 外部メニュー
 
 ### AX target
 **ボタンを押した瞬間にカーソルが乗っていたウィンドウ**。キーボード

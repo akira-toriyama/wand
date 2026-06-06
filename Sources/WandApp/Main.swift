@@ -32,9 +32,13 @@ enum WandApp {
         CLIENT COMMANDS — need a running daemon (exit 3 if none)
           wand --reload              re-read ~/.config/wand/config.toml
                                        (also automatic on file save).
-                                       Live: [[rules]] / exclude-apps /
-                                       [recognition] timing / [overlay].
-                                       Restart only: [trigger].
+                                       Live: [[gesture.rule]] /
+                                       [exclude].apps /
+                                       [gesture.recognition] timing /
+                                       [gesture.overlay] / [gesture.fire].
+                                       Restart only: [gesture] button +
+                                       modifiers, [launcher] enabled +
+                                       button + modifiers.
           wand --status              print rule count, trigger, last
                                        gestures, counters, last reload
           wand --quit                terminate the running daemon
@@ -51,17 +55,20 @@ enum WandApp {
                                        AX-fetch from frontmost app).
 
         STANDALONE COMMANDS — no daemon required (--record refuses if one runs)
-          wand --validate            parse config.toml; exit 0 if valid
-            [--items <PATH>]           also validate a standalone items
-                                       file (for --show-menu)
+          wand --validate            parse config.toml; exit 0 if valid.
+            [--items <PATH>]           Warnings (clamps, retired keys,
+                                       collisions, typos) print to stderr
+                                       in addition to /tmp/wand.log.
+                                       --items also validates a standalone
+                                       items file (for --show-menu).
           wand --doctor              health check: Accessibility, config,
                                        daemon, event tap, tuning + rules
           wand --test PATTERN [APP]  dry-run: which rule would fire for
                                        a pattern (optionally for a bundle id)
           wand --record              interactive recorder: draw a gesture,
-                                       get a paste-ready [[rules]] snippet
-                                       on stdout. Refuses if the daemon is
-                                       running (would fight over the tap).
+                                       get a paste-ready [[gesture.rule]]
+                                       snippet on stdout. Refuses if the
+                                       daemon is running (tap conflict).
           wand --resign              re-sign Wand.app with the persistent
                                        "wand Local Signing" identity + restart
                                        (run once after `brew install` / upgrade)
@@ -94,38 +101,58 @@ enum WandApp {
         // launch sets nothing and stays quiet; `--debug` on argv now exits 2.
         debugMode = ProcessInfo.processInfo.environment["WAND_DEBUG"] != nil
 
-        if argv.contains("--help") { printHelp() }
-
-        // `--test PATTERN [bundle-id]` consumes operands, so handle it
-        // before the unknown-flag scan would reject that pattern.
-        if let i = argv.firstIndex(of: "--test") {
-            let pattern = i + 1 < argv.count ? argv[i + 1] : ""
-            let bundleID = (i + 2 < argv.count && !argv[i + 2].hasPrefix("--"))
-                ? argv[i + 2] : nil
-            runTest(pattern: pattern, bundleID: bundleID)
-        }
-
-        // Two-pass: reject ANY unknown flag *before* dispatching a
-        // recognised one, so `wand --reload --typo` fails loudly on
-        // --typo instead of silently acting on --reload and never
-        // looking at the rest (no silent fallback — the loud-reject
-        // policy must hold even when flags are combined).
-        let recognised: Set<String> = [
-            "--help", "--validate", "--record",
+        // Three flag classes, screened in this order:
+        //  1. action: terminal (each handler calls exit). At most one
+        //     per invocation; default is server mode (no flag).
+        //  2. unknown: reject before any dispatch so `wand --reload
+        //     --typo` fails loudly on --typo instead of silently
+        //     honoring --reload (no silent fallback).
+        //  3. modifier: only meaningful paired with a specific action;
+        //     orphans were silent drops, now rejected.
+        let actionFlags: Set<String> = [
+            "--help", "--test", "--validate", "--record",
             "--reload", "--quit", "--status", "--doctor",
             "--resign", "--show-menu",
-            "--items", "--at", "--selection", "--title",
         ]
-        // Value-bearing flags' operand counts — scan skips that many
-        // tokens after seeing the flag. Without this, `stroke
-        // --show-menu --items /tmp/foo.toml` would reject the path
-        // as an "unknown flag".
+        let modifierFlags: [String: Set<String>] = [
+            "--items":     ["--show-menu", "--validate"],
+            "--at":        ["--show-menu"],
+            "--selection": ["--show-menu"],
+            "--title":     ["--show-menu"],
+        ]
+        let recognised: Set<String> =
+            actionFlags.union(modifierFlags.keys)
         let valueArities: [String: Int] = [
             "--items": 1, "--selection": 1, "--at": 2, "--title": 1,
         ]
+
+        // (1) Mutually-exclusive actions. Without this `wand --reload
+        // --quit` would silently honor only --reload (the first
+        // matching dispatcher calls exit). Same silent-drop class as
+        // config typos.
+        let presentActions = argv.filter { actionFlags.contains($0) }
+        if presentActions.count > 1 {
+            let msg = "wand: incompatible actions: "
+                + presentActions.joined(separator: " ")
+                + " — pick one (see `wand --help`)\n"
+            FileHandle.standardError.write(Data(msg.utf8))
+            exit(2)
+        }
+
+        // (2) Unknown-flag scan. --test's PATTERN [BUNDLE-ID] operands
+        // are skipped here (treated as 1 required + 1 optional non-flag
+        // token) so they don't get reported as unknown.
         var ai = 0
         while ai < argv.count {
             let a = argv[ai]
+            if a == "--test" {
+                ai += 1
+                if ai < argv.count { ai += 1 }                       // PATTERN
+                if ai < argv.count && !argv[ai].hasPrefix("--") {     // BUNDLE-ID
+                    ai += 1
+                }
+                continue
+            }
             if let arity = valueArities[a] {
                 ai += 1 + arity
                 continue
@@ -139,10 +166,47 @@ enum WandApp {
             ai += 1
         }
 
+        // (3) Orphan modifier flags. e.g. `wand --reload --items
+        // /tmp/foo.toml` used to silently drop --items at the daemon;
+        // now it exits 2 with a "needs --show-menu / --validate" hint.
+        let chosenAction = presentActions.first
+        for (modifier, allowedActions) in modifierFlags {
+            guard argv.contains(modifier) else { continue }
+            if let action = chosenAction, allowedActions.contains(action) {
+                continue
+            }
+            let needs = allowedActions.sorted().joined(separator: " or ")
+            let ctx = chosenAction.map { "with \($0)" } ?? "in server mode"
+            let msg = "wand: \(modifier) is not valid \(ctx) — "
+                + "use it with \(needs)\n"
+            FileHandle.standardError.write(Data(msg.utf8))
+            exit(2)
+        }
+
+        if argv.contains("--help") { printHelp() }
+
+        // `--test PATTERN [bundle-id]` consumes operands; handled here
+        // after the scan/checks already covered them.
+        if let i = argv.firstIndex(of: "--test") {
+            let pattern = i + 1 < argv.count ? argv[i + 1] : ""
+            let bundleID = (i + 2 < argv.count && !argv[i + 2].hasPrefix("--"))
+                ? argv[i + 2] : nil
+            runTest(pattern: pattern, bundleID: bundleID)
+        }
+
         // Standalone modes — no running daemon required.
         if argv.contains("--doctor") { runDoctor() }
         if argv.contains("--validate") {
+            // Mirror every parser warning (clamp / migration / collision
+            // / typo) to stderr so the user actually sees them.
+            // Otherwise `--validate` would print a happy rule count even
+            // when half the config silently dropped — config.toml's
+            // "Validate explicitly with `wand --validate`" promise would
+            // be a lie. Warnings still also go to /tmp/wand.log.
+            Log.resetLineCount()
+            mirrorLineToStderr = true
             let cfg = WandConfig.load()
+            let cfgWarnings = Log.lineCount
             let launcherLine = cfg.launcher.enabled
                 ? ", launcher=\(cfg.launcher.trigger.button.rawValue) "
                   + "(\(cfg.launcher.items.count) item(s))"
@@ -150,7 +214,8 @@ enum WandApp {
             FileHandle.standardError.write(Data((
                 "wand: loaded \(cfg.rules.count) rule(s), "
                 + "trigger=\(cfg.trigger.button.rawValue), "
-                + "minStrokePx=\(cfg.recognition.minStrokePx)\(launcherLine)\n"
+                + "minStrokePx=\(cfg.recognition.minStrokePx)\(launcherLine)"
+                + " — \(cfgWarnings) warning(s)\n"
             ).utf8))
             // `--validate --items PATH` also validates a standalone
             // items file (intended for --show-menu) — parse + report
@@ -163,11 +228,14 @@ enum WandApp {
                     ).utf8))
                     exit(2)
                 }
+                Log.resetLineCount()
                 let parsed = WandConfig.parseItems(text)
+                let itemsWarnings = Log.lineCount
                 FileHandle.standardError.write(Data((
                     "wand: items file \(path) — "
                     + "\(parsed.items.count) item(s), "
-                    + "layout=\(parsed.layout.rawValue)\n"
+                    + "layout=\(parsed.layout.rawValue)"
+                    + " — \(itemsWarnings) warning(s)\n"
                 ).utf8))
             }
             exit(0)
@@ -869,11 +937,11 @@ enum WandApp {
             pattern=\(pattern)  samples=\(event.samples.count)  \
             max|dx|=\(Int(dx)) max|dy|=\(Int(dy))  target=\(event.target.bundleID)
 
-            [[rules]]
+            [[gesture.rule]]
             name = "\(pattern)"
             pattern = "\(pattern)"
             apps = ["\(event.target.bundleID)"]
-            action-type = "key"        # key | ax | shell
+            action-type = "key"        # key | ax | shell | url
             action-keys = "cmd+w"      # ← edit me
 
             """
