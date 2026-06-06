@@ -716,9 +716,6 @@ private final class TrailView: NSView {
         case .arrow:
             drawArrowChainPath(origin: origin, cursor: cursor,
                                 color: color, outline: outlineColor)
-        case .city:
-            drawCityPath(origin: origin, cursor: cursor,
-                          color: color, outline: outlineColor)
         case .catRun:
             drawCatRunPath(origin: origin, cursor: cursor,
                             color: color, outline: outlineColor)
@@ -843,7 +840,7 @@ private final class TrailView: NSView {
         case .dotted:
             return TrailStyleParams(width: base, glowRadius: 7,
                                      lineDash: [base * 0.6, base * 2])
-        case .pixel, .ascii, .rainbowRoad, .pacman, .arrow, .city,
+        case .pixel, .ascii, .rainbowRoad, .pacman, .arrow,
              .catRun:
             // Unused — these styles route through their own
             // renderers and never call `drawSinglePath`. Returning a
@@ -1376,88 +1373,6 @@ private final class TrailView: NSView {
             path.stroke()
         }
         walkPath(origin: origin, interval: interval, step: drawChevron)
-    }
-
-    /// City skyline: a row of buildings rises from the path. Each
-    /// building is a filled rectangle with a deterministic randomised
-    /// height + roof variant (flat / antenna / pitched), anchored to
-    /// the path point and grown toward screen `+y` so the path reads
-    /// as the ground line regardless of stroke direction.
-    ///
-    /// `strokeWidth` is re-purposed as a scale multiplier — `width = 3`
-    /// (the default) gives ~14pt-wide buildings; higher widths grow
-    /// the whole skyline proportionally without packing more in.
-    /// Colour flows from the trail colour like the other styles, so
-    /// the match-vs-no-match signal stays legible. `outline` (when
-    /// set) frames each building so the silhouette reads against
-    /// busy backgrounds; same 1pt-inset trick as `drawPixelPath`.
-    ///
-    /// Heights + roof variants are seeded by `strokeSeed` so each
-    /// stroke gets its own skyline, but the per-stroke layout stays
-    /// stable across redraws (no flicker as the trail extends).
-    private func drawCityPath(origin: CGPoint, cursor: CGPoint,
-                               color: NSColor, outline: NSColor?) {
-        let scale = max(0.5, strokeWidth / 3)
-        let bw = 14 * scale
-        let gap = max(1, scale)
-        let bodyW = bw - gap
-        let hMin = 14 * scale
-        let hMax = 56 * scale
-        let fill = color.withAlphaComponent(0.95)
-        let outlineFill = outline?.withAlphaComponent(0.95)
-        let seed = strokeSeed
-        var idx: UInt64 = 0
-        let plot: (CGPoint, CGPoint) -> Void = { p, _ in
-            let hHash = Self.splitmix(seed &+ idx)
-            let roofHash = Self.splitmix(seed &+ idx &+ 0xC0FFEE)
-            idx &+= 1
-            let r = CGFloat(hHash % 1000) / 1000.0
-            let h = hMin + r * (hMax - hMin)
-            let bodyRect = NSRect(x: p.x - bodyW / 2,
-                                  y: p.y,
-                                  width: bodyW,
-                                  height: h)
-            if let outlineFill {
-                outlineFill.setFill()
-                NSBezierPath(rect: bodyRect).fill()
-                fill.setFill()
-                NSBezierPath(rect: bodyRect.insetBy(dx: 1, dy: 1))
-                    .fill()
-            } else {
-                fill.setFill()
-                NSBezierPath(rect: bodyRect).fill()
-            }
-            // Roof variant: 60% flat / 20% antenna / 20% pitched.
-            // Variety reads as a real skyline rather than uniform
-            // boxes.
-            let roof = roofHash % 10
-            let top = bodyRect.maxY
-            if roof < 2 {
-                // Antenna: thin vertical bar centred on the building.
-                let antW = max(1.5, scale * 0.8)
-                let antH = bodyW * 0.6
-                let antRect = NSRect(x: p.x - antW / 2,
-                                     y: top,
-                                     width: antW,
-                                     height: antH)
-                fill.setFill()
-                NSBezierPath(rect: antRect).fill()
-            } else if roof < 4 {
-                // Pitched roof: filled triangle sitting on top.
-                let peakHeight = bodyW * 0.5
-                let tri = NSBezierPath()
-                tri.move(to: CGPoint(x: bodyRect.minX, y: top))
-                tri.line(to: CGPoint(x: bodyRect.maxX, y: top))
-                tri.line(to: CGPoint(
-                    x: (bodyRect.minX + bodyRect.maxX) / 2,
-                    y: top + peakHeight))
-                tri.close()
-                fill.setFill()
-                tri.fill()
-            }
-            // roof >= 4 → flat top, nothing extra drawn.
-        }
-        walkPath(origin: origin, interval: bw, step: plot)
     }
 
     // MARK: - Cat-run style constants

@@ -274,14 +274,11 @@ public enum TrailStyle: String, Sendable, Hashable, CaseIterable {
     /// the arrowhead-on-cursor look in mind needs to switch to
     /// `arrow` explicitly.
     case arrow
-    /// City skyline: a row of buildings rises from the path, each
-    /// with a deterministic randomised height + roof variant
-    /// (flat / antenna / pitched). Buildings grow toward screen
-    /// `+y` so the path reads as the ground line. Colour flows
-    /// from the trail colour like the other styles, so the
-    /// match-vs-no-match signal stays legible. `width` is
-    /// re-purposed as the per-building scale multiplier.
-    case city
+    // Note: a `city` style (skyline of buildings rising from the
+    // path) lived here through #117 but was retired on review —
+    // the skyline metaphor read poorly when the gesture turned and
+    // buildings rotated against the path's tangent. Re-evaluate
+    // if a future style needs ground-line + vertical-growth render.
     /// Cat-run (RunCat tribute): a 🐈 chases the cursor along a
     /// trail of 🐾 paw prints, bouncing on a sine wave at the
     /// gait frequency. **Style-specific exception to the
