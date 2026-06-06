@@ -232,6 +232,9 @@ width = 3
 #   "normal"  — single solid stroke (default)
 #   "dashed"  — broken line (3:2 dash:gap, sized off `width`)
 #   "dotted"  — short-dash dotted line (0.6:2 dash:gap)
+#   "pixel"   — 8-bit / pixel-art: trail rasterised to a coarse grid
+#               and filled cell-by-cell (chunky stepped look)
+#   "ascii"   — AA-art: monospaced `*` glyphs placed along the path
 style = "normal"
 
 # Draw an arrowhead tip at the cursor in the last-committed direction

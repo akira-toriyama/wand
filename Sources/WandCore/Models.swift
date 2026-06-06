@@ -238,6 +238,16 @@ public enum TrailStyle: String, Sendable, Hashable, CaseIterable {
     case normal
     case dashed
     case dotted
+    /// Pixel-art / retro 8-bit feel: trail is rasterised to a coarse
+    /// square grid and drawn as filled cells, so the line reads as a
+    /// chunky stepped pixel run instead of a smooth bezier. Colour
+    /// still flows from `[cast.overlay.trail].color` per the
+    /// "shape-only, not colour" invariant.
+    case pixel
+    /// ASCII-art trail: monospaced glyphs (`*`) placed at fixed
+    /// intervals along the path, tinted with the trail colour. Same
+    /// colour invariant as the other styles.
+    case ascii
 }
 
 /// The window the stroke acts on. Resolved at *button-down* time —

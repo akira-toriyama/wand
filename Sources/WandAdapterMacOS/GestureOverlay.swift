@@ -636,6 +636,10 @@ private final class TrailView: NSView {
         switch trailStyle {
         case .normal, .dashed, .dotted:
             drawSinglePath(origin: origin, cursor: cursor, color: color)
+        case .pixel:
+            drawPixelPath(origin: origin, cursor: cursor, color: color)
+        case .ascii:
+            drawAsciiPath(origin: origin, cursor: cursor, color: color)
         }
 
         // Arrowhead at the raw cursor in the last-committed direction.
@@ -735,7 +739,101 @@ private final class TrailView: NSView {
         case .dotted:
             return TrailStyleParams(width: base, glowRadius: 7,
                                      lineDash: [base * 0.6, base * 2])
+        case .pixel, .ascii:
+            // Unused — `pixel` / `ascii` route through their own
+            // renderers and never call `drawSinglePath`. Returning a
+            // safe baseline keeps the switch exhaustive without
+            // pretending these styles share stroke parameters.
+            return TrailStyleParams(width: base, glowRadius: 0,
+                                     lineDash: [])
         }
+    }
+
+    /// Walk the same hybrid corner + freehand polyline that
+    /// `buildHybridPath` produces, but instead of emitting a bezier,
+    /// invoke `step` once per `interval`-pt advance along the path.
+    /// Used by the pixel and ascii renderers to place discrete marks
+    /// at a fixed spacing regardless of original sample density.
+    private func walkPath(origin: CGPoint,
+                           interval: CGFloat,
+                           step: (CGPoint) -> Void) {
+        let pts = [origin] + corners + Array(freehandPoints.dropFirst())
+        guard !pts.isEmpty, interval > 0 else { return }
+        step(pts[0])
+        var carry: CGFloat = 0
+        for i in 1..<pts.count {
+            let a = pts[i - 1]
+            let b = pts[i]
+            let dx = b.x - a.x
+            let dy = b.y - a.y
+            let segLen = hypot(dx, dy)
+            if segLen <= 0 { continue }
+            let ux = dx / segLen
+            let uy = dy / segLen
+            var t = interval - carry
+            while t <= segLen {
+                step(CGPoint(x: a.x + ux * t, y: a.y + uy * t))
+                t += interval
+            }
+            carry = segLen - (t - interval)
+        }
+    }
+
+    /// 8-bit / pixel-art style: quantise the path to a coarse square
+    /// grid and fill one solid cell per occupied grid square. Colour
+    /// comes from the resolved trail colour (match-vs-no-match still
+    /// reads). De-duplicated via a Set so re-entering the same cell
+    /// on the freehand tail doesn't overdraw.
+    private func drawPixelPath(origin: CGPoint, cursor: CGPoint,
+                                color: NSColor) {
+        let cell = max(6, strokeWidth * 2)
+        var seen = Set<UInt64>()
+        color.withAlphaComponent(0.95).setFill()
+        let plot: (CGPoint) -> Void = { p in
+            let gx = Int((p.x / cell).rounded(.down))
+            let gy = Int((p.y / cell).rounded(.down))
+            // Pack two Int32 into UInt64 for set key.
+            let key = (UInt64(bitPattern: Int64(Int32(gx))) << 32)
+                | UInt64(UInt32(bitPattern: Int32(gy)))
+            guard seen.insert(key).inserted else { return }
+            let rect = NSRect(x: CGFloat(gx) * cell, y: CGFloat(gy) * cell,
+                              width: cell, height: cell)
+            NSBezierPath(rect: rect).fill()
+        }
+        // Sample slightly finer than the cell to fill diagonals
+        // without leaving gaps; the dedupe set absorbs the redundant
+        // samples.
+        walkPath(origin: origin, interval: cell * 0.5, step: plot)
+        plot(cursor)
+    }
+
+    /// ASCII-art style: place a `*` glyph at a fixed interval along
+    /// the path, tinted with the resolved trail colour. Monospaced
+    /// font so the rhythm reads as text. No glow — the glyphs carry
+    /// the look on their own.
+    private func drawAsciiPath(origin: CGPoint, cursor: CGPoint,
+                                color: NSColor) {
+        let fontSize = max(10, strokeWidth * 2.4)
+        let font = NSFont.monospacedSystemFont(ofSize: fontSize,
+                                                weight: .bold)
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .foregroundColor: color.withAlphaComponent(0.95),
+        ]
+        let glyph = NSAttributedString(string: "*", attributes: attrs)
+        let glyphSize = glyph.size()
+        let interval = max(fontSize * 0.9, strokeWidth * 2)
+        let draw: (CGPoint) -> Void = { p in
+            // Centre the glyph on the path point so the trail tracks
+            // the actual stroke rather than offsetting up-right.
+            let r = NSRect(x: p.x - glyphSize.width / 2,
+                           y: p.y - glyphSize.height / 2,
+                           width: glyphSize.width,
+                           height: glyphSize.height)
+            glyph.draw(in: r)
+        }
+        walkPath(origin: origin, interval: interval, step: draw)
+        draw(cursor)
     }
 
     /// Snap `p` onto the axis defined by `dir` and the point `from` —
