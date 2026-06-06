@@ -200,9 +200,22 @@ blur-enabled = true
 #                     moved enough to recognise any direction)
 #   color-no-match  — once the shape matches no rule (e.g. you set
 #                     up "RD" but drew "RL")
-# Either a name (blue red green orange purple pink yellow white
-# black, or "accent" for the system accent color) or a hex string
-# ("#rgb", "#rrggbb", "#rrggbbaa").
+# Accepts a name (blue red green orange purple pink yellow white
+# black, or "accent" for the system accent color), a hex string
+# ("#rgb" / "#rrggbb" / "#rrggbbaa"), or a reserved dynamic token:
+#
+#   "rainbow"   — smooth hue cycle (~3s period). The whole trail
+#                 shifts colour as the cursor moves; static cursors
+#                 freeze on whatever frame they're on.
+#   "neon"      — electric palette (cyan / magenta / lime / hot
+#                 pink / sky / violet) interpolated on a ~2s cycle.
+#   "splatoon"  — pick a random hue from the Splatoon ink palette
+#                 at the start of each stroke. The whole drag stays
+#                 in one team's colour; next stroke re-rolls.
+#
+# `color` and `color-no-match` are independent — fine to set one to
+# a dynamic token and the other to a static hex (e.g. `rainbow`
+# while matching, solid red when off-track).
 color = "#3b82f6"
 color-no-match = "#ef4444"
 

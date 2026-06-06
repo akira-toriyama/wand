@@ -88,4 +88,99 @@ public enum NSColorParse {
     public static func randomSplatoonInk() -> NSColor {
         splatoonInks.randomElement() ?? .systemBlue
     }
+
+    /// Facet-derived neon palette — high-saturation electric hues
+    /// borrowed from facet's `[border] effect = "neon"` (Tokyo-Night-
+    /// adjacent accents). Used by `TrailColorMode.neon` as the
+    /// rotation source.
+    public static let neonInks: [NSColor] = [
+        NSColor(srgbRed: 0x00/255.0, green: 0xE5/255.0, blue: 0xFF/255.0, alpha: 1),   // #00E5FF
+        NSColor(srgbRed: 0xFF/255.0, green: 0x00/255.0, blue: 0xFF/255.0, alpha: 1),   // #FF00FF
+        NSColor(srgbRed: 0x39/255.0, green: 0xFF/255.0, blue: 0x14/255.0, alpha: 1),   // #39FF14
+        NSColor(srgbRed: 0xFE/255.0, green: 0x01/255.0, blue: 0x9A/255.0, alpha: 1),   // #FE019A
+        NSColor(srgbRed: 0x04/255.0, green: 0xD9/255.0, blue: 0xFF/255.0, alpha: 1),   // #04D9FF
+        NSColor(srgbRed: 0xBC/255.0, green: 0x13/255.0, blue: 0xFE/255.0, alpha: 1),   // #BC13FE
+    ]
+}
+
+/// Dynamic colour mode for the cast trail. Resolved from
+/// `[cast.overlay.trail].color` / `.color-no-match` strings — empty
+/// or hex / named falls into `.static`; reserved tokens map to
+/// time-based animation modes (`rainbow`, `neon`) or to a per-stroke
+/// random pick (`splatoon`).
+///
+/// The mode is consumed per-frame in `TrailView.draw(_:)` via
+/// `currentColor(at:strokeSeed:)` — time-cycling modes change colour
+/// as the cursor moves (each sample is a redraw); `splatoon` reads
+/// the per-stroke seed so one stroke stays in one team's colour
+/// even though the seed is fresh per stroke.
+@MainActor
+public enum TrailColorMode: Equatable {
+    case `static`(NSColor)
+    /// Smooth hue cycle 0..1 over ~3 seconds.
+    case rainbow
+    /// Smooth interpolation through `NSColorParse.neonInks` over ~2 s.
+    case neon
+    /// Random pick from `NSColorParse.splatoonInks`, deterministic
+    /// per stroke (so the trail stays one team's colour through the
+    /// whole drag rather than strobing).
+    case splatoon
+
+    /// Parse a trail-colour config string into a mode. `fallback` is
+    /// used when the string is empty or doesn't parse as a colour or
+    /// reserved token.
+    public static func parse(_ s: String, fallback: NSColor) -> TrailColorMode {
+        let t = s.trimmingCharacters(in: .whitespaces).lowercased()
+        switch t {
+        case "rainbow":  return .rainbow
+        case "neon":     return .neon
+        case "splatoon": return .splatoon
+        default:
+            return .static(NSColorParse.nsColor(s) ?? fallback)
+        }
+    }
+
+    /// Resolve the mode to a concrete colour at the given time. For
+    /// `splatoon` the colour is determined entirely by `strokeSeed`
+    /// (time has no effect — one team's ink for the whole stroke).
+    /// For `rainbow` and `neon` the time drives a cycle, and
+    /// `strokeSeed` is ignored.
+    public func currentColor(at time: TimeInterval,
+                              strokeSeed: UInt64) -> NSColor {
+        switch self {
+        case .static(let c):
+            return c
+        case .rainbow:
+            let period: TimeInterval = 3.0
+            let h = (time / period).truncatingRemainder(dividingBy: 1.0)
+            return NSColor(hue: CGFloat(h), saturation: 0.90,
+                           brightness: 1.0, alpha: 1.0)
+        case .neon:
+            return Self.cycle(NSColorParse.neonInks,
+                              at: time, period: 2.0)
+        case .splatoon:
+            let pal = NSColorParse.splatoonInks
+            return pal.isEmpty
+                ? .systemBlue
+                : pal[Int(strokeSeed % UInt64(pal.count))]
+        }
+    }
+
+    /// Smoothly interpolate through a palette over `period` seconds.
+    /// Linear `blended(withFraction:of:)` between adjacent palette
+    /// entries — good enough for vivid neon hues (perceptual lerp
+    /// would only matter near grey).
+    private static func cycle(_ palette: [NSColor],
+                               at time: TimeInterval,
+                               period: TimeInterval) -> NSColor {
+        let n = palette.count
+        guard n > 0 else { return .systemBlue }
+        let p = (time / period).truncatingRemainder(dividingBy: 1.0)
+        let idxF = p * Double(n)
+        let i0 = Int(floor(idxF)) % n
+        let i1 = (i0 + 1) % n
+        let f = CGFloat(idxF - Double(i0))
+        return palette[i0].blended(withFraction: f, of: palette[i1])
+            ?? palette[i0]
+    }
 }

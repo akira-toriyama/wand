@@ -103,8 +103,10 @@ public final class GestureOverlay {
     /// the next flip back.
     public func applyConfig(_ cfg: WandConfig) {
         let ov = cfg.overlay
-        view.matchColor = NSColorParse.nsColor(ov.trail.color) ?? .systemBlue
-        view.noMatchColor = NSColorParse.nsColor(ov.trail.colorNoMatch) ?? .systemRed
+        view.matchMode = TrailColorMode.parse(
+            ov.trail.color, fallback: .systemBlue)
+        view.noMatchMode = TrailColorMode.parse(
+            ov.trail.colorNoMatch, fallback: .systemRed)
         view.strokeWidth = CGFloat(ov.trail.width)
         view.trailStyle = ov.trail.style
         view.arrowheadEnabled = ov.trail.arrowhead
@@ -149,8 +151,18 @@ public final class GestureOverlay {
 
 
 private final class TrailView: NSView {
-    var matchColor: NSColor = .systemBlue
-    var noMatchColor: NSColor = .systemRed
+    /// Resolved trail-colour mode for the matching side. `.static` is
+    /// the historical hex/named-colour path; reserved tokens
+    /// (`rainbow`, `neon`, `splatoon`) drive dynamic resolution at
+    /// `draw(_:)` time. Set live from `[cast.overlay.trail].color`.
+    var matchMode: TrailColorMode = .static(.systemBlue)
+    /// Same as `matchMode`, but for the no-match side
+    /// (`[cast.overlay.trail].color-no-match`).
+    var noMatchMode: TrailColorMode = .static(.systemRed)
+    /// Per-stroke random seed used by `splatoon` mode so the trail
+    /// stays one team's colour through the whole drag. Re-rolled at
+    /// the start of each stroke (via `reset()`).
+    var strokeSeed: UInt64 = UInt64.random(in: 0..<UInt64.max)
     var strokeWidth: CGFloat = 3
     /// Named preset that swaps the trail's whole personality (width,
     /// glow, dash, per-segment color). Resolved from
@@ -524,6 +536,12 @@ private final class TrailView: NSView {
         badgeAppearedAt = nil
         cardLayouts.removeAll()
         badgeLayout = nil
+        // Re-roll the stroke seed so the NEXT stroke's `splatoon`-
+        // mode trail picks a different team colour. The seed is also
+        // ignored by static / rainbow / neon modes (they read time
+        // or the literal colour), so the cost is one cheap roll per
+        // stroke end across the board.
+        strokeSeed = UInt64.random(in: 0..<UInt64.max)
         layoutHUD()
         needsDisplay = true
         hudContent.needsDisplay = true
@@ -562,7 +580,14 @@ private final class TrailView: NSView {
         guard let origin, let cursor,
               origin != cursor || !corners.isEmpty
         else { return }
-        let color = valid ? matchColor : noMatchColor
+        // Resolve the current frame's colour from the active mode.
+        // For dynamic modes (`rainbow` / `neon`) `CACurrentMediaTime`
+        // drives the cycle; for `splatoon` the per-stroke seed picks
+        // one team's colour and holds it. Static modes are a no-op
+        // lookup.
+        let mode = valid ? matchMode : noMatchMode
+        let color = mode.currentColor(at: CACurrentMediaTime(),
+                                       strokeSeed: strokeSeed)
 
         // While holding the post-fire snapped polyline, fade the trail
         // out over the last third of the hold so it doesn't pop off.
@@ -748,7 +773,11 @@ private final class TrailView: NSView {
         cardLayouts.removeAll()
         badgeLayout = nil
 
-        let accent = valid ? matchColor : noMatchColor
+        // Same resolver the trail uses — dynamic modes get the current
+        // time + the stroke seed; static modes pass through.
+        let mode = valid ? matchMode : noMatchMode
+        let accent = mode.currentColor(at: CACurrentMediaTime(),
+                                        strokeSeed: strokeSeed)
 
         if let hint, let cursor = cursor {
             var byDir: [Character: [GestureHint.Row]] = [:]

@@ -405,8 +405,14 @@ enum WandApp {
             MainActor.assumeIsolated {
                 guard let cfg = controller?.config else { return }
                 let cocoaPoint = ScreenCoords.cocoaPoint(fromCG: cgPoint)
-                let color = NSColorParse.nsColor(cfg.overlay.trail.color)
-                    ?? .systemBlue
+                // Resolve the trail colour via TrailColorMode so the
+                // decal "trail" fallback honours the dynamic modes
+                // (`rainbow` / `neon` / `splatoon`) rather than
+                // collapsing to `.systemBlue` when the user picks one.
+                let color = TrailColorMode.parse(
+                    cfg.overlay.trail.color, fallback: .systemBlue
+                ).currentColor(at: CACurrentMediaTime(),
+                               strokeSeed: UInt64.random(in: 0..<UInt64.max))
                 let decalSpec = cfg.fire.decal
                 if decalSpec.kind != .off, decalSpec.durationMs > 0 {
                     // Resolve the decal colour from its own knob,
