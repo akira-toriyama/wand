@@ -135,8 +135,10 @@ intensity = "normal"
 # effects. Sets defaults for:
 #   trail   — color / color-no-match / color-outline
 #   cards   — border-color / body-color / text-color
-#   fire    — decal.color / burst.color
+#   fire    — burst.color
 # Pick a vibe and the colours are guaranteed to read well together.
+# (Decal is intentionally not themed — it always uses the Splatoon
+# multi-team ink palette, that's the identity of the effect.)
 #
 # Individual colour keys still WIN when explicitly set in the
 # TOML (non-empty string), so `theme = "terminal"` + `color =
@@ -451,9 +453,9 @@ color = ""
 #                     classic SVG ink-splat silhouette — round body
 #                     with radial tendril spikes + a darker ink-ring
 #                     underlayer + 3-6 detached droplet specks.
-#                     With `color = "splatoon"` each unit can land a
-#                     different team colour (the Splatoon multi-shot
-#                     feel — one decal, multiple ink hits).
+#                     Each unit picks its own team colour from a
+#                     built-in Splatoon ink palette, so one decal
+#                     lands multiple ink hits at once.
 kind = "off"
 
 # How long (ms) the decal stays visible before fading out.
@@ -463,22 +465,13 @@ duration-ms = 3000
 # Decal footprint in points (width = height). Clamped 10..500.
 size = 60
 
-# Ink colour. Three modes:
-#   ""        — empty / unset: inherit `[cast].theme` palette (which
-#               falls back to `[cast.overlay.trail].color` for most
-#               themes; the `splatoon` theme overrides this to
-#               always pick a random Splatoon ink per fire).
-#   "trail"   — explicit form of the historical default.
-#   "splatoon" — pick a random hue from a 10-colour Splatoon-style
-#                ink palette on every fire (orange / yellow / lime /
-#                neon green / peppermint / sapphire / purple /
-#                magenta / pink / coral, sourced from a Turf War
-#                colour-pair compilation). The deliberate Turf War
-#                feel — each fire is a different team's ink.
-#   <hex / named> — anything `[cast.overlay.trail].color` accepts
-#                   (e.g. `"#ff00ff"` / `"systemPink"`) overrides
-#                   with that fixed colour.
-color = ""
+# Decal colour is not configurable — the Splatoon multi-team ink
+# palette IS the identity of this effect, so the decal always
+# picks random hues from a 10-colour Splatoon-style ink palette
+# on every fire (orange / yellow / lime / neon green / peppermint
+# / sapphire / purple / magenta / pink / coral, sourced from a
+# Turf War colour-pair compilation). One decal can land 2-3
+# different team colours at once.
 
 
 # -----------------------------------------------------------------

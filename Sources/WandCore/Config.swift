@@ -254,13 +254,14 @@ public struct WandConfig: Sendable {
             default: 3000, lo: 0, hi: 10000)
         let decalSize = clampInt(
             de, key: "size", default: 60, lo: 10, hi: 500)
-        let decalColor = { let c = de.string("color")
-            return c.isEmpty ? palette.decalColor : c }()
+        // `[cast.fire.decal].color` was retired — decal always uses
+        // the Splatoon multi-team palette when enabled (#115). Any
+        // stale `color = "..."` line in a user config is silently
+        // dropped by the parser, per wand's clamp-to-default policy.
         let decal = GestureFireDecalSpec(
             kind: decalKind,
             durationMs: decalDurationMs,
-            size: decalSize,
-            color: decalColor)
+            size: decalSize)
 
         let fire = GestureFireSpec(burst: burst, decal: decal)
 

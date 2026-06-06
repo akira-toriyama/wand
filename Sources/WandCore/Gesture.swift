@@ -29,19 +29,18 @@ public struct CastThemePalette: Sendable, Equatable {
     public let cardsBorderColor: String
     public let cardsBodyColor: String
     public let cardsTextColor: String
-    /// Decal ink colour. Empty = inherit `trail.color` (current
-    /// default) — themes that want a differentiated decal can
-    /// override (e.g. `splatoon` uses `"splatoon"` for the
-    /// multi-team-ink feel even when trail picks one team).
-    public let decalColor: String
     /// Burst particle colour. Empty = inherit `trail.color`. Same
-    /// override grammar as `decalColor`.
+    /// grammar as the trail colour fields.
     public let burstColor: String
+
+    // Note: a `decalColor` entry lived here through #114 but was
+    // retired alongside `[cast.fire.decal].color` — decal is always
+    // the Splatoon multi-team palette when enabled.
+
     public init(trailColor: String, trailColorNoMatch: String,
                 trailColorOutline: String,
                 cardsBorderColor: String, cardsBodyColor: String,
                 cardsTextColor: String,
-                decalColor: String = "",
                 burstColor: String = "") {
         self.trailColor = trailColor
         self.trailColorNoMatch = trailColorNoMatch
@@ -49,7 +48,6 @@ public struct CastThemePalette: Sendable, Equatable {
         self.cardsBorderColor = cardsBorderColor
         self.cardsBodyColor = cardsBodyColor
         self.cardsTextColor = cardsTextColor
-        self.decalColor = decalColor
         self.burstColor = burstColor
     }
 }
@@ -103,10 +101,9 @@ public enum CastTheme: String, Sendable, CaseIterable {
                 cardsBorderColor: "splatoon",
                 cardsBodyColor: "#1a1a1a",
                 cardsTextColor: "#ffffff",
-                // Decal goes full multi-team palette per fire — the
-                // identifying feel of the theme. Burst inherits trail
-                // (one team's colour per stroke, matching the line).
-                decalColor: "splatoon",
+                // Burst inherits trail (one team's colour per stroke,
+                // matching the line). Decal is always Splatoon
+                // multi-team regardless of theme.
                 burstColor: "")
         case .rainbow:
             return CastThemePalette(
@@ -399,20 +396,19 @@ public struct GestureFireDecalSpec: Sendable, Equatable {
     public let durationMs: Int
     /// Decal footprint in points. Clamped 10..500.
     public let size: Int
-    /// Colour source for the decal. Empty / `"trail"` inherits
-    /// `[cast.overlay.trail].color`; `"splatoon"` picks a random hue
-    /// from the built-in Splatoon ink palette on every fire; anything
-    /// else parses as a hex / named colour like `trail.color` itself.
-    public let color: String
+
+    // Note: a `color` knob lived here through #114 but was retired —
+    // the decal's identity is the Splatoon-style multi-team ink, and
+    // letting users force it to a single colour fought the whole
+    // point of the shape. The dispatch path now hard-codes the
+    // Splatoon palette when `kind != .off`.
 
     public init(kind: DecalKind = .off,
                 durationMs: Int = 3000,
-                size: Int = 60,
-                color: String = "") {
+                size: Int = 60) {
         self.kind = kind
         self.durationMs = durationMs
         self.size = size
-        self.color = color
     }
 
     public static let `default` = GestureFireDecalSpec()

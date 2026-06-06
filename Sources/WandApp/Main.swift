@@ -417,32 +417,16 @@ enum WandApp {
                                 cfg.overlay.colorCycleMs) / 1000.0)
                 let decalSpec = cfg.fire.decal
                 if decalSpec.kind != .off, decalSpec.durationMs > 0 {
-                    // Resolve the decal colour from its own knob,
-                    // falling back to the trail colour when unset.
-                    // `"splatoon"` re-rolls the hue per-fire from the
-                    // built-in palette AND passes the full palette
-                    // through so each splat unit inside the decal can
-                    // pick its own colour (Splatoon "multi-shot": two
-                    // splats in one decal can land different team
-                    // colours).
-                    let decalColor: NSColor
-                    let decalPalette: [NSColor]
-                    switch decalSpec.color.trimmingCharacters(
-                        in: .whitespaces).lowercased() {
-                    case "", "trail":
-                        decalColor = color
-                        decalPalette = []
-                    case "splatoon":
-                        decalColor = NSColorParse.randomSplatoonInk()
-                        decalPalette = NSColorParse.splatoonInks
-                    default:
-                        decalColor = NSColorParse.nsColor(decalSpec.color)
-                            ?? color
-                        decalPalette = []
-                    }
+                    // Decal is always the Splatoon multi-team palette
+                    // (#115 dropped the `color` knob). The full
+                    // palette flows through so each splat unit can
+                    // pick its own team colour — the Splatoon
+                    // "multi-shot" feel where one decal lands a
+                    // mix of team inks at the cursor.
                     decalManager.emit(
-                        at: cocoaPoint, color: decalColor,
-                        palette: decalPalette,
+                        at: cocoaPoint,
+                        color: NSColorParse.randomSplatoonInk(),
+                        palette: NSColorParse.splatoonInks,
                         kind: decalSpec.kind,
                         durationSec: TimeInterval(decalSpec.durationMs)
                             / 1000.0,
