@@ -166,6 +166,7 @@ public struct WandConfig: Sendable {
             default: 2000, lo: 100, hi: 10000)
         let trailFinalHoldMs = clampInt(tr, key: "final-hold-ms",
                                         default: 400, lo: 0, hi: 2000)
+        let trailStraightenOnTurn = tr.bool("straighten-on-turn", true)
         let trail = GestureOverlayTrailSpec(
             color: trailColor,
             colorNoMatch: trailColorNoMatch,
@@ -173,7 +174,8 @@ public struct WandConfig: Sendable {
             style: trailStyle,
             arrowhead: trailArrowhead,
             colorCycleMs: trailColorCycleMs,
-            finalHoldMs: trailFinalHoldMs)
+            finalHoldMs: trailFinalHoldMs,
+            straightenOnTurn: trailStraightenOnTurn)
 
         // [cast.overlay.badge]
         let bd = doc.tables["cast.overlay.badge"] ?? [:]

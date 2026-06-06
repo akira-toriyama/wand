@@ -111,6 +111,7 @@ public final class GestureOverlay {
         view.strokeWidth = CGFloat(ov.trail.width)
         view.trailStyle = ov.trail.style
         view.arrowheadEnabled = ov.trail.arrowhead
+        view.straightenOnTurn = ov.trail.straightenOnTurn
         view.badgeEnabled = ov.badge.enabled
         view.badgeSize = CGFloat(ov.badge.size)
         view.animEnabled = ov.badge.animEnabled
@@ -188,6 +189,15 @@ private final class TrailView: NSView {
     /// still opt out of the tip, and a plain `normal` trail can keep
     /// it. Set live from `[cast.overlay.trail].arrowhead`.
     var arrowheadEnabled: Bool = true
+    /// When `true` (default), every committed turn snaps the
+    /// just-completed segment onto its axis so the trail reads as a
+    /// clean orthogonal polyline — the historical hard-coded
+    /// behaviour. When `false`, every sample is rendered as raw
+    /// freehand (the trail follows the actual mouse path, jitter
+    /// included). Recognition is unaffected — this only changes how
+    /// the trail is drawn, not how directions are detected. Set live
+    /// from `[cast.overlay.trail].straighten-on-turn`.
+    var straightenOnTurn: Bool = true
     /// Cocoa-global origin of the window; subtracted to get view-local
     /// coords from a global point.
     var originOffset: CGPoint = .zero
@@ -250,6 +260,11 @@ private final class TrailView: NSView {
     /// `cursor`. Reset on every corner commit so the new segment
     /// starts at the snapped corner.
     private var freehandPoints: [CGPoint] = []
+    /// Every raw mouse sample of the in-progress stroke, never
+    /// trimmed at corner commits. Drives the `straightenOnTurn=false`
+    /// render path so the trail shows the literal hand path. Reset
+    /// in `_actualReset` alongside the other stroke state.
+    private var rawTrail: [CGPoint] = []
     /// Index in `freehandPoints` of the most recent anchor update —
     /// samples *after* this index are the transition between the old
     /// anchor and the current sample, and get carried over into the
@@ -415,6 +430,8 @@ private final class TrailView: NSView {
             origin = p
             anchor = p
             freehandPoints.removeAll(keepingCapacity: true)
+            rawTrail.removeAll(keepingCapacity: true)
+            rawTrail.append(p)
             anchorIndex = 0
         }
         cursor = p
@@ -456,6 +473,7 @@ private final class TrailView: NSView {
             }
         }
         freehandPoints.append(p)
+        rawTrail.append(p)
         if anchorUpdated {
             anchorIndex = freehandPoints.count - 1
         }
@@ -547,6 +565,7 @@ private final class TrailView: NSView {
         cursor = nil
         corners.removeAll(keepingCapacity: true)
         freehandPoints.removeAll(keepingCapacity: true)
+        rawTrail.removeAll(keepingCapacity: true)
         anchorIndex = 0
         anchor = nil
         lastDir = nil
@@ -656,12 +675,27 @@ private final class TrailView: NSView {
     /// path used by every single-color style. Centralised so dashed /
     /// dotted / glow / thin / thick all share the same geometry and
     /// only differ in stroke parameters.
+    ///
+    /// When `straightenOnTurn = false`, return a pure polyline through
+    /// every raw mouse sample instead — no corner snapping, no
+    /// orthogonal axes. Recognition still uses `corners` / `lastDir`
+    /// to drive the rule matcher; this only affects what's drawn.
     private func buildHybridPath(origin: CGPoint,
                                   lineWidth: CGFloat) -> NSBezierPath {
         let path = NSBezierPath()
         path.lineWidth = lineWidth
         path.lineCapStyle = .round
         path.lineJoinStyle = .round
+
+        if !straightenOnTurn {
+            // Pure freehand: trace every raw sample as-is. `rawTrail`
+            // is seeded with `origin` on stroke start so this always
+            // begins at the button-down point.
+            guard let first = rawTrail.first else { return path }
+            path.move(to: first)
+            for p in rawTrail.dropFirst() { path.line(to: p) }
+            return path
+        }
 
         // Straight part: origin → corners, with each interior corner
         // softened by a quadratic-style bezier (radius capped to half
@@ -757,7 +791,11 @@ private final class TrailView: NSView {
     private func walkPath(origin: CGPoint,
                            interval: CGFloat,
                            step: (CGPoint) -> Void) {
-        let pts = [origin] + corners + Array(freehandPoints.dropFirst())
+        // Freehand mode walks the raw sample stream; straightened
+        // mode walks the snapped corner polyline + active freehand.
+        let pts: [CGPoint] = straightenOnTurn
+            ? ([origin] + corners + Array(freehandPoints.dropFirst()))
+            : rawTrail
         guard !pts.isEmpty, interval > 0 else { return }
         step(pts[0])
         var carry: CGFloat = 0

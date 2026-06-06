@@ -262,6 +262,15 @@ color-cycle-ms = 2000
 # (matches the no-match behaviour). Clamped 0..2000.
 final-hold-ms = 400
 
+# How committed past segments render once you turn (e.g. `D → L` in
+# `DLD`):
+#   true   — snap the just-completed segment onto its axis so the
+#            trail reads as a clean orthogonal polyline (default).
+#   false  — keep every sample as raw freehand; the trail follows
+#            the literal hand path, jitter included.
+# Recognition is unaffected either way — this is a render-only knob.
+straighten-on-turn = true
+
 
 # Origin badge — small app-icon chip at the gesture's start point.
 [cast.overlay.badge]
