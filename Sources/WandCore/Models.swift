@@ -279,15 +279,14 @@ public enum TrailStyle: String, Sendable, Hashable, CaseIterable {
     // the skyline metaphor read poorly when the gesture turned and
     // buildings rotated against the path's tangent. Re-evaluate
     // if a future style needs ground-line + vertical-growth render.
-    /// Cat-run (RunCat tribute): a 🐈 chases the cursor along a
-    /// trail of 🐾 paw prints, bouncing on a sine wave at the
-    /// gait frequency. **Style-specific exception to the
-    /// "shape-only, not colour" invariant** — emoji glyphs are
-    /// pre-coloured and ignore the trail tint, so the match-vs-
-    /// no-match signal is carried by swapping the head emoji
-    /// (🐈 → 😿) instead of recolouring. `width` is re-purposed
-    /// as a scale multiplier on emoji size + spacing.
-    case catRun = "cat-run"
+    /// Paw prints walking along the path — a stylised pad + 3 toes
+    /// drawn at fixed intervals, alternating slightly left / right
+    /// of the path to evoke "footprints from two paws". Bezier
+    /// shapes (not emoji), so the trail colour flows through and
+    /// the match-vs-no-match signal stays in colour like the other
+    /// styles. `width` is re-purposed as a scale multiplier on
+    /// paw size + spacing.
+    case paws
 }
 
 /// The window the stroke acts on. Resolved at *button-down* time —

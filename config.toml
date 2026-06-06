@@ -300,10 +300,14 @@ color-outline = ""
 #                              size + spacing + lag. Single line of
 #                              pellets always; `width = 2` doubles
 #                              the whole arcade aesthetic.
+#   paws                     — scale multiplier on paw print size +
+#                              spacing. Always one alternating L/R
+#                              line of prints; `width` doesn't
+#                              stack rows.
 # So in pixel / ascii, raising `width` adds more small marks across
-# the path rather than scaling each mark up. pacman is different —
-# the arcade look is always one line, so `width` scales sizes
-# instead of stacking rows.
+# the path rather than scaling each mark up. pacman / paws are
+# different — always a single silhouette line, so `width` scales
+# sizes instead of stacking rows.
 width = 3
 
 # Trail dash pattern preset. **Shape only — the trail's colour is
@@ -335,13 +339,12 @@ width = 3
 #               tangent so the direction reads at every point — not
 #               just at the cursor tip. Replaces the retired
 #               `arrowhead = true` knob.
-#   "cat-run" — RunCat tribute: 🐈 chases the cursor along a line
-#               of 🐾 paw prints, bouncing on a sine wave at the
-#               gait frequency. Style-specific exception to the
-#               "shape-only, not colour" invariant — emoji glyphs
-#               are pre-coloured, so the no-match signal swaps the
-#               head to 😿 instead of recolouring. `width` scales
-#               emoji size + spacing.
+#   "paws"    — stylised paw prints (heel pad + 3 toes) walking
+#               along the path, oriented along the tangent and
+#               alternating left/right of the centreline. Bezier
+#               shapes — the trail colour flows through like the
+#               other styles, so match-vs-no-match stays in
+#               colour. `width` scales paw size + spacing.
 style = "normal"
 
 # How long (ms) the trail lingers after a gesture fires. The
