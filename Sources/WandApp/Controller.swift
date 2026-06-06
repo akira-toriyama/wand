@@ -154,8 +154,19 @@ public final class Controller: @unchecked Sendable {
         // the last sample's location; cursor-anchored callers don't
         // need the target since the decal lives in its own click-
         // through window above all apps.
-        if let firePoint = event.samples.last?.p {
-            onGestureFire?(firePoint)
+        //
+        // `Sample.p` is Y-flipped (EventTap.flipY's `-p.y` trick)
+        // because Recognition was written against a Y-up convention
+        // and only ever inspects relative motion. The fire callback
+        // lives in the App layer next to AppKit / CGEvent code which
+        // expects standard CG global coords (Y-down, origin = top-
+        // left of the primary display) — re-flip here so the
+        // callback's parameter actually matches the CG convention
+        // its name implies. Skipping this step silently shifts the
+        // fire point by `2 * realCgY` and lands the decal/burst
+        // window in dead space outside every NSScreen.frame.
+        if let lastP = event.samples.last?.p {
+            onGestureFire?(CGPoint(x: lastP.x, y: -lastP.y))
         }
     }
 

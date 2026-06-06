@@ -45,17 +45,17 @@ public final class BurstManager {
                       intensity: CGFloat) {
         guard kind == .burst else { return }
 
-        // Centre the window on the fire point. Pick the screen that
-        // contains the point so multi-display setups don't end up
-        // with a window straddling two screens.
+        // Centre the window on the fire point. Skip only when no
+        // connected screen overlaps the burst window — the earlier
+        // `frame.contains(point)`-based lookup mis-fired in multi-
+        // display layouts where the cursor can land in regions not
+        // strictly contained by any NSScreen frame (gaps between
+        // displays, mirror-with-scaling, scale-boundary quirks).
         let half = Self.frameSize / 2
         let frame = CGRect(x: point.x - half, y: point.y - half,
                            width: Self.frameSize, height: Self.frameSize)
-        let screen = NSScreen.screens.first(where: {
-            $0.frame.contains(point)
-        }) ?? NSScreen.main ?? NSScreen.screens.first
-        guard let screenFrame = screen?.frame,
-              screenFrame.intersects(frame) else { return }
+        guard NSScreen.screens.contains(where: { $0.frame.intersects(frame) })
+        else { return }
 
         let win = NSWindow(contentRect: frame,
                             styleMask: .borderless,
