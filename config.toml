@@ -313,7 +313,7 @@ kind = "off"
 # Clamped 0..10000. 0 collapses to "off" regardless of `kind` above.
 duration-ms = 3000
 
-# Decal footprint in points (width = height). Clamped 10..200.
+# Decal footprint in points (width = height). Clamped 10..500.
 size = 60
 
 # Ink colour. Three modes:

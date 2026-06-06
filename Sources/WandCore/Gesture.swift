@@ -187,7 +187,7 @@ public struct GestureFireDecalSpec: Sendable, Equatable {
     /// How long the decal stays visible. Clamped 0..10000;
     /// `0` collapses to `.off` regardless of `kind`.
     public let durationMs: Int
-    /// Decal footprint in points. Clamped 10..200.
+    /// Decal footprint in points. Clamped 10..500.
     public let size: Int
     /// Colour source for the decal. Empty / `"trail"` inherits
     /// `[cast.overlay.trail].color`; `"splatoon"` picks a random hue
