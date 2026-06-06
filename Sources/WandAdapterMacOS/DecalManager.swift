@@ -45,14 +45,6 @@ public final class DecalManager {
                       size: CGFloat) {
         guard kind != .off, durationSec > 0, size > 0 else { return }
 
-        // Pick the screen containing the fire point so the decal
-        // window is a child of that screen (avoids weird placement
-        // on multi-display setups).
-        let screen = NSScreen.screens.first(where: {
-            $0.frame.contains(point)
-        }) ?? NSScreen.main ?? NSScreen.screens.first
-        let screenFrame = screen?.frame ?? .zero
-
         // Window centred on the fire point, large enough to hold the
         // decal even when it animates a tiny bit outward (small extra
         // margin = a few pixels of room for stroke / glow).
@@ -61,10 +53,16 @@ public final class DecalManager {
                             y: point.y - size / 2 - margin,
                             width: size + margin * 2,
                             height: size + margin * 2)
-        // Skip when the resolved window would land off-screen on
-        // every monitor — there's no screen to draw on, no point
-        // wasting an NSWindow allocation.
-        if !screenFrame.intersects(frame) { return }
+        // Skip only when the window frame doesn't intersect ANY
+        // connected screen. The earlier `frame.contains(point)`-based
+        // lookup mis-fired in multi-display layouts where the cursor
+        // can land in regions not strictly contained by any NSScreen
+        // frame (gaps between displays, mirror-with-scaling, or
+        // coordinate quirks crossing scale boundaries — the symptom
+        // was a silently-discarded decal even though the fire point
+        // was clearly on-screen for the user).
+        guard NSScreen.screens.contains(where: { $0.frame.intersects(frame) })
+        else { return }
 
         let win = NSWindow(contentRect: frame,
                             styleMask: .borderless,
