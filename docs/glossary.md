@@ -165,7 +165,9 @@ tome のメインメニュー。トリガーボタンを押した瞬間に出現
 の 3 つ。`[tome].layout` でデーモン全体、`--show-menu --items`
 のファイル内の `[tome].layout` でその呼び出し限定に切り替えられる。
 - 設定: `[tome].layout`
-- **Don't call it:** orientation, mode, panel style, 並び順, レイアウト
+- **Don't call it:** orientation, mode, panel style, 並び順
+  （`layout` 単体は `[tome].layout` のキー名なので可。「並びモード」
+  を指す名詞としては `tome layout` を使う）
 
 ### excludes
 cast と tome を **特定のアプリ内で完全に無効化** する
@@ -181,7 +183,7 @@ cast と tome を **特定のアプリ内で完全に無効化** する
 
 ### external trigger
 他のデーモン（例: `eventfx` のテキスト選択監視）が
-`wand --show-menu --items <PATH> --at <X> <Y>` 経由でランチャーを
+`wand --show-menu --items <PATH> --at <X> <Y>` 経由で tome を
 呼び出す経路。ボタン押下に紐付かないため [[AX target]] では解決
 できず、**フロントモストアプリを対象**として spine の例外扱い
 となる。`--selection` で `$SELECTION`、`--title` で
@@ -204,7 +206,7 @@ cast と tome を **特定のアプリ内で完全に無効化** する
   （frontmost / focused は AX target と一致しないことがある）
 
 ### `$SELECTION`
-ランチャートリガー発火の瞬間に、フォーカスされている要素で選択
+tome トリガー発火の瞬間に、フォーカスされている要素で選択
 されていたテキスト。`shell` 系 [[tome entry]] に環境変数として
 渡される。何も選択されていない場合、もしくはフォーカス先のアプリ
 が AX selection を公開していない場合は空文字列。**信頼できない値**

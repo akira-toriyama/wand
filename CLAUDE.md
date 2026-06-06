@@ -5,11 +5,16 @@ Guidance for working in this repository.
 ## Terminology
 
 All UI / config terminology follows [`docs/glossary.md`](docs/glossary.md) —
-use the canonical names (assist card, badge, trail, fire burst,
-fire decal, non-activating panel, child panel, tome entry,
-tome layout, dynamic submenu, AX target, external trigger,
-excludes, …), **not** the `Don't call it:` synonyms. Adding or
-renaming a term lands in the same PR as the code change.
+use the canonical names (**cast**, **tome**, assist card, badge,
+trail, fire burst, fire decal, non-activating panel, child panel,
+tome entry, tome layout, dynamic submenu, AX target, external
+trigger, excludes, …), **not** the `Don't call it:` synonyms.
+Adding or renaming a term lands in the same PR as the code change.
+
+Swift type names (`LauncherSpec`, `LauncherPanel`, `LauncherSource`,
+`GestureOverlay`, `cfg.launcher`, …) intentionally retain the
+pre-v7 names — the v7 rename (#100) covered TOML keys and user-
+facing strings only; an internal-type rename is a tracked follow-up.
 
 ## What this is
 
@@ -293,51 +298,61 @@ daemon.
 
 **Five layers of defense**
 
-Don't lean on any single layer; combine them so one failure mode
-can't cascade:
+The full target architecture. Layers 1 and 2 ship today
+(`FailsafeMonitor`); layers 3–5 are tracked follow-ups documented
+as PLANNED below so the WHY of each one is on record for the next
+PR that touches this surface. Don't lean on any single layer;
+combine them so one failure mode can't cascade.
 
 1. **Button-hold timeout** — `[failsafe].mouse-hold-timeout-sec`.
    If any mouse button stays `down` longer than the timeout, the
    daemon force-posts a mouseUp at the current cursor position.
    Catches both wand-origin stuck states and external HID layers
    (Karabiner-Elements / Logitech Options / KVMs) that drop the
-   real up event.
+   real up event. SHIPPED.
 2. **Emergency release key** — `[failsafe].emergency-release-key`,
    default `"esc"`. Implemented via
    `NSEvent.addGlobalMonitorForEvents` (passive observer — Esc
    still flows to the underlying app, so modals / cancels keep
    working). The release sequence is **idempotent**: releasing an
-   un-held button and cancelling an inactive state are both no-ops,
-   so the firehose of normal Esc presses is harmless. Only logs
-   `Log.line` when it *actually* released something, so an empty
-   log = healthy.
+   un-held button is a no-op, so the firehose of normal Esc
+   presses is harmless. Only logs `Log.line` when it *actually*
+   released something, so an empty log = healthy. SHIPPED.
 3. **CLI escape hatch** — `wand --release-all` over the existing
    DNC channel. Works from a second shell / ssh / a keyboard
-   shortcut app when the mouse itself is unusable.
-4. **Tap-internal invariants** (see below).
+   shortcut app when the mouse itself is unusable. PLANNED — not
+   yet wired; do not reference as if available.
+4. **Tap-internal invariants** (see below). The relevant tap
+   doesn't yet exist (only bolt posts synthetic mouseUp, and bolt
+   itself is PLANNED). The invariants below are the contract that
+   tap will be held to.
 5. **Tap watchdog** — `[failsafe].tap-watchdog-interval-sec`.
    `CGEventTap` can be disabled by the OS under load; the daemon
    periodically checks and reinstalls. `wand --doctor` flags any
    button held longer than the timeout and suggests
-   `--release-all`.
+   `--release-all`. PLANNED — neither the config key nor the
+   watchdog exists yet.
 
-**Tap-internal invariants (code level)**
+**Tap-internal invariants (code level — PLANNED, lands with bolt)**
 
-- **bolt's synthetic `.leftMouseUp` post is the single most
-  dangerous code path.** Before posting, check
-  `CGEventSource.buttonState`: if it's already `false` (user
-  released naturally), skip the post. After posting, re-check; if
-  still `true`, retry once. bolt is the *only* place in wand that
-  posts a synthetic mouseUp — keep it the only one, and keep this
-  check in place.
-- **The cast tap must never swallow mouseUp on any
-  error path.** A crashed daemon is recoverable (the OS
-  auto-uninstalls the tap); a tap that holds the mouseUp is not.
-  Audit every CGReturn / error branch in
+These apply to any code path that posts synthetic mouse events.
+Today no such path exists; bolt (the planned shake-to-shelf
+trigger) will be the first. Codifying them here so the bolt PR
+honours them by construction.
+
+- **A synthetic `.leftMouseUp` post is the single most dangerous
+  code path.** Before posting, check `CGEventSource.buttonState`:
+  if it's already `false` (user released naturally), skip the
+  post. After posting, re-check; if still `true`, retry once.
+  Keep this the *only* place wand posts a synthetic mouseUp.
+- **The cast tap must never swallow mouseUp on any error path.**
+  A crashed daemon is recoverable (the OS auto-uninstalls the
+  tap); a tap that holds the mouseUp is not. Audit every CGReturn
+  / error branch in
   [Sources/WandAdapterMacOS/EventTap.swift](Sources/WandAdapterMacOS/EventTap.swift)
   to confirm mouseUp always reaches AppKit.
-- **No "synthetic-down-in-flight" state** in the daemon. wand
-  posts mouseUp synthetically (bolt); it never posts mouseDown
+- **No "synthetic-down-in-flight" state** in the daemon. wand may
+  post mouseUp synthetically; it must never post mouseDown
   synthetically. The asymmetry is the whole point: if wand
   crashes between a synthetic-down and the matching synthetic-up,
   the OS has no way to recover. Crashing with no synthetic-down
@@ -346,8 +361,8 @@ can't cascade:
 
 **Adding a new trigger family**
 
-Every new trigger (bolt's left-drag-shake, scry's AX observation,
-anything future) goes through this checklist:
+Every new trigger (planned bolt's left-drag-shake, planned scry's
+AX observation, anything future) goes through this checklist:
 
 1. If the daemon crashes mid-trigger, can the user still use the
    mouse normally?

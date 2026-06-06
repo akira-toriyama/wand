@@ -230,6 +230,12 @@ wand は **config.toml 駆動**。設定 GUI は意図的に持たない。
 ので、typo でデーモンが壊れることはない。明示的な検証は
 `wand --validate` で。
 
+> **`[failsafe]` ブロックは必須。** クリック / ドラッグ詰まりを
+> 救済する安全策(ボタン保持タイムアウト、Esc 緊急解除)を
+> 定義する。テンプレートに同梱されているので **削除しないこと** —
+> `wand --validate` と daemon 起動の両方が、無いと拒否する。
+> 各ノブは [`config.toml`](config.toml) の `[failsafe]` 参照。
+
 ルール例:
 
 ```toml
@@ -338,7 +344,7 @@ WAND_DEBUG=1 wand       # 詳細ログを /tmp/wand.log + stderr へ
 wand --validate         # config.toml をパース、0 / 2 で exit。
                           # 警告(clamp / 旧キー / 衝突 / typo)を
                           # stderr にも流す。
-wand --validate --items <PATH>  # --show-menu 用 [[item]] ファイルも検証
+wand --validate --items <PATH>  # --show-menu 用 [[tome.item]] ファイルも検証
 wand --doctor           # 健康診断: AX / config / daemon / tap
 wand --test DR [app]    # ドライラン: そのパターンでどのルールが発動するか
 wand --record           # 対話型レコーダ — 描くと貼れる [[cast.rule]]
@@ -352,7 +358,7 @@ wand --resign           # インストール済 Wand.app を永続自己署名 i
                           # 後に TCC 権限が落ちた場合に 1 回だけ)
 wand --show-menu --items <PATH> --at <X> <Y> [--selection <TEXT>] \
                  [--title <TEXT>]
-                        # 外部トリガー: 任意の [[item]] ファイルで
+                        # 外部トリガー: 任意の [[tome.item]] ファイルで
                           # tome を <X> <Y>(Cocoa 座標、Y-up)
                           # に出す。eventfx のようなイベント駆動デーモン
                           # 用のエントリ。--selection で $SELECTION を
