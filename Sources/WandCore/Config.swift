@@ -32,6 +32,19 @@ public struct WandConfig: Sendable {
     /// `[tome]` and sub-blocks — trigger + items + row /
     /// animation / decoration cosmetics.
     public var launcher: LauncherSpec
+    /// `[failsafe]` — mandatory safety-net block. Values default-
+    /// populated even when the user omits the block, so the runtime
+    /// never has to unwrap; the App layer separately checks
+    /// `failsafeBlockPresent` and refuses to start when the block
+    /// is missing (a deliberate deviation from the clamp-to-default
+    /// rule — silently defaulting a safety net is worse than a loud
+    /// "your config is missing this required block").
+    public var failsafe: FailsafeConfig
+    /// `true` when the `[failsafe]` block was present in the parsed
+    /// TOML (regardless of which keys it carried). `false` flags a
+    /// missing block; the App layer refuses to bring the daemon up
+    /// in that case.
+    public var failsafeBlockPresent: Bool
 
     public static let `default` = WandConfig(
         trigger: Trigger(button: .right, modifiers: []),
@@ -41,7 +54,9 @@ public struct WandConfig: Sendable {
         rules: [],
         overlay: .default,
         fire: .default,
-        launcher: .default
+        launcher: .default,
+        failsafe: .default,
+        failsafeBlockPresent: true
     )
 
     /// The single source-of-truth path. Shared by `load()` and the
@@ -341,6 +356,26 @@ public struct WandConfig: Sendable {
                             action: action)
             }
 
+        // [failsafe] — mandatory block. Always parsed; absence is
+        // signalled to the App layer via `failsafeBlockPresent` so
+        // server startup / `--validate` can refuse to proceed without
+        // surprising users mid-stroke (the silent-default policy that
+        // covers every other knob is explicitly inverted here — a
+        // missing safety net is the one config error wand will not
+        // gloss over).
+        let fs = doc.tables["failsafe"] ?? [:]
+        let mouseHoldTimeoutSec = clampInt(
+            fs, key: "mouse-hold-timeout-sec",
+            default: 30, lo: 5, hi: 300)
+        let emergencyReleaseKey: String = {
+            let raw = fs.string("emergency-release-key").lowercased()
+            return raw.isEmpty ? "esc" : raw
+        }()
+        let failsafe = FailsafeConfig(
+            mouseHoldTimeoutSec: mouseHoldTimeoutSec,
+            emergencyReleaseKey: emergencyReleaseKey)
+        let failsafeBlockPresent = doc.tables["failsafe"] != nil
+
         return WandConfig(
             trigger: gestureTrigger,
             intensity: intensity,
@@ -349,7 +384,9 @@ public struct WandConfig: Sendable {
             rules: rules,
             overlay: overlay,
             fire: fire,
-            launcher: launcher
+            launcher: launcher,
+            failsafe: failsafe,
+            failsafeBlockPresent: failsafeBlockPresent
         )
     }
 

@@ -207,6 +207,23 @@ enum WandApp {
             mirrorLineToStderr = true
             let cfg = WandConfig.load()
             let cfgWarnings = Log.lineCount
+            // [failsafe] is a mandatory block — a missing one is a
+            // FATAL config error, not just a warning. Surface it
+            // loudly + exit non-zero so CI / scripts catch the
+            // problem before the daemon ever starts. Same policy as
+            // runServer(), centralised here so `--validate` and
+            // server startup agree.
+            guard cfg.failsafeBlockPresent else {
+                let msg = "wand: FATAL: config.toml is missing the "
+                    + "required [failsafe] block. wand refuses to start "
+                    + "without it (low-level mouse interception needs "
+                    + "the safety net configured explicitly). Copy the "
+                    + "[failsafe] block from the bundled template:\n"
+                    + "  https://raw.githubusercontent.com/akira-toriyama/"
+                    + "wand/main/config.toml\n"
+                FileHandle.standardError.write(Data(msg.utf8))
+                exit(2)
+            }
             let tomeLine = cfg.launcher.enabled
                 ? ", tome=\(cfg.launcher.trigger.button.rawValue) "
                   + "(\(cfg.launcher.items.count) item(s))"
@@ -257,6 +274,23 @@ enum WandApp {
     @MainActor
     private static func runServer() -> Never {
         let cfg = WandConfig.load()
+
+        // The `[failsafe]` block is mandatory — a missing block means
+        // wand would run without the safety nets that catch a stuck
+        // click / drag, and the user could end up with an unusable
+        // PC. Deliberate inversion of the clamp-to-default rule that
+        // covers every other key: a silent default for a safety net
+        // is worse than a loud "your config is missing this block".
+        guard cfg.failsafeBlockPresent else {
+            let msg = "wand: config.toml is missing the required "
+                + "[failsafe] block — refusing to start. "
+                + "Copy the [failsafe] block from "
+                + "https://raw.githubusercontent.com/akira-toriyama/wand/main/config.toml"
+                + " into ~/.config/wand/config.toml, then re-launch.\n"
+            FileHandle.standardError.write(Data(msg.utf8))
+            Log.line("startup: [failsafe] block missing — refusing to start")
+            exit(2)
+        }
 
         let app = NSApplication.shared
         app.setActivationPolicy(.accessory)            // LSUIElement: no Dock icon
@@ -416,6 +450,26 @@ enum WandApp {
             controller.reload(cause: "file-change")
         }
         watcher.start()
+
+        // [failsafe] — the safety nets that catch a stuck click /
+        // drag. Documented in CLAUDE.md's "Safety invariants" section;
+        // see Sources/WandAdapterMacOS/FailsafeMonitor.swift for the
+        // two layers shipped in this version (Esc emergency release +
+        // button-hold timeout). The `onRelease` hook is a placeholder
+        // for future state-cancellation wiring — for now the
+        // idempotent release sequence is just "post mouseUp for any
+        // held button", which already handles the worst PC-inoperable
+        // case.
+        let failsafe = FailsafeMonitor(config: cfg.failsafe) {
+            // No-op for v0. Tracking issue: drop any in-flight cast
+            // stroke / tome panel so a synthetic mouseUp can't commit
+            // an unwanted gesture. Until that lands, the rare
+            // "Esc-while-mid-stroke" path may fire whatever stroke
+            // was captured — acceptable trade-off since the
+            // alternative is leaving the PC stuck.
+        }
+        failsafe.start()
+        _ = failsafe   // hold for process lifetime
 
         app.run()
         exit(0)

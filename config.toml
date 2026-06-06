@@ -67,6 +67,39 @@ apps = []
 
 
 # -----------------------------------------------------------------
+# Failsafe — required safety net (mandatory; missing block →
+# wand refuses to start)
+# -----------------------------------------------------------------
+# wand grabs low-level mouse via CGEventTap. A bug, a crash, or a
+# swallowed event maps directly to "the user's PC is now unusable".
+# This block defines the safety nets that catch such failures. It
+# is **mandatory**: removing it makes `wand --validate` and server
+# startup both refuse to proceed.
+#
+# Deliberate inversion of wand's clamp-to-default rule that covers
+# every other key. A silently-defaulted safety net is worse than a
+# loud "your config is missing this required block".
+[failsafe]
+
+# Maximum time (seconds) any mouse button may stay reported as
+# `down` before wand force-releases it. Catches both wand-origin
+# stuck states and external HID layers (Karabiner-Elements,
+# Logitech Options, KVMs) that drop the real up event.
+# Clamped 5..300.
+mouse-hold-timeout-sec = 30
+
+# Emergency release key. Observed via NSEvent global monitor —
+# passively, so the underlying app still receives the key (Esc still
+# closes modals, cancels input, etc). The release sequence is
+# idempotent: releasing an un-held button is a no-op, so the
+# firehose of normal Esc presses is harmless. Only logs when wand
+# actually released something — quiet log = healthy, an entry =
+# wand had to step in. Currently only "esc" is implemented; future
+# keys can be added without a schema change.
+emergency-release-key = "esc"
+
+
+# -----------------------------------------------------------------
 # Cast — right-button + drag draws a shape that fires a rule
 # -----------------------------------------------------------------
 [cast]
