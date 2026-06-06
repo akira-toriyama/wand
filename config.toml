@@ -131,6 +131,47 @@ modifiers = []
 #   wild    ≈ 2.5× (over-the-top)
 intensity = "normal"
 
+# Coordinated colour palette for the cast HUD + fire-moment
+# effects. Sets defaults for:
+#   trail   — color / color-no-match / color-outline
+#   cards   — border-color / body-color / text-color /
+#             fires-color / fires-text-color
+#   fire    — burst.color
+# Pick a vibe and the colours are guaranteed to read well together.
+# (Decal is intentionally not themed — it always uses the Splatoon
+# multi-team ink palette, that's the identity of the effect.)
+#
+# Individual colour keys still WIN when explicitly set in the
+# TOML (non-empty string), so `theme = "terminal"` + `color =
+# "red"` gives a Terminal HUD with a red trail line.
+#
+#   "default"  — historical blue trail / red no-match / no
+#                outline; the look wand has shipped with.
+#   "terminal" — Tokyo-Night-style green-on-black with amber
+#                no-match. Mono-feel, very legible.
+#   "neon"     — cycling neon palette on near-black cards;
+#                hot-pink no-match.
+#   "splatoon" — per-stroke random team colour ink, white
+#                outline, black no-match.
+#   "rainbow"  — full-spectrum animated trail + cards; white
+#                outline, very dark no-match.
+#   "mono"     — white trail / black outline / red no-match
+#                only — failure stays loud, everything else
+#                is monochrome.
+#   "vapor"    — synthwave: pink trail, lime no-match, slate
+#                outline, Dracula-style dark card.
+#   "pacman"   — Pac-Man arcade palette: yellow trail on black,
+#                red-ghost no-match. Pairs with
+#                `style = "pacman"` for the canonical arcade
+#                yellow wedge. Cards use a two-state design —
+#                directional cards are yellow pellets with black
+#                text; the firing card is the inverted pair
+#                (black body + yellow text) so "fires on release"
+#                lands as a sharp colour flip.
+#
+# Unknown names clamp to "default". Validate with `wand --validate`.
+theme = "default"
+
 
 # -----------------------------------------------------------------
 # Cast recognition — sample → direction tuning
@@ -189,6 +230,20 @@ enabled = true
 # easier on the eyes for some screens, and a touch cheaper.
 blur-enabled = true
 
+# Cycle period in milliseconds for the dynamic colour modes
+# (`rainbow` / `neon`). Smaller = faster strobe; larger = slower
+# drift. Clamped 100..10000. Shared by trail + cards (border /
+# body / text) + trail outline — anything that resolves a dynamic
+# colour uses this period, so a `rainbow` trail and a `rainbow`
+# card border cycle in lockstep. Ignored by static and `splatoon`
+# modes (the latter is per-stroke fixed).
+#
+#   500   — strobing (very fast colour churn)
+#   1000  — flicker
+#   2000  — default; visible cycle in a typical short stroke
+#   5000  — slow drift, almost-solid feel
+color-cycle-ms = 2000
+
 
 # Trail line — the stroke you draw, plus how it recolours when the
 # shape matches / doesn't match any rule.
@@ -216,41 +271,73 @@ blur-enabled = true
 # `color` and `color-no-match` are independent — fine to set one to
 # a dynamic token and the other to a static hex (e.g. `rainbow`
 # while matching, solid red when off-track).
+# Empty = inherit from `[cast].theme`. Non-empty value overrides
+# the theme's palette for that field.
 color = "#3b82f6"
 color-no-match = "#ef4444"
 
-# Stroke width in points. Clamped 1..40. Style presets below may
-# override this — `thin` halves it (with a 1.5pt floor), `thick`
-# doubles it, `dashed`/`dotted` use it as the dash unit.
+# Outline / underlay colour drawn behind or around the trail so the
+# main `color` reads against backgrounds that would otherwise
+# swallow it (e.g. `color = "black"` on a dark editor). Empty = no
+# outline. Same grammar as `color` (named / hex / `rainbow` /
+# `neon` / `splatoon`). Style-specific rendering:
+#   normal/dashed/dotted — wider underlay stroke beneath the trail
+#   pixel / rainbow-road — 1pt outline-colour frame inset into each
+#                          cell (every dot looks framed)
+#   ascii                — solid backing rect under each glyph
+#                          (terminal / cmatrix feel: green letters
+#                          on black blocks)
+#   pacman               — concentric outer ring on pellets + face
+color-outline = ""
+
+# Trail width. Clamped 1..40. Meaning depends on `style`:
+#   normal / dashed / dotted — stroke width in points
+#   pixel                    — thickness in fixed-size cells
+#                              (5pt cell; `width = 3` lays down a
+#                              3-cell-wide stripe)
+#   ascii                    — thickness in fixed-size glyphs
+#                              (14pt font; `width = 3` lays down a
+#                              3-glyph-wide band)
+#   pacman                   — scale multiplier on pellet / face
+#                              size + spacing + lag. Single line of
+#                              pellets always; `width = 2` doubles
+#                              the whole arcade aesthetic.
+# So in pixel / ascii, raising `width` adds more small marks across
+# the path rather than scaling each mark up. pacman is different —
+# the arcade look is always one line, so `width` scales sizes
+# instead of stacking rows.
 width = 3
 
 # Trail dash pattern preset. **Shape only — the trail's colour is
 # always sourced from `color` / `color-no-match` above**, so the
-# match-vs-no-match signal isn't lost when the style changes. Width
-# comes from `width` above; glow is fixed.
+# match-vs-no-match signal isn't lost when the style changes.
 #
 #   "normal"  — single solid stroke (default)
 #   "dashed"  — broken line (3:2 dash:gap, sized off `width`)
 #   "dotted"  — short-dash dotted line (0.6:2 dash:gap)
+#   "pixel"   — 8-bit / pixel-art: fixed 5pt cells stepped along the
+#               path; `width` = cells across the path (thickness)
+#   "ascii"   — AA-art: 14pt monospaced glyphs (`* + x o # . : = ~ ^`)
+#               picked dynamically — each slot reshuffles a few times
+#               per second so the trail flickers as it draws. `width`
+#               = glyphs across the path (thickness).
+#   "rainbow-road" — pixel cells coloured by a spectrum-ordered
+#               palette (red/orange/yellow/green/blue/indigo/purple),
+#               one colour per 4-cell unit, reading as a rainbow
+#               track. Style-specific exception: `color` is
+#               overridden by the palette; `color-no-match` still
+#               wins so the failure signal survives.
+#   "pacman"  — small pellets along the path + a Pac-Man wedge that
+#               chases behind the cursor, mouth chomping along the
+#               current direction. Always a single line of pellets
+#               (the arcade look); `width` scales pellet / face size
+#               + spacing.
+#   "arrow"   — continuous chevron chain along the whole path
+#               (`-->-->-->`), each `>` rotated to match the local
+#               tangent so the direction reads at every point — not
+#               just at the cursor tip. Replaces the retired
+#               `arrowhead = true` knob.
 style = "normal"
-
-# Draw an arrowhead tip at the cursor in the last-committed direction
-# — a directional indicator pointing where the gesture's last segment
-# went. Independent of `style` (a `dashed` trail can still opt in or
-# out of the tip), so the indicator is its own axis, not bundled into
-# the line-shape preset. `false` for a plain line.
-arrowhead = true
-
-# Cycle period in milliseconds for the dynamic colour modes
-# (`rainbow` / `neon`). Smaller = faster strobe; larger = slower
-# drift. Ignored by static and `splatoon` modes (`splatoon` is
-# per-stroke fixed). Clamped 100..10000.
-#
-#   500   — strobing (very fast colour churn)
-#   1000  — flicker
-#   2000  — default; visible cycle in a typical short stroke
-#   5000  — slow drift, almost-solid feel
-color-cycle-ms = 2000
 
 # How long (ms) the trail lingers after a gesture fires. The
 # in-progress segment is first snapped onto its axis so the whole
@@ -258,6 +345,15 @@ color-cycle-ms = 2000
 # then faded out across the window. Set to 0 for an instant clear
 # (matches the no-match behaviour). Clamped 0..2000.
 final-hold-ms = 400
+
+# How committed past segments render once you turn (e.g. `D → L` in
+# `DLD`):
+#   true   — snap the just-completed segment onto its axis so the
+#            trail reads as a clean orthogonal polyline.
+#   false  — keep every sample as raw freehand; the trail follows
+#            the literal hand path, jitter included (default).
+# Recognition is unaffected either way — this is a render-only knob.
+straighten-on-turn = false
 
 
 # Origin badge — small app-icon chip at the gesture's start point.
@@ -325,6 +421,28 @@ border-color = ""
 # `border-color` above; dynamic modes work here too.
 body-color = ""
 
+# Text colour for card labels (rule name + direction arrows).
+# Empty falls back to white — the historical hard-coded value.
+# Same grammar as `border-color` / `body-color`; dynamic modes
+# work here too. Useful when `body-color` is light enough that
+# white text washes out (set `text-color = "#000000"` etc.).
+text-color = ""
+
+# Body fill for the **firing** card (the one that triggers on
+# release). Empty falls back to the trail accent — the historical
+# "this fires on release" tint. Set to a different colour or a
+# dynamic token to make the firing card flash distinctly from
+# the trail. Used by the `pacman` theme to invert the firing
+# card body (black) against the yellow-pellet directional cards.
+fires-color = ""
+
+# Text colour for the **firing** card only. Empty falls back to
+# `text-color` (= the same colour as directional-card text).
+# Lets a theme invert the firing card cleanly — e.g. pacman uses
+# this to flip the firing card's text to yellow against its
+# black body, the opposite of directional cards' black-on-yellow.
+fires-text-color = ""
+
 
 # -----------------------------------------------------------------
 # Cast fire-moment effects — at the cursor when a rule fires
@@ -338,9 +456,20 @@ body-color = ""
 
 #   "off"    — no burst (default)
 #   "burst"  — omnidirectional particle explosion (~0.7s)
-# Burst color rides `[cast.overlay.trail].color` (the same accent
-# the trail uses), so the burst reads as tied to the action.
 kind = "off"
+
+# Burst particle colour. Same three-mode grammar as
+# `[cast.fire.decal].color`:
+#   ""         — empty / unset: inherit `[cast.overlay.trail].color`
+#                (historical default — burst matches the trail accent
+#                so it reads as tied to the action). Also obeys
+#                `[cast].theme` palette inheritance.
+#   "trail"    — explicit form of the above.
+#   "splatoon" — pick a random hue from the Splatoon ink palette on
+#                every fire.
+#   <hex / named> — anything `[cast.overlay.trail].color` accepts
+#                   (e.g. `"#ff00ff"` / `"systemPink"`).
+color = ""
 
 
 # Post-fire ink decal — a Splatoon-style splatter left at the
@@ -353,9 +482,9 @@ kind = "off"
 #                     classic SVG ink-splat silhouette — round body
 #                     with radial tendril spikes + a darker ink-ring
 #                     underlayer + 3-6 detached droplet specks.
-#                     With `color = "splatoon"` each unit can land a
-#                     different team colour (the Splatoon multi-shot
-#                     feel — one decal, multiple ink hits).
+#                     Each unit picks its own team colour from a
+#                     built-in Splatoon ink palette, so one decal
+#                     lands multiple ink hits at once.
 kind = "off"
 
 # How long (ms) the decal stays visible before fading out.
@@ -365,21 +494,13 @@ duration-ms = 3000
 # Decal footprint in points (width = height). Clamped 10..500.
 size = 60
 
-# Ink colour. Three modes:
-#   ""        — empty / unset: inherit `[cast.overlay.trail].color`.
-#               This is the historical default (the splat matches
-#               the trail accent).
-#   "trail"   — explicit form of the above.
-#   "splatoon" — pick a random hue from a 10-colour Splatoon-style
-#                ink palette on every fire (orange / yellow / lime /
-#                neon green / peppermint / sapphire / purple /
-#                magenta / pink / coral, sourced from a Turf War
-#                colour-pair compilation). The deliberate Turf War
-#                feel — each fire is a different team's ink.
-#   <hex / named> — anything `[cast.overlay.trail].color` accepts
-#                   (e.g. `"#ff00ff"` / `"systemPink"`) overrides
-#                   with that fixed colour.
-color = ""
+# Decal colour is not configurable — the Splatoon multi-team ink
+# palette IS the identity of this effect, so the decal always
+# picks random hues from a 10-colour Splatoon-style ink palette
+# on every fire (orange / yellow / lime / neon green / peppermint
+# / sapphire / purple / magenta / pink / coral, sourced from a
+# Turf War colour-pair compilation). One decal can land 2-3
+# different team colours at once.
 
 
 # -----------------------------------------------------------------

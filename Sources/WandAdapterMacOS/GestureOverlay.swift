@@ -107,10 +107,14 @@ public final class GestureOverlay {
             ov.trail.color, fallback: .systemBlue)
         view.noMatchMode = TrailColorMode.parse(
             ov.trail.colorNoMatch, fallback: .systemRed)
-        view.colorCyclePeriod = TimeInterval(ov.trail.colorCycleMs) / 1000.0
+        view.outlineMode = ov.trail.colorOutline.isEmpty
+            ? nil
+            : TrailColorMode.parse(ov.trail.colorOutline,
+                                    fallback: .black)
+        view.colorCyclePeriod = TimeInterval(ov.colorCycleMs) / 1000.0
         view.strokeWidth = CGFloat(ov.trail.width)
         view.trailStyle = ov.trail.style
-        view.arrowheadEnabled = ov.trail.arrowhead
+        view.straightenOnTurn = ov.trail.straightenOnTurn
         view.badgeEnabled = ov.badge.enabled
         view.badgeSize = CGFloat(ov.badge.size)
         view.animEnabled = ov.badge.animEnabled
@@ -125,6 +129,18 @@ public final class GestureOverlay {
             ? nil
             : TrailColorMode.parse(ov.cards.bodyColor,
                                     fallback: .clear)
+        view.cardTextMode = ov.cards.textColor.isEmpty
+            ? .static(.white)
+            : TrailColorMode.parse(ov.cards.textColor,
+                                    fallback: .white)
+        view.cardFiresMode = ov.cards.firesColor.isEmpty
+            ? nil
+            : TrailColorMode.parse(ov.cards.firesColor,
+                                    fallback: .systemBlue)
+        view.cardFiresTextMode = ov.cards.firesTextColor.isEmpty
+            ? nil
+            : TrailColorMode.parse(ov.cards.firesTextColor,
+                                    fallback: .white)
         view.effectIntensity = cfg.intensity.multiplier
         view.minStrokePx = CGFloat(cfg.recognition.minStrokePx)
         view.finalHoldDuration = TimeInterval(ov.trail.finalHoldMs) / 1000.0
@@ -162,6 +178,11 @@ private final class TrailView: NSView {
     /// (`rainbow`, `neon`, `splatoon`) drive dynamic resolution at
     /// `draw(_:)` time. Set live from `[cast.overlay.trail].color`.
     var matchMode: TrailColorMode = .static(.systemBlue)
+    /// Optional outline / underlay colour mode. `nil` = no outline
+    /// (historical behaviour); set live from
+    /// `[cast.overlay.trail].color-outline`. Each style renders the
+    /// outline differently — see `outlineColor(for:)`.
+    var outlineMode: TrailColorMode? = nil
     /// Same as `matchMode`, but for the no-match side
     /// (`[cast.overlay.trail].color-no-match`).
     var noMatchMode: TrailColorMode = .static(.systemRed)
@@ -182,12 +203,18 @@ private final class TrailView: NSView {
     /// (`brush` / `splatoon` / …) are reserved for follow-up PRs of #63
     /// and not represented in this enum yet.
     var trailStyle: TrailStyle = .normal
-    /// Draw the arrowhead tip at the cursor in the last-committed
-    /// direction. Independent of `trailStyle` so the directional
-    /// indicator is its own knob — a `dashed` / `comet` trail can
-    /// still opt out of the tip, and a plain `normal` trail can keep
-    /// it. Set live from `[cast.overlay.trail].arrowhead`.
-    var arrowheadEnabled: Bool = true
+    // `arrowheadEnabled` was retired in #115 — the cursor-only tip
+    // is gone; `style = .arrow` provides direction along the whole
+    // path instead.
+    /// When `true` (default), every committed turn snaps the
+    /// just-completed segment onto its axis so the trail reads as a
+    /// clean orthogonal polyline — the historical hard-coded
+    /// behaviour. When `false`, every sample is rendered as raw
+    /// freehand (the trail follows the actual mouse path, jitter
+    /// included). Recognition is unaffected — this only changes how
+    /// the trail is drawn, not how directions are detected. Set live
+    /// from `[cast.overlay.trail].straighten-on-turn`.
+    var straightenOnTurn: Bool = true
     /// Cocoa-global origin of the window; subtracted to get view-local
     /// coords from a global point.
     var originOffset: CGPoint = .zero
@@ -223,6 +250,25 @@ private final class TrailView: NSView {
     /// trail-accent tint regardless of this — so the "fires on
     /// release" signal stays loud.
     var cardBodyMode: TrailColorMode? = nil
+    /// Text colour mode for assist-card labels (rule name + direction
+    /// arrows). Set live from `[cast.overlay.cards].text-color`;
+    /// `.static(.white)` is the fallback for the historical
+    /// hard-coded white. Dynamic tokens (`rainbow` / `neon` /
+    /// `splatoon`) animate alongside the trail using the same cycle
+    /// period and stroke seed.
+    var cardTextMode: TrailColorMode = .static(.white)
+    /// Body fill mode for the **firing** card (`nil` = inherit the
+    /// trail accent, the historical default). Set live from
+    /// `[cast.overlay.cards].fires-color`. Themes can flash the
+    /// firing card in a different palette from the trail.
+    var cardFiresMode: TrailColorMode? = nil
+    /// Text colour mode for the firing card only (`nil` = inherit
+    /// `cardTextMode`, the same text colour as directional cards).
+    /// Set live from `[cast.overlay.cards].fires-text-color`. Lets
+    /// a theme invert the firing card cleanly — e.g. directional
+    /// cards run yellow-on-black and the firing card flips to
+    /// black-on-yellow.
+    var cardFiresTextMode: TrailColorMode? = nil
     /// Pre-resolved multiplier from `Intensity.multiplier` — scales
     /// translation distance, scale deltas, vibration amplitude, and
     /// particle birth-rate / velocity.
@@ -250,6 +296,11 @@ private final class TrailView: NSView {
     /// `cursor`. Reset on every corner commit so the new segment
     /// starts at the snapped corner.
     private var freehandPoints: [CGPoint] = []
+    /// Every raw mouse sample of the in-progress stroke, never
+    /// trimmed at corner commits. Drives the `straightenOnTurn=false`
+    /// render path so the trail shows the literal hand path. Reset
+    /// in `_actualReset` alongside the other stroke state.
+    private var rawTrail: [CGPoint] = []
     /// Index in `freehandPoints` of the most recent anchor update —
     /// samples *after* this index are the transition between the old
     /// anchor and the current sample, and get carried over into the
@@ -415,6 +466,8 @@ private final class TrailView: NSView {
             origin = p
             anchor = p
             freehandPoints.removeAll(keepingCapacity: true)
+            rawTrail.removeAll(keepingCapacity: true)
+            rawTrail.append(p)
             anchorIndex = 0
         }
         cursor = p
@@ -456,6 +509,7 @@ private final class TrailView: NSView {
             }
         }
         freehandPoints.append(p)
+        rawTrail.append(p)
         if anchorUpdated {
             anchorIndex = freehandPoints.count - 1
         }
@@ -547,6 +601,7 @@ private final class TrailView: NSView {
         cursor = nil
         corners.removeAll(keepingCapacity: true)
         freehandPoints.removeAll(keepingCapacity: true)
+        rawTrail.removeAll(keepingCapacity: true)
         anchorIndex = 0
         anchor = nil
         lastDir = nil
@@ -608,6 +663,10 @@ private final class TrailView: NSView {
         let color = mode.currentColor(at: CACurrentMediaTime(),
                                        strokeSeed: strokeSeed,
                                        cyclePeriod: colorCyclePeriod)
+        let outlineColor: NSColor? = outlineMode?.currentColor(
+            at: CACurrentMediaTime(),
+            strokeSeed: strokeSeed,
+            cyclePeriod: colorCyclePeriod)
 
         // While holding the post-fire snapped polyline, fade the trail
         // out over the last third of the hold so it doesn't pop off.
@@ -635,15 +694,23 @@ private final class TrailView: NSView {
         // modes cover their use cases without a separate axis.
         switch trailStyle {
         case .normal, .dashed, .dotted:
-            drawSinglePath(origin: origin, cursor: cursor, color: color)
-        }
-
-        // Arrowhead at the raw cursor in the last-committed direction.
-        // Skipped until a direction has been committed (no axis to
-        // point along yet), or when `[cast.overlay.trail].arrowhead`
-        // is `false` — the tip is its own axis, not a style detail.
-        if arrowheadEnabled, let dir = lastDir {
-            drawArrowhead(at: cursor, direction: dir, color: color)
+            drawSinglePath(origin: origin, cursor: cursor,
+                            color: color, outline: outlineColor)
+        case .pixel:
+            drawPixelPath(origin: origin, cursor: cursor,
+                           color: color, outline: outlineColor)
+        case .ascii:
+            drawAsciiPath(origin: origin, cursor: cursor,
+                           color: color, outline: outlineColor)
+        case .rainbowRoad:
+            drawRainbowRoadPath(origin: origin, cursor: cursor,
+                                 color: color, outline: outlineColor)
+        case .pacman:
+            drawPacmanPath(origin: origin, cursor: cursor,
+                            color: color, outline: outlineColor)
+        case .arrow:
+            drawArrowChainPath(origin: origin, cursor: cursor,
+                                color: color, outline: outlineColor)
         }
         NSGraphicsContext.restoreGraphicsState()
     }
@@ -652,12 +719,27 @@ private final class TrailView: NSView {
     /// path used by every single-color style. Centralised so dashed /
     /// dotted / glow / thin / thick all share the same geometry and
     /// only differ in stroke parameters.
+    ///
+    /// When `straightenOnTurn = false`, return a pure polyline through
+    /// every raw mouse sample instead — no corner snapping, no
+    /// orthogonal axes. Recognition still uses `corners` / `lastDir`
+    /// to drive the rule matcher; this only affects what's drawn.
     private func buildHybridPath(origin: CGPoint,
                                   lineWidth: CGFloat) -> NSBezierPath {
         let path = NSBezierPath()
         path.lineWidth = lineWidth
         path.lineCapStyle = .round
         path.lineJoinStyle = .round
+
+        if !straightenOnTurn {
+            // Pure freehand: trace every raw sample as-is. `rawTrail`
+            // is seeded with `origin` on stroke start so this always
+            // begins at the button-down point.
+            guard let first = rawTrail.first else { return path }
+            path.move(to: first)
+            for p in rawTrail.dropFirst() { path.line(to: p) }
+            return path
+        }
 
         // Straight part: origin → corners, with each interior corner
         // softened by a quadratic-style bezier (radius capped to half
@@ -698,13 +780,28 @@ private final class TrailView: NSView {
 
     /// Render a single-color trail. `normal` / `thin` / `thick` / `glow`
     /// / `dashed` / `dotted` all funnel through here — they only differ
-    /// in lineWidth, glow radius, and dash pattern.
+    /// in lineWidth, glow radius, and dash pattern. When `outline` is
+    /// set, the same path is stroked first with a wider line in the
+    /// outline colour so the main stroke reads against backgrounds
+    /// that would otherwise swallow it.
     private func drawSinglePath(origin: CGPoint, cursor: CGPoint,
-                                 color: NSColor) {
+                                 color: NSColor, outline: NSColor?) {
         let p = styleParams(base: strokeWidth)
         let path = buildHybridPath(origin: origin, lineWidth: p.width)
         if !p.lineDash.isEmpty {
             path.setLineDash(p.lineDash, count: p.lineDash.count, phase: 0)
+        }
+        if let outline {
+            // 2pt total extra (1pt each side) — visible without
+            // dominating the trail.
+            let underlay = buildHybridPath(origin: origin,
+                                            lineWidth: p.width + 2)
+            if !p.lineDash.isEmpty {
+                underlay.setLineDash(p.lineDash,
+                                      count: p.lineDash.count, phase: 0)
+            }
+            outline.withAlphaComponent(0.9).setStroke()
+            underlay.stroke()
         }
         let glow = NSShadow()
         glow.shadowColor = color.withAlphaComponent(0.5)
@@ -735,7 +832,470 @@ private final class TrailView: NSView {
         case .dotted:
             return TrailStyleParams(width: base, glowRadius: 7,
                                      lineDash: [base * 0.6, base * 2])
+        case .pixel, .ascii, .rainbowRoad, .pacman, .arrow:
+            // Unused — these styles route through their own
+            // renderers and never call `drawSinglePath`. Returning a
+            // safe baseline keeps the switch exhaustive without
+            // pretending these styles share stroke parameters.
+            return TrailStyleParams(width: base, glowRadius: 0,
+                                     lineDash: [])
         }
+    }
+
+    /// Walk the same hybrid corner + freehand polyline that
+    /// `buildHybridPath` produces, but instead of emitting a bezier,
+    /// invoke `step` once per `interval`-pt advance along the path.
+    /// Used by the pixel and ascii renderers to place discrete marks
+    /// at a fixed spacing regardless of original sample density.
+    private func walkPath(origin: CGPoint,
+                           interval: CGFloat,
+                           trimTail: CGFloat = 0,
+                           step: (CGPoint, CGPoint) -> Void) {
+        // Freehand mode walks the raw sample stream; straightened
+        // mode walks the snapped corner polyline + active freehand.
+        let pts: [CGPoint] = straightenOnTurn
+            ? ([origin] + corners + Array(freehandPoints.dropFirst()))
+            : rawTrail
+        guard !pts.isEmpty, interval > 0 else { return }
+        // `trimTail` (pt) trims that much distance off the end of the
+        // path before emitting — used by the Pac-Man style to leave a
+        // visible gap between the trailing pellets and the cursor's
+        // face, so it reads as Pac-Man running ahead of the trail.
+        // When set, compute total length once and derive the cutoff
+        // distance; bail early if there isn't enough path to clear
+        // the trim.
+        let cutoff: CGFloat?
+        if trimTail > 0 {
+            var totalLen: CGFloat = 0
+            for i in 1..<pts.count {
+                totalLen += hypot(pts[i].x - pts[i - 1].x,
+                                  pts[i].y - pts[i - 1].y)
+            }
+            if totalLen <= trimTail { return }
+            cutoff = totalLen - trimTail
+        } else {
+            cutoff = nil
+        }
+        // Tangent for the very first point: peek forward to the first
+        // non-zero segment so the leading mark is oriented along the
+        // path instead of an arbitrary axis. Defaults to (1, 0) until
+        // a real direction is available.
+        var lastTangent = CGPoint(x: 1, y: 0)
+        if pts.count > 1 {
+            for i in 1..<pts.count {
+                let dx = pts[i].x - pts[i - 1].x
+                let dy = pts[i].y - pts[i - 1].y
+                let len = hypot(dx, dy)
+                if len > 0 {
+                    lastTangent = CGPoint(x: dx / len, y: dy / len)
+                    break
+                }
+            }
+        }
+        step(pts[0], lastTangent)
+        var carry: CGFloat = 0
+        var traveled: CGFloat = 0
+        for i in 1..<pts.count {
+            let a = pts[i - 1]
+            let b = pts[i]
+            let dx = b.x - a.x
+            let dy = b.y - a.y
+            let segLen = hypot(dx, dy)
+            if segLen <= 0 { continue }
+            let ux = dx / segLen
+            let uy = dy / segLen
+            lastTangent = CGPoint(x: ux, y: uy)
+            var t = interval - carry
+            while t <= segLen {
+                if let cutoff, traveled + t > cutoff {
+                    // Reached the trim boundary — emit the exact
+                    // cutoff position so callers (Pac-Man face) can
+                    // anchor against it, then stop. The final-sample
+                    // emit below is skipped because we never reached
+                    // the path end.
+                    let last = traveled + t - cutoff
+                    let tEnd = t - last
+                    step(CGPoint(x: a.x + ux * tEnd,
+                                  y: a.y + uy * tEnd),
+                         lastTangent)
+                    return
+                }
+                step(CGPoint(x: a.x + ux * t, y: a.y + uy * t),
+                     lastTangent)
+                t += interval
+            }
+            traveled += segLen
+            carry = segLen - (t - interval)
+        }
+        // Always emit the final sample (== cursor for live strokes) so
+        // the head of the trail is marked even when the last segment
+        // is shorter than `interval`. Skipped when `cutoff` is in
+        // effect — callers that pass `trimTail` don't want the final
+        // sample because the trail is meant to end short of it.
+        if cutoff == nil, let last = pts.last {
+            step(last, lastTangent)
+        }
+    }
+
+    /// Fixed grid cell size for the `pixel` style (pt). Small enough
+    /// to read as ドット絵 rather than a chunky bar. `strokeWidth`
+    /// no longer drives this — it drives the thickness (cells across
+    /// the path) instead.
+    private static let pixelCellSize: CGFloat = 5
+
+    /// 8-bit / pixel-art style: quantise the path to a fixed-size
+    /// square grid and fill cells along the path. `strokeWidth` is
+    /// re-purposed here as **thickness in cells**: a `width = 3`
+    /// trail lays down a 3-cell-wide stripe perpendicular to the
+    /// path. Colour comes from the resolved trail colour. Cells are
+    /// de-duplicated via a Set so overlapping stripes never overdraw.
+    private func drawPixelPath(origin: CGPoint, cursor: CGPoint,
+                                color: NSColor, outline: NSColor?) {
+        let cell = Self.pixelCellSize
+        let thickness = max(1, Int(strokeWidth.rounded()))
+        let offsetBase = CGFloat(thickness - 1) / 2
+        var seen = Set<UInt64>()
+        let fill = color.withAlphaComponent(0.95)
+        let outlineFill = outline?.withAlphaComponent(0.95)
+        let plot: (CGPoint, CGPoint) -> Void = { p, tangent in
+            // Normal to the path: rotate tangent 90°.
+            let nx = -tangent.y
+            let ny =  tangent.x
+            for i in 0..<thickness {
+                let d = (CGFloat(i) - offsetBase) * cell
+                let cx = p.x + nx * d
+                let cy = p.y + ny * d
+                let gx = Int((cx / cell).rounded(.down))
+                let gy = Int((cy / cell).rounded(.down))
+                // Pack two Int32 into UInt64 for set key.
+                let key = (UInt64(bitPattern: Int64(Int32(gx))) << 32)
+                    | UInt64(UInt32(bitPattern: Int32(gy)))
+                guard seen.insert(key).inserted else { continue }
+                let rect = NSRect(x: CGFloat(gx) * cell,
+                                  y: CGFloat(gy) * cell,
+                                  width: cell, height: cell)
+                // Outline = full-cell outline-colour fill, then a
+                // 1pt-inset main-colour fill on top. Adjacent cells
+                // don't overdraw each other because both rects are
+                // contained within the cell's own grid square.
+                if let outlineFill {
+                    outlineFill.setFill()
+                    NSBezierPath(rect: rect).fill()
+                    fill.setFill()
+                    NSBezierPath(rect: rect.insetBy(dx: 1, dy: 1))
+                        .fill()
+                } else {
+                    fill.setFill()
+                    NSBezierPath(rect: rect).fill()
+                }
+            }
+        }
+        // Sample slightly finer than the cell so diagonal segments
+        // don't leave gaps; the dedupe set absorbs the redundancy.
+        walkPath(origin: origin, interval: cell * 0.5, step: plot)
+    }
+
+    /// Palette of ASCII glyphs used by `drawAsciiPath`. Chosen for
+    /// visual variety while staying readable as text — mixes solid
+    /// (`*` / `#` / `@`), open (`o` / `+`), and punctuation (`.` /
+    /// `:` / `=`) shapes so the trail reads as scattered ASCII art
+    /// rather than a single repeating mark.
+    private static let asciiGlyphs: [String] = [
+        "*", "+", "x", "o", "#", ".", ":", "=", "~", "^",
+    ]
+
+    /// Cheap deterministic 64-bit hash (SplitMix64). Combined with
+    /// `strokeSeed` so each stroke gets its own glyph sequence but
+    /// the sequence is stable across redraws within a stroke (no
+    /// flicker as the trail extends frame to frame).
+    private static func splitmix(_ x: UInt64) -> UInt64 {
+        var z = x &+ 0x9E3779B97F4A7C15
+        z = (z ^ (z >> 30)) &* 0xBF58476D1CE4E5B9
+        z = (z ^ (z >> 27)) &* 0x94D049BB133111EB
+        return z ^ (z >> 31)
+    }
+
+    /// Fixed monospaced font size for the `ascii` style (pt).
+    /// `strokeWidth` is re-purposed as the thickness (glyph count
+    /// perpendicular to the path).
+    private static let asciiFontSize: CGFloat = 14
+
+    /// How fast each glyph slot reshuffles. The picker seed is
+    /// quantised by `floor(time * frequency)`, so a frequency of
+    /// 8 means each slot can pick a fresh glyph 8 times per second.
+    /// Slow enough to read as flicker, fast enough to feel alive.
+    private static let asciiGlyphFlickerHz: Double = 8
+
+    /// ASCII-art style: place varied glyphs along the path, tinted
+    /// with the resolved trail colour. Monospaced font so the
+    /// rhythm reads as text. Glyph at each position is picked
+    /// deterministically from `asciiGlyphs` via `strokeSeed`,
+    /// giving each stroke its own randomised mix. `strokeWidth` is
+    /// re-purposed as **thickness in glyphs**: a `width = 3` trail
+    /// lays down a 3-glyph-wide band perpendicular to the path.
+    private func drawAsciiPath(origin: CGPoint, cursor: CGPoint,
+                                color: NSColor, outline: NSColor?) {
+        let fontSize = Self.asciiFontSize
+        let font = NSFont.monospacedSystemFont(ofSize: fontSize,
+                                                weight: .bold)
+        // `color-outline` on ascii means **backing rect** (cmatrix
+        // feel), not glyph stroke: each glyph gets painted onto a
+        // solid block of the outline colour. A black outline + green
+        // accent gives the classic Matrix-rain look. Earlier this
+        // used `.strokeColor` for outlined characters, but that
+        // produced "outlined letters" rather than the terminal
+        // backdrop users actually expected.
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .foregroundColor: color.withAlphaComponent(0.95),
+        ]
+        // Pre-build one NSAttributedString per palette entry — cheap
+        // cache (~10 small strings) so the per-step draw doesn't
+        // re-allocate.
+        let glyphs = Self.asciiGlyphs.map {
+            NSAttributedString(string: $0, attributes: attrs)
+        }
+        // Monospaced font → every glyph reports the same width, so a
+        // single size value is correct for placement.
+        let glyphSize = glyphs[0].size()
+        let interval = fontSize * 0.9
+        let thickness = max(1, Int(strokeWidth.rounded()))
+        let offsetBase = CGFloat(thickness - 1) / 2
+        let seed = strokeSeed
+        // Time-quantised component so the picker shuffles each slot
+        // a few times per second — the trail's glyphs flicker as the
+        // animation tick redraws the view, without changing so fast
+        // they smear into noise.
+        let timeTick = UInt64(
+            (CACurrentMediaTime() * Self.asciiGlyphFlickerHz)
+                .rounded(.down))
+        var index: UInt64 = 0
+        let backing = outline?.withAlphaComponent(0.95)
+        let draw: (CGPoint, CGPoint) -> Void = { p, tangent in
+            // Normal to the path: rotate tangent 90°.
+            let nx = -tangent.y
+            let ny =  tangent.x
+            for i in 0..<thickness {
+                let d = (CGFloat(i) - offsetBase) * glyphSize.width
+                let cx = p.x + nx * d
+                let cy = p.y + ny * d
+                let pick = Int(
+                    Self.splitmix(seed &+ index &+ (timeTick &<< 16))
+                        % UInt64(glyphs.count))
+                index &+= 1
+                // Centre the glyph on the offset point.
+                let r = NSRect(x: cx - glyphSize.width / 2,
+                               y: cy - glyphSize.height / 2,
+                               width: glyphSize.width,
+                               height: glyphSize.height)
+                if let backing {
+                    backing.setFill()
+                    NSBezierPath(rect: r).fill()
+                }
+                glyphs[pick].draw(in: r)
+            }
+        }
+        walkPath(origin: origin, interval: interval, step: draw)
+    }
+
+    /// Rainbow-road palette — spectrum-ordered (ROYGBIV) so the
+    /// trail reads as a rainbow track. Indexed by `(cellIndex / 4)`
+    /// so every 4 consecutive cells share a colour, giving the
+    /// track its segment-like rhythm.
+    private static let rainbowRoadColors: [NSColor] = [
+        .systemRed, .systemOrange, .systemYellow, .systemGreen,
+        .systemBlue, .systemIndigo, .systemPurple,
+    ]
+
+    /// Rainbow-road-themed pixel variant: same fixed-cell grid as
+    /// `drawPixelPath`, but the fill colour steps through a
+    /// spectrum-ordered palette every 4 cells. When the in-progress
+    /// shape can no longer reach any rule (`!valid`), the whole trail
+    /// switches to `color` (= the resolved no-match colour) so the
+    /// failure signal still reads even with the bespoke palette.
+    private func drawRainbowRoadPath(origin: CGPoint, cursor: CGPoint,
+                                      color: NSColor,
+                                      outline: NSColor?) {
+        let cell = Self.pixelCellSize
+        let thickness = max(1, Int(strokeWidth.rounded()))
+        let offsetBase = CGFloat(thickness - 1) / 2
+        var seen = Set<UInt64>()
+        // Cell counter drives both the dedup key and the colour
+        // rotation. Bumped per *placed* cell (not per attempted) so
+        // a track segment's 4 cells stay the same colour even when
+        // some would-be cells are skipped by dedup.
+        var cellIndex = 0
+        let useFallback = !valid
+        let outlineFill = outline?.withAlphaComponent(0.95)
+        let plot: (CGPoint, CGPoint) -> Void = { p, tangent in
+            let nx = -tangent.y
+            let ny =  tangent.x
+            for i in 0..<thickness {
+                let d = (CGFloat(i) - offsetBase) * cell
+                let cx = p.x + nx * d
+                let cy = p.y + ny * d
+                let gx = Int((cx / cell).rounded(.down))
+                let gy = Int((cy / cell).rounded(.down))
+                let key = (UInt64(bitPattern: Int64(Int32(gx))) << 32)
+                    | UInt64(UInt32(bitPattern: Int32(gy)))
+                guard seen.insert(key).inserted else { continue }
+                let fill: NSColor
+                if useFallback {
+                    fill = color
+                } else {
+                    let pick = (cellIndex / 4)
+                        % Self.rainbowRoadColors.count
+                    fill = Self.rainbowRoadColors[pick]
+                }
+                cellIndex += 1
+                let rect = NSRect(x: CGFloat(gx) * cell,
+                                  y: CGFloat(gy) * cell,
+                                  width: cell, height: cell)
+                if let outlineFill {
+                    outlineFill.setFill()
+                    NSBezierPath(rect: rect).fill()
+                    fill.withAlphaComponent(0.95).setFill()
+                    NSBezierPath(rect: rect.insetBy(dx: 1, dy: 1))
+                        .fill()
+                } else {
+                    fill.withAlphaComponent(0.95).setFill()
+                    NSBezierPath(rect: rect).fill()
+                }
+            }
+        }
+        walkPath(origin: origin, interval: cell * 0.5, step: plot)
+    }
+
+    /// Fixed sizes for the Pac-Man trail. Pellet = small dot lining
+    /// the path; face = larger wedge that lags behind the cursor by
+    /// `pacmanFaceLag` pt so it reads as Pac-Man running along the
+    /// trail rather than sitting flat on the cursor.
+    private static let pacmanPelletDiameter: CGFloat = 4
+    private static let pacmanPelletInterval: CGFloat = 14
+    private static let pacmanFaceRadius: CGFloat = 10
+    /// Mouth half-angle bounds (degrees). The face animates between
+    /// these via `cos`, giving the classic open-close chomp.
+    /// `min` is just above zero so the mouth doesn't fully close
+    /// (a sealed circle reads as "not Pac-Man anymore").
+    private static let pacmanMouthHalfAngleMinDeg: CGFloat = 5
+    private static let pacmanMouthHalfAngleMaxDeg: CGFloat = 45
+    /// Chomp frequency (Hz). The cosine drive makes one full
+    /// open→close→open cycle per period; ~4 Hz lands near the feel
+    /// of the original arcade animation.
+    private static let pacmanChompHz: Double = 4
+    /// How far back along the path Pac-Man's face sits behind the
+    /// live cursor (pt). Tuned by feel — too small reads as
+    /// "Pac-Man sitting on the cursor" (no chase), too large feels
+    /// like Pac-Man can never catch up. 50pt = roughly 2.5 face
+    /// widths of gap, which lands as "actively chasing".
+    private static let pacmanFaceLag: CGFloat = 50
+
+    /// Pac-Man-themed trail: the cursor lays a single line of pellet
+    /// dots along the path (origin → cursor), and the Pac-Man face
+    /// chases along that same path `pacmanFaceLag` pt behind the
+    /// cursor. `strokeWidth` is interpreted as a **scale multiplier**
+    /// here — `width = 1` gives the default pellet / face size and
+    /// spacing, higher values scale everything up proportionally.
+    /// The arcade aesthetic is always a single line of pellets, so
+    /// thickness rows would fight the visual.
+    private func drawPacmanPath(origin: CGPoint, cursor: CGPoint,
+                                 color: NSColor, outline: NSColor?) {
+        let scale = max(1, strokeWidth)
+        let dot = Self.pacmanPelletDiameter * scale
+        let interval = Self.pacmanPelletInterval * scale
+        let faceLag = Self.pacmanFaceLag * scale
+        let faceRadius = Self.pacmanFaceRadius * scale
+        let pelletFill = color.withAlphaComponent(0.9)
+        let outlineFill = outline?.withAlphaComponent(0.9)
+        let outlinePad = max(1, scale)
+
+        // 1) Locate where Pac-Man's face sits this frame: walk the
+        // path with the lag as `trimTail` — the final step the walker
+        // emits is exactly the cutoff point. Skip drawing in this
+        // pass; we only need the coordinate + tangent.
+        var faceAnchor: (point: CGPoint, tangent: CGPoint)?
+        walkPath(origin: origin,
+                 interval: interval,
+                 trimTail: faceLag) { p, tangent in
+            faceAnchor = (p, tangent)
+        }
+
+        // 2) Draw the pellets across the full path (no trim) so the
+        // dot trail extends from origin all the way to the cursor.
+        // Single line — no thickness stacking.
+        let plot: (CGPoint, CGPoint) -> Void = { p, _ in
+            if let outlineFill {
+                outlineFill.setFill()
+                let outer = NSRect(x: p.x - dot / 2 - outlinePad,
+                                   y: p.y - dot / 2 - outlinePad,
+                                   width: dot + outlinePad * 2,
+                                   height: dot + outlinePad * 2)
+                NSBezierPath(ovalIn: outer).fill()
+            }
+            pelletFill.setFill()
+            let rect = NSRect(x: p.x - dot / 2, y: p.y - dot / 2,
+                              width: dot, height: dot)
+            NSBezierPath(ovalIn: rect).fill()
+        }
+        walkPath(origin: origin, interval: interval, step: plot)
+
+        // 3) Draw the face. Path too short for a meaningful lag (just
+        // pressed the button) → fall back to the cursor so the face
+        // is visible immediately instead of hiding for the first
+        // stretch of motion.
+        if let anchor = faceAnchor {
+            drawPacmanFace(at: anchor.point, tangent: anchor.tangent,
+                            radius: faceRadius,
+                            color: color, outline: outline)
+        } else {
+            drawPacmanFace(at: cursor, tangent: CGPoint(x: 1, y: 0),
+                            radius: faceRadius,
+                            color: color, outline: outline)
+        }
+    }
+
+    /// Draw a closed pie wedge centred on `p`, with the mouth
+    /// opening (an angular slice cut out) facing along `tangent`.
+    /// The mouth half-angle oscillates between
+    /// `pacmanMouthHalfAngleMin/MaxDeg` at `pacmanChompHz` so the
+    /// face chomps as it travels. Angles are in degrees for
+    /// `NSBezierPath.appendArc`; the wedge sweeps the long way
+    /// around (counter-clockwise from `+mouthHalf` to `-mouthHalf`)
+    /// so the "closed" portion of the face fills.
+    private func drawPacmanFace(at p: CGPoint, tangent: CGPoint,
+                                 radius: CGFloat,
+                                 color: NSColor, outline: NSColor?) {
+        // Cosine remap to [0, 1]: 0 at min mouth, 1 at max mouth.
+        let phase = (1 - cos(CACurrentMediaTime() * 2 * .pi
+                              * Self.pacmanChompHz)) / 2
+        let mouthHalf = Self.pacmanMouthHalfAngleMinDeg
+            + (Self.pacmanMouthHalfAngleMaxDeg
+                - Self.pacmanMouthHalfAngleMinDeg) * CGFloat(phase)
+        let dirDeg = atan2(tangent.y, tangent.x) * 180 / .pi
+        let startDeg = dirDeg + mouthHalf
+        let endDeg = dirDeg - mouthHalf
+        // Optional outer wedge in the outline colour. Rim width
+        // scales with the face radius so it stays proportionally
+        // visible at any `strokeWidth`.
+        if let outline {
+            let outer = NSBezierPath()
+            outer.move(to: p)
+            outer.appendArc(withCenter: p,
+                             radius: radius + max(1.5, radius * 0.15),
+                             startAngle: startDeg, endAngle: endDeg,
+                             clockwise: false)
+            outer.close()
+            outline.withAlphaComponent(0.95).setFill()
+            outer.fill()
+        }
+        let path = NSBezierPath()
+        path.move(to: p)
+        path.appendArc(withCenter: p, radius: radius,
+                        startAngle: startDeg, endAngle: endDeg,
+                        clockwise: false)
+        path.close()
+        color.withAlphaComponent(0.95).setFill()
+        path.fill()
     }
 
     /// Snap `p` onto the axis defined by `dir` and the point `from` —
@@ -751,34 +1311,59 @@ private final class TrailView: NSView {
         }
     }
 
-    /// Filled triangle pointing along `direction`, with its tip at
-    /// `tip`. Sized off `strokeWidth` so it scales with the trail.
-    private func drawArrowhead(at tip: CGPoint, direction: Direction,
-                                color: NSColor) {
-        let len = strokeWidth * 4
-        let half = strokeWidth * 2.5
-        let path = NSBezierPath()
-        let p1: CGPoint, p2: CGPoint
-        switch direction {
-        case .right:
-            p1 = CGPoint(x: tip.x - len, y: tip.y - half)
-            p2 = CGPoint(x: tip.x - len, y: tip.y + half)
-        case .left:
-            p1 = CGPoint(x: tip.x + len, y: tip.y - half)
-            p2 = CGPoint(x: tip.x + len, y: tip.y + half)
-        case .up:
-            p1 = CGPoint(x: tip.x - half, y: tip.y - len)
-            p2 = CGPoint(x: tip.x + half, y: tip.y - len)
-        case .down:
-            p1 = CGPoint(x: tip.x - half, y: tip.y + len)
-            p2 = CGPoint(x: tip.x + half, y: tip.y + len)
+    /// Continuous arrow chain along the path — filled chevron glyphs
+    /// (`>`) rotated to follow the local tangent, so the trail reads
+    /// as `-->-->-->` pointing toward the cursor. Each chevron is
+    /// rendered as a small NSBezierPath (two strokes that meet at a
+    /// point) instead of a text glyph so the rotation is per-pixel
+    /// crisp at any angle and the size scales cleanly with
+    /// `strokeWidth`.
+    private func drawArrowChainPath(origin: CGPoint, cursor: CGPoint,
+                                     color: NSColor,
+                                     outline: NSColor?) {
+        // Geometry scales with `strokeWidth`: a `width = 3` (the
+        // default) chevron is ~12pt long with a ~9pt half-height,
+        // and chevrons sit ~14pt apart. Higher widths grow
+        // proportionally; the chain density stays the same.
+        let len = max(8, strokeWidth * 4)
+        let half = max(5, strokeWidth * 3)
+        let lineWidth = max(1.5, strokeWidth * 0.8)
+        let interval = max(len * 1.4, strokeWidth * 5)
+        let stroke = color.withAlphaComponent(0.95)
+        let outlineStroke = outline?.withAlphaComponent(0.95)
+        let drawChevron: (CGPoint, CGPoint) -> Void = { p, tangent in
+            // Tangent gives the forward direction (the open side of
+            // the `>`). The chevron's two arms reach BACK from the
+            // tip, each at a fixed angle to the tangent.
+            let tx = tangent.x, ty = tangent.y
+            // Perpendicular (90° CCW): (-ty, tx).
+            let nx = -ty, ny = tx
+            // Tip = a bit ahead of `p`; back-corners are length `len`
+            // behind the tip, ±`half` along the normal.
+            let tipX = p.x + tx * (len * 0.4)
+            let tipY = p.y + ty * (len * 0.4)
+            let backCenterX = p.x - tx * (len * 0.6)
+            let backCenterY = p.y - ty * (len * 0.6)
+            let p1 = CGPoint(x: backCenterX + nx * half,
+                             y: backCenterY + ny * half)
+            let p2 = CGPoint(x: backCenterX - nx * half,
+                             y: backCenterY - ny * half)
+            let path = NSBezierPath()
+            path.move(to: p1)
+            path.line(to: CGPoint(x: tipX, y: tipY))
+            path.line(to: p2)
+            path.lineCapStyle = .round
+            path.lineJoinStyle = .round
+            if let outlineStroke {
+                outlineStroke.setStroke()
+                path.lineWidth = lineWidth + 2
+                path.stroke()
+            }
+            stroke.setStroke()
+            path.lineWidth = lineWidth
+            path.stroke()
         }
-        path.move(to: tip)
-        path.line(to: p1)
-        path.line(to: p2)
-        path.close()
-        color.withAlphaComponent(0.95).setFill()
-        path.fill()
+        walkPath(origin: origin, interval: interval, step: drawChevron)
     }
 
     // MARK: - HUD layout
@@ -813,7 +1398,7 @@ private final class TrailView: NSView {
             }
             let gap: CGFloat = 24
             for (arrow, rows) in byDir {
-                let s = cardText(rows)
+                let s = cardText(rows, textMode: cardTextMode)
                 let size = cardSize(s)
                 let o: CGPoint
                 switch arrow {
@@ -829,7 +1414,9 @@ private final class TrailView: NSView {
                     text: s, fill: nil))
             }
             if !fires.isEmpty {
-                let s = cardText(fires)
+                let s = cardText(fires,
+                                  textMode: cardFiresTextMode
+                                    ?? cardTextMode)
                 let size = cardSize(s)
                 // Fires card fill: accent on its own over blur (alpha
                 // 0.5 lets the frost show through). Without blur the
@@ -862,10 +1449,19 @@ private final class TrailView: NSView {
                         break
                     }
                 }
+                // Firing card body: theme/config can override the
+                // historical "trail accent as fill" with its own
+                // palette (e.g. pacman's rainbow flash) via
+                // `cardFiresMode`. Fall back to the trail accent
+                // when unset.
+                let firesBase = cardFiresMode?.currentColor(
+                    at: CACurrentMediaTime(),
+                    strokeSeed: strokeSeed,
+                    cyclePeriod: colorCyclePeriod) ?? accent
                 cardLayouts.append(CardLayout(
                     kind: .fires,
                     rect: firesRect, text: s,
-                    fill: accent.withAlphaComponent(firesAlpha)))
+                    fill: firesBase.withAlphaComponent(firesAlpha)))
             }
             // With blur disabled, regular cards still need a fill —
             // the frost would have been their backdrop. Re-run and
@@ -1086,8 +1682,12 @@ private final class TrailView: NSView {
     /// One card's text. Directional cards (`fires == false` rows)
     /// stay tab-aligned past the widest arrows. The firing card has
     /// no arrows left, so it drops the tab — its accent-tinted fill
-    /// (set in `layoutHUD`) does the "firing" signal; text stays white.
-    fileprivate func cardText(_ rows: [GestureHint.Row]) -> NSAttributedString {
+    /// (set in `layoutHUD`) does the "firing" signal. `textMode`
+    /// lets the caller pick a different colour for the firing card
+    /// (`cardFiresTextMode`) from the directional cards
+    /// (`cardTextMode`).
+    fileprivate func cardText(_ rows: [GestureHint.Row],
+                               textMode: TrailColorMode) -> NSAttributedString {
         let arrowFont = Self.mono(cardFontSize + 1, .semibold)
         var arrowMax: CGFloat = 0
         for r in rows {
@@ -1101,16 +1701,24 @@ private final class TrailView: NSView {
             para.tabStops = [NSTextTab(textAlignment: .left, location: arrowMax + 12)]
         }
 
+        // Resolve current text colour from the supplied mode —
+        // honours dynamic tokens (`rainbow` / `neon` / `splatoon`)
+        // alongside static hex / named values.
+        let textColor = textMode.currentColor(
+            at: CACurrentMediaTime(),
+            strokeSeed: strokeSeed,
+            cyclePeriod: colorCyclePeriod)
+
         let s = NSMutableAttributedString()
         for (i, r) in rows.enumerated() {
             if i > 0 { s.append(NSAttributedString(string: "\n")) }
             if !r.suffix.isEmpty {
                 s.append(NSAttributedString(string: r.suffix, attributes: [
-                    .font: arrowFont, .foregroundColor: NSColor.white]))
+                    .font: arrowFont, .foregroundColor: textColor]))
             }
             s.append(NSAttributedString(string: (useTab ? "\t" : "") + r.name, attributes: [
                 .font: Self.mono(cardFontSize, .regular),
-                .foregroundColor: NSColor.white]))
+                .foregroundColor: textColor]))
         }
         s.addAttribute(.paragraphStyle, value: para,
                        range: NSRange(location: 0, length: s.length))

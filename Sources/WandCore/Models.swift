@@ -238,6 +238,42 @@ public enum TrailStyle: String, Sendable, Hashable, CaseIterable {
     case normal
     case dashed
     case dotted
+    /// Pixel-art / retro 8-bit feel: trail is rasterised to a coarse
+    /// square grid and drawn as filled cells, so the line reads as a
+    /// chunky stepped pixel run instead of a smooth bezier. Colour
+    /// still flows from `[cast.overlay.trail].color` per the
+    /// "shape-only, not colour" invariant.
+    case pixel
+    /// ASCII-art trail: monospaced glyphs (`*`) placed at fixed
+    /// intervals along the path, tinted with the trail colour. Same
+    /// colour invariant as the other styles.
+    case ascii
+    /// Rainbow-road-themed pixel variant: same cell grid as
+    /// `pixel`, but every 4 consecutive cells step through a
+    /// spectrum-ordered palette (red → orange → yellow → green →
+    /// blue → indigo → purple), so the trail reads as a
+    /// rainbow track segment travelling along the path.
+    /// **Style-specific exception to the "shape-only, not colour"
+    /// invariant** — the palette IS the identity. `color-no-match`
+    /// is still honoured: when the shape can no longer reach any
+    /// rule, the whole trail switches to the no-match colour so
+    /// the failure signal survives.
+    case rainbowRoad = "rainbow-road"
+    /// Pac-Man-themed: ASCII-style pellets (`·` dots) line the
+    /// path, and a forward-facing Pac-Man wedge follows the cursor
+    /// with its mouth open along the current direction. Colour
+    /// flows from the trail colour just like the other styles —
+    /// match-vs-no-match signal preserved.
+    case pacman
+    /// Continuous arrow chain along the entire path — repeated
+    /// chevron glyphs (`>`) rotated to match the path tangent so the
+    /// trail reads as `-->-->-->` flowing toward the cursor.
+    /// Replaces the cursor-only `arrowhead = true` indicator (its
+    /// retired knob); use `arrow` whenever the goal is "show
+    /// direction along the whole path", and any other style with
+    /// the arrowhead-on-cursor look in mind needs to switch to
+    /// `arrow` explicitly.
+    case arrow
 }
 
 /// The window the stroke acts on. Resolved at *button-down* time —

@@ -414,44 +414,44 @@ enum WandApp {
                 ).currentColor(at: CACurrentMediaTime(),
                                strokeSeed: UInt64.random(in: 0..<UInt64.max),
                                cyclePeriod: TimeInterval(
-                                cfg.overlay.trail.colorCycleMs) / 1000.0)
+                                cfg.overlay.colorCycleMs) / 1000.0)
                 let decalSpec = cfg.fire.decal
                 if decalSpec.kind != .off, decalSpec.durationMs > 0 {
-                    // Resolve the decal colour from its own knob,
-                    // falling back to the trail colour when unset.
-                    // `"splatoon"` re-rolls the hue per-fire from the
-                    // built-in palette AND passes the full palette
-                    // through so each splat unit inside the decal can
-                    // pick its own colour (Splatoon "multi-shot": two
-                    // splats in one decal can land different team
-                    // colours).
-                    let decalColor: NSColor
-                    let decalPalette: [NSColor]
-                    switch decalSpec.color.trimmingCharacters(
-                        in: .whitespaces).lowercased() {
-                    case "", "trail":
-                        decalColor = color
-                        decalPalette = []
-                    case "splatoon":
-                        decalColor = NSColorParse.randomSplatoonInk()
-                        decalPalette = NSColorParse.splatoonInks
-                    default:
-                        decalColor = NSColorParse.nsColor(decalSpec.color)
-                            ?? color
-                        decalPalette = []
-                    }
+                    // Decal is always the Splatoon multi-team palette
+                    // (#115 dropped the `color` knob). The full
+                    // palette flows through so each splat unit can
+                    // pick its own team colour — the Splatoon
+                    // "multi-shot" feel where one decal lands a
+                    // mix of team inks at the cursor.
                     decalManager.emit(
-                        at: cocoaPoint, color: decalColor,
-                        palette: decalPalette,
+                        at: cocoaPoint,
+                        color: NSColorParse.randomSplatoonInk(),
+                        palette: NSColorParse.splatoonInks,
                         kind: decalSpec.kind,
                         durationSec: TimeInterval(decalSpec.durationMs)
                             / 1000.0,
                         size: CGFloat(decalSpec.size))
                 }
                 if cfg.fire.burst.kind == .burst {
+                    // Resolve burst colour with the same three-mode
+                    // grammar as decal: `""` / `"trail"` inherits the
+                    // trail accent, `"splatoon"` picks a random ink,
+                    // anything else parses as static colour.
+                    let burstSpec = cfg.fire.burst
+                    let burstColor: NSColor
+                    switch burstSpec.color.trimmingCharacters(
+                        in: .whitespaces).lowercased() {
+                    case "", "trail":
+                        burstColor = color
+                    case "splatoon":
+                        burstColor = NSColorParse.randomSplatoonInk()
+                    default:
+                        burstColor = NSColorParse.nsColor(
+                            burstSpec.color) ?? color
+                    }
                     burstManager.emit(
-                        at: cocoaPoint, color: color,
-                        kind: cfg.fire.burst.kind,
+                        at: cocoaPoint, color: burstColor,
+                        kind: burstSpec.kind,
                         intensity: cfg.intensity.multiplier)
                 }
             }

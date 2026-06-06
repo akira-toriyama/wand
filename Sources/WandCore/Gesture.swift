@@ -15,6 +15,168 @@
 
 import Foundation
 
+// MARK: - Theme
+
+/// Coordinated colour palette for the cast HUD — supplies defaults
+/// for `[cast.overlay.trail]` + `[cast.overlay.cards]` colour
+/// fields. Individual config keys override per field, so
+/// `theme = "terminal"` + `color = "red"` gives a Terminal HUD
+/// with a red trail line.
+public struct CastThemePalette: Sendable, Equatable {
+    public let trailColor: String
+    public let trailColorNoMatch: String
+    public let trailColorOutline: String
+    public let cardsBorderColor: String
+    public let cardsBodyColor: String
+    public let cardsTextColor: String
+    /// Body fill for the **firing** card. Empty = inherit the trail
+    /// accent (the historical behaviour). Themes that want a
+    /// distinct firing-card flash override this without touching
+    /// the trail colour.
+    public let cardsFiresColor: String
+    /// Text colour for the **firing** card only. Empty = inherit
+    /// `cardsTextColor`. Lets a theme invert the firing card cleanly
+    /// — e.g. directional cards use yellow-on-black, firing card
+    /// flips to black-on-yellow.
+    public let cardsFiresTextColor: String
+    /// Burst particle colour. Empty = inherit `trail.color`. Same
+    /// grammar as the trail colour fields.
+    public let burstColor: String
+
+    // Note: a `decalColor` entry lived here through #114 but was
+    // retired alongside `[cast.fire.decal].color` — decal is always
+    // the Splatoon multi-team palette when enabled.
+
+    public init(trailColor: String, trailColorNoMatch: String,
+                trailColorOutline: String,
+                cardsBorderColor: String, cardsBodyColor: String,
+                cardsTextColor: String,
+                cardsFiresColor: String = "",
+                cardsFiresTextColor: String = "",
+                burstColor: String = "") {
+        self.trailColor = trailColor
+        self.trailColorNoMatch = trailColorNoMatch
+        self.trailColorOutline = trailColorOutline
+        self.cardsBorderColor = cardsBorderColor
+        self.cardsBodyColor = cardsBodyColor
+        self.cardsTextColor = cardsTextColor
+        self.cardsFiresColor = cardsFiresColor
+        self.cardsFiresTextColor = cardsFiresTextColor
+        self.burstColor = burstColor
+    }
+}
+
+/// `[cast].theme` — picks a coordinated palette for the cast HUD.
+/// Each theme supplies defaults for trail + cards colour fields;
+/// individual keys still override the theme value when explicitly
+/// set in the TOML (non-empty string). Unknown names clamp to
+/// `.default`, which preserves the historical hard-coded values.
+public enum CastTheme: String, Sendable, CaseIterable {
+    case `default`
+    case terminal
+    case neon
+    case splatoon
+    case rainbow
+    case mono
+    case vapor
+    case pacman
+
+    // Note: a `paper` (light-background) theme lived here through
+    // #115 but was retired — wand's HUD overlays a dark blur on
+    // whatever's behind, so a light theme's dark trail blended into
+    // the dark backing and the bright cards floated as detached
+    // patches. Light themes need a different overlay model than what
+    // wand ships, so dropping the option beats shipping one that
+    // reads as broken.
+
+    public var palette: CastThemePalette {
+        switch self {
+        case .default:
+            return CastThemePalette(
+                trailColor: "#3b82f6",
+                trailColorNoMatch: "#ef4444",
+                trailColorOutline: "",
+                cardsBorderColor: "",
+                cardsBodyColor: "",
+                cardsTextColor: "")
+        case .terminal:
+            return CastThemePalette(
+                trailColor: "#22c55e",
+                trailColorNoMatch: "#fbbf24",
+                trailColorOutline: "#000000",
+                cardsBorderColor: "#22c55e",
+                cardsBodyColor: "#000000",
+                cardsTextColor: "#22c55e")
+        case .neon:
+            return CastThemePalette(
+                trailColor: "neon",
+                trailColorNoMatch: "#ec4899",
+                trailColorOutline: "#000000",
+                cardsBorderColor: "neon",
+                cardsBodyColor: "#0f0a1f",
+                cardsTextColor: "#ffffff")
+        case .splatoon:
+            return CastThemePalette(
+                trailColor: "splatoon",
+                trailColorNoMatch: "#000000",
+                trailColorOutline: "#ffffff",
+                cardsBorderColor: "splatoon",
+                cardsBodyColor: "#1a1a1a",
+                cardsTextColor: "#ffffff",
+                // Burst inherits trail (one team's colour per stroke,
+                // matching the line). Decal is always Splatoon
+                // multi-team regardless of theme.
+                burstColor: "")
+        case .rainbow:
+            return CastThemePalette(
+                trailColor: "rainbow",
+                trailColorNoMatch: "#1a1a1a",
+                trailColorOutline: "#ffffff",
+                cardsBorderColor: "rainbow",
+                cardsBodyColor: "#000000",
+                cardsTextColor: "#ffffff")
+        case .mono:
+            return CastThemePalette(
+                trailColor: "#ffffff",
+                trailColorNoMatch: "#ef4444",
+                trailColorOutline: "#000000",
+                cardsBorderColor: "#ffffff",
+                cardsBodyColor: "#000000",
+                cardsTextColor: "#ffffff")
+        case .vapor:
+            return CastThemePalette(
+                trailColor: "#ff79c6",
+                trailColorNoMatch: "#50fa7b",
+                trailColorOutline: "#6272a4",
+                cardsBorderColor: "#ff79c6",
+                cardsBodyColor: "#282a36",
+                cardsTextColor: "#f8f8f2")
+        case .pacman:
+            // Pac-Man arcade palette: yellow Pac-Man on a black
+            // backdrop, red-ghost no-match. The yellow accent pairs
+            // particularly well with `style = "pacman"`, where the
+            // wedge face inherits the trail colour and ends up the
+            // canonical arcade yellow.
+            //
+            // Card scheme is a deliberate two-state design:
+            //   directional cards — yellow pellet body + black text
+            //   firing card       — INVERTED (black body + yellow
+            //                       text), so the "fires on release"
+            //                       moment reads as a sharp colour
+            //                       flip rather than a flashy effect.
+            return CastThemePalette(
+                trailColor: "#ffea00",
+                trailColorNoMatch: "#ff0000",
+                trailColorOutline: "#000000",
+                cardsBorderColor: "#ffea00",
+                cardsBodyColor: "#ffea00",
+                cardsTextColor: "#000000",
+                cardsFiresColor: "#000000",
+                cardsFiresTextColor: "#ffea00")
+        }
+    }
+}
+
 // MARK: - Recognition tuning
 
 /// `[gesture.recognition]` — knobs that tune how raw mouse samples
@@ -63,41 +225,56 @@ public struct GestureOverlayTrailSpec: Sendable, Equatable {
     public let color: String
     /// While the in-progress shape can no longer reach any rule.
     public let colorNoMatch: String
+    /// Outline / underlay colour drawn behind / around the trail
+    /// so the main `color` reads against backgrounds that would
+    /// otherwise swallow it (e.g. `color = "black"` on a dark
+    /// app). Empty = no outline (historical behaviour). Same
+    /// grammar as `color`: named / hex / dynamic tokens
+    /// (`rainbow` / `neon` / `splatoon`). The exact rendering is
+    /// style-specific — bezier styles get a wider underlay stroke,
+    /// pixel / rainbow-road get a 1pt frame inset into each cell,
+    /// ascii gets a glyph stroke, pacman pellets / face get a
+    /// concentric outer ring.
+    public let colorOutline: String
     /// Stroke width in points. Clamped 1..40. Style presets may
     /// adjust this — `thin` halves, `thick` doubles, etc.
     public let width: Int
     /// Named preset bundling width × glow × dash. Shape only — colour
     /// always comes from `color` / `colorNoMatch`.
     public let style: TrailStyle
-    /// Draw an arrowhead tip at the cursor in the last-committed
-    /// direction. Independent of `style` (a `comet` or `dashed`
-    /// trail can still have or omit the tip) so the directional
-    /// indicator is its own axis. Defaults to `true` — preserves
-    /// the original hard-coded behaviour.
-    public let arrowhead: Bool
-    /// Cycle period in milliseconds for the dynamic colour modes
-    /// (`rainbow` / `neon`). Smaller = faster strobe; larger =
-    /// slower drift. Clamped 100..10000. Ignored by static and
-    /// `splatoon` modes (the latter is per-stroke fixed).
-    public let colorCycleMs: Int
+    // Note: an `arrowhead` (cursor-tip glyph) field lived here
+    // through #115 but was retired in favour of the `arrow`
+    // TrailStyle, which draws a continuous chevron chain along the
+    // whole path. The cursor-only tip wasn't expressive enough and
+    // duplicated direction information the path itself already
+    // carried.
     /// How long (ms) the trail lingers after a gesture fires.
     /// Clamped 0..2000; `0` = instant clear.
     public let finalHoldMs: Int
+    /// When `true`: each time a turn is detected (e.g. `D` → `L`
+    /// in `DLD`), the just-completed segment snaps onto its axis
+    /// so it renders as an orthogonal straight line — the trail
+    /// looks like a Figma diagram of the gesture.
+    /// When `false` (default): every segment stays as the raw
+    /// freehand polyline through the actual mouse samples — the
+    /// trail looks like a hand-drawn sketch. Recognition is
+    /// unaffected either way; this is a render-only knob.
+    public let straightenOnTurn: Bool
 
     public init(color: String = "#3b82f6",
                 colorNoMatch: String = "#ef4444",
+                colorOutline: String = "",
                 width: Int = 3,
                 style: TrailStyle = .normal,
-                arrowhead: Bool = true,
-                colorCycleMs: Int = 2000,
-                finalHoldMs: Int = 400) {
+                finalHoldMs: Int = 400,
+                straightenOnTurn: Bool = false) {
         self.color = color
         self.colorNoMatch = colorNoMatch
+        self.colorOutline = colorOutline
         self.width = width
         self.style = style
-        self.arrowhead = arrowhead
-        self.colorCycleMs = colorCycleMs
         self.finalHoldMs = finalHoldMs
+        self.straightenOnTurn = straightenOnTurn
     }
 
     public static let `default` = GestureOverlayTrailSpec()
@@ -154,17 +331,41 @@ public struct GestureOverlayCardsSpec: Sendable, Equatable {
     /// "this rule fires on release" signal stays visible. Same
     /// grammar as `borderColor`; dynamic modes work here too.
     public let bodyColor: String
+    /// Card text colour (rule name + direction arrows). Empty falls
+    /// back to white — the historical hard-coded value. Same grammar
+    /// as `borderColor` / `bodyColor`: named / hex / dynamic tokens
+    /// (`rainbow` / `neon` / `splatoon`).
+    public let textColor: String
+    /// Body fill colour for the **firing** card (the one that will
+    /// trigger on release). Empty falls back to the trail accent —
+    /// the historical "this card fires on release" tint. Same
+    /// grammar as the other colour fields, including dynamic tokens.
+    /// Useful for themes that want the firing card to flash
+    /// differently from the trail.
+    public let firesColor: String
+    /// Text colour for the **firing** card only. Empty falls back
+    /// to `textColor` (= the same text colour as directional
+    /// cards). Lets a theme invert the firing card cleanly — e.g.
+    /// directional cards use yellow-on-black, firing card uses
+    /// black-on-yellow.
+    public let firesTextColor: String
 
     public init(match: Effect = .none,
                 unmatch: Effect = .none,
                 fontSize: Int = 13,
                 borderColor: String = "",
-                bodyColor: String = "") {
+                bodyColor: String = "",
+                textColor: String = "",
+                firesColor: String = "",
+                firesTextColor: String = "") {
         self.match = match
         self.unmatch = unmatch
         self.fontSize = fontSize
         self.borderColor = borderColor
         self.bodyColor = bodyColor
+        self.textColor = textColor
+        self.firesColor = firesColor
+        self.firesTextColor = firesTextColor
     }
 
     public static let `default` = GestureOverlayCardsSpec()
@@ -179,17 +380,29 @@ public struct GestureOverlaySpec: Sendable, Equatable {
     /// Frosted blur (`NSVisualEffectView`) under the HUD cards +
     /// badge. `false` falls back to a solid dark fill.
     public let blurEnabled: Bool
+    /// Cycle period in milliseconds for the dynamic colour modes
+    /// (`rainbow` / `neon`). Smaller = faster strobe; larger =
+    /// slower drift. Clamped 100..10000. Shared by trail + cards
+    /// (border / body / text) + outline — anything that resolves
+    /// a `TrailColorMode` uses this period, so a `rainbow` trail
+    /// and a `rainbow` card border cycle in lockstep. Placed at
+    /// overlay scope (not under `trail`) because of that cross-
+    /// surface scope. Ignored by static and `splatoon` modes (the
+    /// latter is per-stroke fixed).
+    public let colorCycleMs: Int
     public let trail: GestureOverlayTrailSpec
     public let badge: GestureOverlayBadgeSpec
     public let cards: GestureOverlayCardsSpec
 
     public init(enabled: Bool = true,
                 blurEnabled: Bool = true,
+                colorCycleMs: Int = 2000,
                 trail: GestureOverlayTrailSpec = .default,
                 badge: GestureOverlayBadgeSpec = .default,
                 cards: GestureOverlayCardsSpec = .default) {
         self.enabled = enabled
         self.blurEnabled = blurEnabled
+        self.colorCycleMs = colorCycleMs
         self.trail = trail
         self.badge = badge
         self.cards = cards
@@ -206,9 +419,19 @@ public struct GestureOverlaySpec: Sendable, Equatable {
 /// false`.
 public struct GestureFireBurstSpec: Sendable, Equatable {
     public let kind: TrailEndKind
+    /// Burst particle colour. Same three-mode grammar as
+    /// `[cast.fire.decal].color`:
+    ///   `""` / `"trail"`  — inherit `[cast.overlay.trail].color`
+    ///                       (the historical default — burst reads
+    ///                       as tied to the trail accent).
+    ///   `"splatoon"`     — pick a random hue from the Splatoon ink
+    ///                       palette at each fire (Turf War feel).
+    ///   `<hex / name>`   — any value `trail.color` accepts.
+    public let color: String
 
-    public init(kind: TrailEndKind = .off) {
+    public init(kind: TrailEndKind = .off, color: String = "") {
         self.kind = kind
+        self.color = color
     }
 
     public static let `default` = GestureFireBurstSpec()
@@ -224,20 +447,19 @@ public struct GestureFireDecalSpec: Sendable, Equatable {
     public let durationMs: Int
     /// Decal footprint in points. Clamped 10..500.
     public let size: Int
-    /// Colour source for the decal. Empty / `"trail"` inherits
-    /// `[cast.overlay.trail].color`; `"splatoon"` picks a random hue
-    /// from the built-in Splatoon ink palette on every fire; anything
-    /// else parses as a hex / named colour like `trail.color` itself.
-    public let color: String
+
+    // Note: a `color` knob lived here through #114 but was retired —
+    // the decal's identity is the Splatoon-style multi-team ink, and
+    // letting users force it to a single colour fought the whole
+    // point of the shape. The dispatch path now hard-codes the
+    // Splatoon palette when `kind != .off`.
 
     public init(kind: DecalKind = .off,
                 durationMs: Int = 3000,
-                size: Int = 60,
-                color: String = "") {
+                size: Int = 60) {
         self.kind = kind
         self.durationMs = durationMs
         self.size = size
-        self.color = color
     }
 
     public static let `default` = GestureFireDecalSpec()
