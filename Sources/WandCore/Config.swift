@@ -219,24 +219,15 @@ public struct WandConfig: Sendable {
             cd, key: "unmatch", section: "cast.overlay.cards", default: .none)
         let cardsFontSize = clampInt(
             cd, key: "font-size", default: 13, lo: 8, hi: 32)
-        let cardsBorderColor = { let c = cd.string("border-color")
-            return c.isEmpty ? palette.cardsBorderColor : c }()
-        let cardsBodyColor = { let c = cd.string("body-color")
-            return c.isEmpty ? palette.cardsBodyColor : c }()
-        let cardsTextColor = { let c = cd.string("text-color")
-            return c.isEmpty ? palette.cardsTextColor : c }()
-        let cardsFiresColor = { let c = cd.string("fires-color")
-            return c.isEmpty ? palette.cardsFiresColor : c }()
-        let cardsFiresTextColor = { let c = cd.string("fires-text-color")
-            return c.isEmpty ? palette.cardsFiresTextColor : c }()
+        // Card colours retired from `[cast.overlay.cards]` (#116) —
+        // sole source is now `[cast].theme`. Any stale `border-color`
+        // / `body-color` / `text-color` / `fires-color` /
+        // `fires-text-color` lines are silently dropped per wand's
+        // clamp-to-default policy. Resolution happens in
+        // `GestureOverlay.applyConfig` directly from `cfg.theme.palette`.
         let cards = GestureOverlayCardsSpec(
             match: cardsMatch, unmatch: cardsUnmatch,
-            fontSize: cardsFontSize,
-            borderColor: cardsBorderColor,
-            bodyColor: cardsBodyColor,
-            textColor: cardsTextColor,
-            firesColor: cardsFiresColor,
-            firesTextColor: cardsFiresTextColor)
+            fontSize: cardsFontSize)
 
         let overlay = GestureOverlaySpec(
             enabled: overlayEnabled,

@@ -315,57 +315,20 @@ public struct GestureOverlayCardsSpec: Sendable, Equatable {
     /// padding is fixed in pt, so a larger font expands the card
     /// naturally rather than just changing typography. Clamped 8..32.
     public let fontSize: Int
-    /// Card border colour. Empty falls back to the historical
-    /// `NSColor.white.withAlphaComponent(0.18)` (a 1pt hairline that
-    /// reads against the blurred backing). Accepts the same grammar
-    /// as `[cast.overlay.trail].color` — hex / named, plus the
-    /// dynamic tokens `"rainbow"` / `"neon"` / `"splatoon"`. Dynamic
-    /// modes share `[cast.overlay.trail].color-cycle-ms` for cadence
-    /// and the trail's per-stroke seed for `splatoon` (so the trail
-    /// and the card borders pick the same team colour each stroke).
-    public let borderColor: String
-    /// Card body fill colour for the **non-firing** (directional)
-    /// cards. Empty leaves the body transparent over the blurred
-    /// backing (historical behaviour). The firing card is always
-    /// tinted with the trail accent regardless of this knob — so the
-    /// "this rule fires on release" signal stays visible. Same
-    /// grammar as `borderColor`; dynamic modes work here too.
-    public let bodyColor: String
-    /// Card text colour (rule name + direction arrows). Empty falls
-    /// back to white — the historical hard-coded value. Same grammar
-    /// as `borderColor` / `bodyColor`: named / hex / dynamic tokens
-    /// (`rainbow` / `neon` / `splatoon`).
-    public let textColor: String
-    /// Body fill colour for the **firing** card (the one that will
-    /// trigger on release). Empty falls back to the trail accent —
-    /// the historical "this card fires on release" tint. Same
-    /// grammar as the other colour fields, including dynamic tokens.
-    /// Useful for themes that want the firing card to flash
-    /// differently from the trail.
-    public let firesColor: String
-    /// Text colour for the **firing** card only. Empty falls back
-    /// to `textColor` (= the same text colour as directional
-    /// cards). Lets a theme invert the firing card cleanly — e.g.
-    /// directional cards use yellow-on-black, firing card uses
-    /// black-on-yellow.
-    public let firesTextColor: String
+
+    // Note: per-card-colour knobs (`borderColor` / `bodyColor` /
+    // `textColor` / `firesColor` / `firesTextColor`) lived here
+    // through #116 but were retired — card colours come exclusively
+    // from `[cast].theme` now, so the trail and the cards always
+    // read as a coordinated set. `applyConfig` resolves them
+    // straight from `cfg.theme.palette`.
 
     public init(match: Effect = .none,
                 unmatch: Effect = .none,
-                fontSize: Int = 13,
-                borderColor: String = "",
-                bodyColor: String = "",
-                textColor: String = "",
-                firesColor: String = "",
-                firesTextColor: String = "") {
+                fontSize: Int = 13) {
         self.match = match
         self.unmatch = unmatch
         self.fontSize = fontSize
-        self.borderColor = borderColor
-        self.bodyColor = bodyColor
-        self.textColor = textColor
-        self.firesColor = firesColor
-        self.firesTextColor = firesTextColor
     }
 
     public static let `default` = GestureOverlayCardsSpec()

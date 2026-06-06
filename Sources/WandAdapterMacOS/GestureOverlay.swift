@@ -103,6 +103,7 @@ public final class GestureOverlay {
     /// the next flip back.
     public func applyConfig(_ cfg: WandConfig) {
         let ov = cfg.overlay
+        let palette = cfg.theme.palette
         view.matchMode = TrailColorMode.parse(
             ov.trail.color, fallback: .systemBlue)
         view.noMatchMode = TrailColorMode.parse(
@@ -122,24 +123,28 @@ public final class GestureOverlay {
         view.effectUnmatch = ov.cards.unmatch
         view.effectMatch = ov.cards.match
         view.cardFontSize = CGFloat(ov.cards.fontSize)
+        // Card colours come exclusively from the theme palette
+        // (per-card-colour knobs retired in #116). Empty palette
+        // entries fall back to the historical hard-coded values
+        // here, preserving the `theme = "default"` look.
         view.cardBorderMode = TrailColorMode.parse(
-            ov.cards.borderColor,
+            palette.cardsBorderColor,
             fallback: NSColor.white.withAlphaComponent(0.18))
-        view.cardBodyMode = ov.cards.bodyColor.isEmpty
+        view.cardBodyMode = palette.cardsBodyColor.isEmpty
             ? nil
-            : TrailColorMode.parse(ov.cards.bodyColor,
+            : TrailColorMode.parse(palette.cardsBodyColor,
                                     fallback: .clear)
-        view.cardTextMode = ov.cards.textColor.isEmpty
+        view.cardTextMode = palette.cardsTextColor.isEmpty
             ? .static(.white)
-            : TrailColorMode.parse(ov.cards.textColor,
+            : TrailColorMode.parse(palette.cardsTextColor,
                                     fallback: .white)
-        view.cardFiresMode = ov.cards.firesColor.isEmpty
+        view.cardFiresMode = palette.cardsFiresColor.isEmpty
             ? nil
-            : TrailColorMode.parse(ov.cards.firesColor,
+            : TrailColorMode.parse(palette.cardsFiresColor,
                                     fallback: .systemBlue)
-        view.cardFiresTextMode = ov.cards.firesTextColor.isEmpty
+        view.cardFiresTextMode = palette.cardsFiresTextColor.isEmpty
             ? nil
-            : TrailColorMode.parse(ov.cards.firesTextColor,
+            : TrailColorMode.parse(palette.cardsFiresTextColor,
                                     fallback: .white)
         view.effectIntensity = cfg.intensity.multiplier
         view.minStrokePx = CGFloat(cfg.recognition.minStrokePx)

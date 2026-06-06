@@ -132,18 +132,16 @@ modifiers = []
 intensity = "normal"
 
 # Coordinated colour palette for the cast HUD + fire-moment
-# effects. Sets defaults for:
-#   trail   — color / color-no-match / color-outline
-#   cards   — border-color / body-color / text-color /
-#             fires-color / fires-text-color
-#   fire    — burst.color
+# effects. Sets the colours for:
+#   trail   — color / color-no-match / color-outline (still
+#             overridable per-key under `[cast.overlay.trail]`)
+#   cards   — border / body / text / fires-body / fires-text
+#             (sole source — `[cast.overlay.cards]` no longer
+#              carries colour knobs; pick a theme to change them)
+#   fire    — burst.color (overridable under `[cast.fire.burst]`)
 # Pick a vibe and the colours are guaranteed to read well together.
 # (Decal is intentionally not themed — it always uses the Splatoon
 # multi-team ink palette, that's the identity of the effect.)
-#
-# Individual colour keys still WIN when explicitly set in the
-# TOML (non-empty string), so `theme = "terminal"` + `color =
-# "red"` gives a Terminal HUD with a red trail line.
 #
 #   "default"  — historical blue trail / red no-match / no
 #                outline; the look wand has shipped with.
@@ -403,45 +401,13 @@ unmatch = "none"      # cards that became unreachable mid-gesture
 # Clamped 8..32.
 font-size = 13
 
-# Border stroke colour for assist cards. Empty falls back to the
-# historical 18%-alpha white hairline (which reads against the
-# blurred backing). Accepts the same grammar as
-# `[cast.overlay.trail].color` — hex / named (with optional alpha
-# byte `#RRGGBBAA`), plus the dynamic tokens `"rainbow"` /
-# `"neon"` / `"splatoon"`. Dynamic modes share trail's
-# `color-cycle-ms` cadence and per-stroke seed, so the trail line
-# and the card borders cycle in lockstep.
-border-color = ""
-
-# Body fill colour for **non-firing** (directional) assist cards.
-# Empty leaves the body transparent over the blurred backing
-# (historical behaviour). The firing card is always tinted with
-# the trail accent regardless of this knob — so the "this rule
-# fires on release" signal stays loud. Same grammar as
-# `border-color` above; dynamic modes work here too.
-body-color = ""
-
-# Text colour for card labels (rule name + direction arrows).
-# Empty falls back to white — the historical hard-coded value.
-# Same grammar as `border-color` / `body-color`; dynamic modes
-# work here too. Useful when `body-color` is light enough that
-# white text washes out (set `text-color = "#000000"` etc.).
-text-color = ""
-
-# Body fill for the **firing** card (the one that triggers on
-# release). Empty falls back to the trail accent — the historical
-# "this fires on release" tint. Set to a different colour or a
-# dynamic token to make the firing card flash distinctly from
-# the trail. Used by the `pacman` theme to invert the firing
-# card body (black) against the yellow-pellet directional cards.
-fires-color = ""
-
-# Text colour for the **firing** card only. Empty falls back to
-# `text-color` (= the same colour as directional-card text).
-# Lets a theme invert the firing card cleanly — e.g. pacman uses
-# this to flip the firing card's text to yellow against its
-# black body, the opposite of directional cards' black-on-yellow.
-fires-text-color = ""
+# Card colours (border / body / text / firing-card body & text)
+# live on `[cast].theme` exclusively — pick a theme to change
+# them. The per-card-colour knobs that used to live here
+# (`border-color` / `body-color` / `text-color` / `fires-color` /
+# `fires-text-color`) were retired so card colours always read
+# as a coordinated set with the trail. Stale lines are silently
+# dropped per wand's clamp-to-default policy.
 
 
 # -----------------------------------------------------------------
