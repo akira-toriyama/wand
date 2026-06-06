@@ -5,10 +5,11 @@ Guidance for working in this repository.
 ## Terminology
 
 All UI / config terminology follows [`docs/glossary.md`](docs/glossary.md) —
-use the canonical names (assist card, badge, trail, non-activating
-panel, child panel, launcher item, AX target, …), **not** the
-`Don't call it:` synonyms. Adding or renaming a term lands in the
-same PR as the code change.
+use the canonical names (assist card, badge, trail, fire burst,
+fire decal, non-activating panel, child panel, launcher item,
+launcher layout, dynamic submenu, AX target, external trigger,
+excludes, …), **not** the `Don't call it:` synonyms. Adding or
+renaming a term lands in the same PR as the code change.
 
 ## What this is
 
@@ -336,6 +337,13 @@ Everything below depends on this contract:
   quiet. There is no `--debug` flag).
 - **Both write to `/tmp/wand.log`**; `WAND_DEBUG` also mirrors to
   stderr so foreground users see events live.
+- **`mirrorLineToStderr`** is the `--validate`-only escape hatch
+  for surfacing `Log.line` (and only `Log.line`, never `Log.debug`)
+  to stderr without flipping `debugMode`. `Log.lineCount` /
+  `Log.resetLineCount()` let the caller turn the warning stream
+  into a tally for the validation summary. Don't reach for these
+  outside `--validate`; for normal daemon foregrounding, set
+  `WAND_DEBUG=1` instead.
 - **Use `Log.debug` liberally** in EventTap / dispatch hot paths.
   It costs one bool check when disabled. Skip per-sample logging
   (mouse-moved fires too often even with the gate).
@@ -381,8 +389,10 @@ The workflow:
    stroke and fires **no actions**, so you can confirm the
    capture+recognition half without side effects. (Refuses if the
    daemon is already running — they'd fight over the tap.)
-6. **Check config** with `wand --validate` (exit 0 + rule count,
-   or exit 2).
+6. **Check config** with `wand --validate` (exit 0 + rule count +
+   warning count, or exit 2). Parser warnings (clamps / retired
+   keys / collisions / typos) mirror to stderr in addition to
+   `/tmp/wand.log` so the user sees them without tailing the log.
 
 **Known external interference to suspect first:** virtual-HID
 remappers (Karabiner-Elements, Logitech Options, some KVMs) can
@@ -417,26 +427,38 @@ stray instances before relaunching.
 ### CLI surface
 
 - **Flags**: `--validate` / `--doctor` / `--test` / `--record` /
-  `--help` (standalone), `--reload` / `--quit` / `--status`
-  (client). Verbose logging is triggered by the `WAND_DEBUG` env
-  var, not a flag — there is no `--debug` flag (passing it exits
-  `2` like any unknown flag). Any unrecognised flag exits `2` with
-  a stderr message (no silent fallback — facet's *Rule of Repair*
-  discipline). **`--test` takes an operand**
-  (the pattern), so it's handled *before* the unknown-flag scan would
-  reject that operand — keep that ordering if adding more
-  value-taking flags.
+  `--resign` / `--help` (standalone), `--reload` / `--quit` /
+  `--status` / `--show-menu` (client). Verbose logging is triggered
+  by the `WAND_DEBUG` env var, not a flag — there is no `--debug`
+  flag (passing it exits `2` like any unknown flag). Any unrecognised
+  flag exits `2` with a stderr message (no silent fallback — facet's
+  *Rule of Repair* discipline). The same loud-reject policy extends
+  to **combinations**: multiple action flags (e.g. `--reload --quit`)
+  and orphan modifier flags (e.g. `--items` without `--show-menu` /
+  `--validate`) both exit `2`. Argument processing in
+  [Main.swift](Sources/WandApp/Main.swift) runs in three passes —
+  (1) mutually-exclusive-action check, (2) unknown-flag scan with
+  per-flag operand arities (incl. `--test PATTERN [BUNDLE-ID]`
+  inline), (3) orphan-modifier check — then dispatches. Keep that
+  ordering when adding flags; in particular, register any new
+  value-bearing flag in `valueArities` so its operand doesn't get
+  flagged as "unknown".
 - **`--doctor`** reports Accessibility (`AXTarget.isTrusted()`),
   config, daemon liveness, and a live tap probe
   (`MacOSMouseSource.canInstallTap()` — a listen-only tap created and
   torn down). Exit 1 if AX/tap fail. **`--test PATTERN [bundle-id]`**
   dry-runs `Matcher` against config (no event tap touched).
-- **`--reload` / `--quit` talk to the running daemon over
-  Distributed Notification Center** (`com.wand.app.control`,
+- **`--reload` / `--quit` / `--show-menu` talk to the running
+  daemon over Distributed Notification Center**
+  (`com.wand.app.control`,
   see [Sources/WandApp/Control.swift](Sources/WandApp/Control.swift)
   + `Controller.installCLIControl`) — same pattern as facet.
   Don't invent a different IPC. They exit `3` if no daemon is
   running; `--record` exits `3` if one *is* (tap conflict).
+  `--resign` is standalone (not a client cmd) — it re-signs the
+  installed bundle with the persistent identity and restarts the
+  daemon, used as a one-shot recovery after `brew install` /
+  upgrade drops the TCC grant.
 - **`--status` is one-way the other direction**: DNC can't reply, so
   the daemon rewrites a small status file (`statusPath` =
   `/tmp/wand.status`) on start / reload / each recognised gesture,

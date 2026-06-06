@@ -8,8 +8,20 @@ import Foundation
 /// Write-once at startup from the WAND_DEBUG env var. Never mutated after that.
 nonisolated(unsafe) public var debugMode = false
 
+/// Opt-in stderr mirror for `Log.line` only. `--validate` flips this so
+/// every parse-time warning (clamp / migration / collision / typo) reaches
+/// the user instead of being buried in `/tmp/wand.log` — the file the user
+/// is least likely to tail while testing config edits.
+nonisolated(unsafe) public var mirrorLineToStderr = false
+
 public enum Log {
     public static let path = "/tmp/wand.log"
+
+    /// Count of `Log.line` calls since reset. `--validate` uses this to
+    /// derive an "n warning(s)" summary without re-parsing.
+    nonisolated(unsafe) public static var lineCount = 0
+
+    public static func resetLineCount() { lineCount = 0 }
 
     public static func line(_ s: String) {
         emit(s, prefix: "")
@@ -33,6 +45,7 @@ public enum Log {
         let data = Data(msg.utf8)
         lock.lock()
         defer { lock.unlock() }
+        if prefix.isEmpty { lineCount += 1 }
         if let fh = FileHandle(forWritingAtPath: path) {
             fh.seekToEndOfFile()
             fh.write(data)
@@ -40,7 +53,12 @@ public enum Log {
         } else {
             try? msg.write(toFile: path, atomically: false, encoding: .utf8)
         }
-        if debugMode {
+        // Stderr mirror policy:
+        //  - debugMode (WAND_DEBUG=1): everything mirrors — live tail UX.
+        //  - mirrorLineToStderr (--validate): only line() mirrors, never
+        //    debug() — debug noise would drown the validation summary,
+        //    and validate only ever calls line() through the parser.
+        if debugMode || (mirrorLineToStderr && prefix.isEmpty) {
             FileHandle.standardError.write(data)
         }
     }
