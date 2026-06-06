@@ -299,8 +299,11 @@ kind = "off"
 [cast.fire.decal]
 
 #   "off"           — no decal (default)
-#   "ink-splatter"  — Splatoon-style splatter: main blob + 3-6
-#                     satellite spatters at random offsets
+#   "ink-splatter"  — Splatoon-style splat: 3-layer stack centre-out
+#                     (1 main blob + 5-9 satellites + 10-17 droplet
+#                     specks), each layer's alpha steps down so the
+#                     main reads as the impact point and the specks
+#                     fade outward.
 # Color comes from `[cast.overlay.trail].color`.
 kind = "off"
 

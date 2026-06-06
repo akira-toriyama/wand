@@ -152,29 +152,54 @@ private final class DecalView: NSView {
         }
     }
 
-    /// 1 main blob + 3-6 satellite splatters at random offsets. Each
-    /// blob is an irregular polygon with the corners pulled out from
-    /// its centre by a randomised radius so it reads as a paint
-    /// splatter rather than a clean circle.
+    /// Splatoon-style splatter, three layers stacked centre-out:
+    ///
+    ///   1. main blob   — 1 big irregular polygon, jitter 0.42 so the
+    ///                    silhouette reads as a thrown ink mark.
+    ///   2. satellites  — 5-9 mid-tier blobs ringing the perimeter,
+    ///                    each its own ragged shape.
+    ///   3. specks      — 10-17 tiny droplets farther out, the "wet
+    ///                    ink, droplets fly outward" polish that sells
+    ///                    the Splatoon feel.
+    ///
+    /// Each layer's alpha steps down (0.95 / 0.88 / 0.78) so the
+    /// main blob reads as the impact point and the specks fade
+    /// outward. All distances are capped at ~1.55× baseR (= ~0.46
+    /// of the view) so the splatter stays inside the configured
+    /// `size` footprint rather than clipping against the view bounds.
     private func drawInkSplatter(in rect: CGRect, rng: inout SplitMix64) {
         let centre = CGPoint(x: rect.midX, y: rect.midY)
-        let baseR = rect.width * 0.32
+        let baseR = rect.width * 0.30
 
-        color.withAlphaComponent(0.92).setFill()
+        // Layer 1 — main blob.
+        color.withAlphaComponent(0.95).setFill()
         irregularBlobPath(at: centre, baseRadius: baseR,
-                           jitter: 0.35, points: 16, rng: &rng).fill()
+                           jitter: 0.42, points: 20, rng: &rng).fill()
 
-        let satelliteCount = 3 + Int(rng.next() % 4)   // 3..6
-        let lighter = color.withAlphaComponent(0.7)
-        lighter.setFill()
+        // Layer 2 — mid-tier satellites (5..9).
+        let satelliteCount = 5 + Int(rng.next() % 5)
+        color.withAlphaComponent(0.88).setFill()
         for _ in 0..<satelliteCount {
             let angle = CGFloat(rng.nextUnit()) * .pi * 2
-            let dist = baseR * (0.7 + CGFloat(rng.nextUnit()) * 0.6)
-            let r = baseR * (0.12 + CGFloat(rng.nextUnit()) * 0.22)
+            let dist = baseR * (0.75 + CGFloat(rng.nextUnit()) * 0.55)
+            let r = baseR * (0.12 + CGFloat(rng.nextUnit()) * 0.28)
             let c = CGPoint(x: centre.x + cos(angle) * dist,
                              y: centre.y + sin(angle) * dist)
             irregularBlobPath(at: c, baseRadius: r,
-                               jitter: 0.4, points: 10, rng: &rng).fill()
+                               jitter: 0.45, points: 12, rng: &rng).fill()
+        }
+
+        // Layer 3 — droplet specks (10..17).
+        let speckCount = 10 + Int(rng.next() % 8)
+        color.withAlphaComponent(0.78).setFill()
+        for _ in 0..<speckCount {
+            let angle = CGFloat(rng.nextUnit()) * .pi * 2
+            let dist = baseR * (1.1 + CGFloat(rng.nextUnit()) * 0.45)
+            let r = baseR * (0.04 + CGFloat(rng.nextUnit()) * 0.08)
+            let c = CGPoint(x: centre.x + cos(angle) * dist,
+                             y: centre.y + sin(angle) * dist)
+            irregularBlobPath(at: c, baseRadius: r,
+                               jitter: 0.5, points: 8, rng: &rng).fill()
         }
     }
 
