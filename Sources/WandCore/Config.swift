@@ -18,6 +18,10 @@ public struct WandConfig: Sendable {
     /// because moving it into either sub-block would mislead about
     /// the scope.
     public var intensity: Intensity
+    /// `[cast].theme` — coordinated colour palette for trail +
+    /// cards. Individual colour keys still win when explicitly set
+    /// in the TOML (non-empty string).
+    public var theme: CastTheme
     /// `[cast.recognition]` — sample → direction tuning.
     public var recognition: GestureRecognitionSpec
     /// `[exclude].apps` — global bundle-id exclusion list. Applies
@@ -42,6 +46,7 @@ public struct WandConfig: Sendable {
     public static let `default` = WandConfig(
         trigger: Trigger(button: .right, modifiers: []),
         intensity: .normal,
+        theme: .default,
         recognition: .default,
         excludeApps: [],
         rules: [],
@@ -124,6 +129,13 @@ public struct WandConfig: Sendable {
         let intensity: Intensity = parseEnum(
             g, key: "intensity", section: "cast", default: .normal)
 
+        // [cast].theme — coordinated colour palette supplying
+        // defaults for trail + cards colour fields. Individual
+        // keys still win when explicitly non-empty in the TOML.
+        let theme: CastTheme = parseEnum(
+            g, key: "theme", section: "cast", default: .default)
+        let palette = theme.palette
+
         // [cast.recognition] — sample → direction tuning. v6 split
         // these out of the bare [cast] block (which now holds only
         // trigger identity + the family-wide intensity knob) so
@@ -153,8 +165,15 @@ public struct WandConfig: Sendable {
 
         // [cast.overlay.trail]
         let tr = doc.tables["cast.overlay.trail"] ?? [:]
-        let trailColor = { let c = tr.string("color"); return c.isEmpty ? "#3b82f6" : c }()
-        let trailColorNoMatch = { let c = tr.string("color-no-match"); return c.isEmpty ? "#ef4444" : c }()
+        // Theme inheritance: explicit non-empty user value wins,
+        // else the active theme's palette value supplies the default.
+        // `theme = "default"` reproduces the historical hard-coded
+        // values, so existing configs that never set `theme` behave
+        // unchanged.
+        let trailColor = { let c = tr.string("color")
+            return c.isEmpty ? palette.trailColor : c }()
+        let trailColorNoMatch = { let c = tr.string("color-no-match")
+            return c.isEmpty ? palette.trailColorNoMatch : c }()
         let trailWidth = clampInt(tr, key: "width",
                                   default: 3, lo: 1, hi: 40)
         let trailStyle: TrailStyle = parseEnum(
@@ -167,7 +186,8 @@ public struct WandConfig: Sendable {
         let trailFinalHoldMs = clampInt(tr, key: "final-hold-ms",
                                         default: 400, lo: 0, hi: 2000)
         let trailStraightenOnTurn = tr.bool("straighten-on-turn", false)
-        let trailColorOutline = tr.string("color-outline")
+        let trailColorOutline = { let c = tr.string("color-outline")
+            return c.isEmpty ? palette.trailColorOutline : c }()
         let trail = GestureOverlayTrailSpec(
             color: trailColor,
             colorNoMatch: trailColorNoMatch,
@@ -198,9 +218,12 @@ public struct WandConfig: Sendable {
             cd, key: "unmatch", section: "cast.overlay.cards", default: .none)
         let cardsFontSize = clampInt(
             cd, key: "font-size", default: 13, lo: 8, hi: 32)
-        let cardsBorderColor = cd.string("border-color")
-        let cardsBodyColor = cd.string("body-color")
-        let cardsTextColor = cd.string("text-color")
+        let cardsBorderColor = { let c = cd.string("border-color")
+            return c.isEmpty ? palette.cardsBorderColor : c }()
+        let cardsBodyColor = { let c = cd.string("body-color")
+            return c.isEmpty ? palette.cardsBodyColor : c }()
+        let cardsTextColor = { let c = cd.string("text-color")
+            return c.isEmpty ? palette.cardsTextColor : c }()
         let cards = GestureOverlayCardsSpec(
             match: cardsMatch, unmatch: cardsUnmatch,
             fontSize: cardsFontSize,
@@ -388,6 +411,7 @@ public struct WandConfig: Sendable {
         return WandConfig(
             trigger: gestureTrigger,
             intensity: intensity,
+            theme: theme,
             recognition: recognition,
             excludeApps: excludes,
             rules: rules,

@@ -15,6 +15,118 @@
 
 import Foundation
 
+// MARK: - Theme
+
+/// Coordinated colour palette for the cast HUD — supplies defaults
+/// for `[cast.overlay.trail]` + `[cast.overlay.cards]` colour
+/// fields. Individual config keys override per field, so
+/// `theme = "terminal"` + `color = "red"` gives a Terminal HUD
+/// with a red trail line.
+public struct CastThemePalette: Sendable, Equatable {
+    public let trailColor: String
+    public let trailColorNoMatch: String
+    public let trailColorOutline: String
+    public let cardsBorderColor: String
+    public let cardsBodyColor: String
+    public let cardsTextColor: String
+    public init(trailColor: String, trailColorNoMatch: String,
+                trailColorOutline: String,
+                cardsBorderColor: String, cardsBodyColor: String,
+                cardsTextColor: String) {
+        self.trailColor = trailColor
+        self.trailColorNoMatch = trailColorNoMatch
+        self.trailColorOutline = trailColorOutline
+        self.cardsBorderColor = cardsBorderColor
+        self.cardsBodyColor = cardsBodyColor
+        self.cardsTextColor = cardsTextColor
+    }
+}
+
+/// `[cast].theme` — picks a coordinated palette for the cast HUD.
+/// Each theme supplies defaults for trail + cards colour fields;
+/// individual keys still override the theme value when explicitly
+/// set in the TOML (non-empty string). Unknown names clamp to
+/// `.default`, which preserves the historical hard-coded values.
+public enum CastTheme: String, Sendable, CaseIterable {
+    case `default`
+    case terminal
+    case neon
+    case splatoon
+    case rainbow
+    case mono
+    case paper
+    case vapor
+
+    public var palette: CastThemePalette {
+        switch self {
+        case .default:
+            return CastThemePalette(
+                trailColor: "#3b82f6",
+                trailColorNoMatch: "#ef4444",
+                trailColorOutline: "",
+                cardsBorderColor: "",
+                cardsBodyColor: "",
+                cardsTextColor: "")
+        case .terminal:
+            return CastThemePalette(
+                trailColor: "#22c55e",
+                trailColorNoMatch: "#fbbf24",
+                trailColorOutline: "#000000",
+                cardsBorderColor: "#22c55e",
+                cardsBodyColor: "#000000",
+                cardsTextColor: "#22c55e")
+        case .neon:
+            return CastThemePalette(
+                trailColor: "neon",
+                trailColorNoMatch: "#ec4899",
+                trailColorOutline: "#000000",
+                cardsBorderColor: "neon",
+                cardsBodyColor: "#0f0a1f",
+                cardsTextColor: "#ffffff")
+        case .splatoon:
+            return CastThemePalette(
+                trailColor: "splatoon",
+                trailColorNoMatch: "#000000",
+                trailColorOutline: "#ffffff",
+                cardsBorderColor: "splatoon",
+                cardsBodyColor: "#1a1a1a",
+                cardsTextColor: "#ffffff")
+        case .rainbow:
+            return CastThemePalette(
+                trailColor: "rainbow",
+                trailColorNoMatch: "#1a1a1a",
+                trailColorOutline: "#ffffff",
+                cardsBorderColor: "rainbow",
+                cardsBodyColor: "#000000",
+                cardsTextColor: "#ffffff")
+        case .mono:
+            return CastThemePalette(
+                trailColor: "#ffffff",
+                trailColorNoMatch: "#ef4444",
+                trailColorOutline: "#000000",
+                cardsBorderColor: "#ffffff",
+                cardsBodyColor: "#000000",
+                cardsTextColor: "#ffffff")
+        case .paper:
+            return CastThemePalette(
+                trailColor: "#0f172a",
+                trailColorNoMatch: "#dc2626",
+                trailColorOutline: "",
+                cardsBorderColor: "#0f172a",
+                cardsBodyColor: "#ffffff",
+                cardsTextColor: "#0f172a")
+        case .vapor:
+            return CastThemePalette(
+                trailColor: "#ff79c6",
+                trailColorNoMatch: "#50fa7b",
+                trailColorOutline: "#6272a4",
+                cardsBorderColor: "#ff79c6",
+                cardsBodyColor: "#282a36",
+                cardsTextColor: "#f8f8f2")
+        }
+    }
+}
+
 // MARK: - Recognition tuning
 
 /// `[gesture.recognition]` — knobs that tune how raw mouse samples

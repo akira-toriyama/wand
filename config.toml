@@ -131,6 +131,37 @@ modifiers = []
 #   wild    ≈ 2.5× (over-the-top)
 intensity = "normal"
 
+# Coordinated colour palette for the cast HUD. Sets defaults for
+# `[cast.overlay.trail]` (color / color-no-match / color-outline)
+# AND `[cast.overlay.cards]` (border-color / body-color /
+# text-color) in one knob — pick a vibe and the colours are
+# guaranteed to read well together.
+#
+# Individual colour keys still WIN when explicitly set in the
+# TOML (non-empty string), so `theme = "terminal"` + `color =
+# "red"` gives a Terminal HUD with a red trail line.
+#
+#   "default"  — historical blue trail / red no-match / no
+#                outline; the look wand has shipped with.
+#   "terminal" — Tokyo-Night-style green-on-black with amber
+#                no-match. Mono-feel, very legible.
+#   "neon"     — cycling neon palette on near-black cards;
+#                hot-pink no-match.
+#   "splatoon" — per-stroke random team colour ink, white
+#                outline, black no-match.
+#   "rainbow"  — full-spectrum animated trail + cards; white
+#                outline, very dark no-match.
+#   "mono"     — white trail / black outline / red no-match
+#                only — failure stays loud, everything else
+#                is monochrome.
+#   "paper"    — light theme: dark trail on white card body,
+#                no outline (the white backing doesn't need it).
+#   "vapor"    — synthwave: pink trail, lime no-match, slate
+#                outline, Dracula-style dark card.
+#
+# Unknown names clamp to "default". Validate with `wand --validate`.
+theme = "default"
+
 
 # -----------------------------------------------------------------
 # Cast recognition — sample → direction tuning
@@ -216,6 +247,8 @@ blur-enabled = true
 # `color` and `color-no-match` are independent — fine to set one to
 # a dynamic token and the other to a static hex (e.g. `rainbow`
 # while matching, solid red when off-track).
+# Empty = inherit from `[cast].theme`. Non-empty value overrides
+# the theme's palette for that field.
 color = "#3b82f6"
 color-no-match = "#ef4444"
 
