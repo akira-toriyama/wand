@@ -248,17 +248,17 @@ public enum TrailStyle: String, Sendable, Hashable, CaseIterable {
     /// intervals along the path, tinted with the trail colour. Same
     /// colour invariant as the other styles.
     case ascii
-    /// Tetris-themed pixel variant: same cell grid as `pixel`, but
-    /// every 4 consecutive cells share one of the 7 tetromino
-    /// guideline colours (cyan / yellow / purple / green / red /
-    /// blue / orange), so the trail reads as a chain of falling
-    /// tetromino units. **Style-specific exception to the
-    /// "shape-only, not colour" invariant** — the palette IS the
-    /// identity. `color-no-match` is still honoured: when the
-    /// shape can no longer reach any rule, the whole trail
-    /// switches to the no-match colour so the failure signal
-    /// survives.
-    case tetris
+    /// Rainbow-road-themed pixel variant: same cell grid as
+    /// `pixel`, but every 4 consecutive cells step through a
+    /// spectrum-ordered palette (red → orange → yellow → green →
+    /// blue → indigo → purple), so the trail reads as a
+    /// rainbow track segment travelling along the path.
+    /// **Style-specific exception to the "shape-only, not colour"
+    /// invariant** — the palette IS the identity. `color-no-match`
+    /// is still honoured: when the shape can no longer reach any
+    /// rule, the whole trail switches to the no-match colour so
+    /// the failure signal survives.
+    case rainbowRoad = "rainbow-road"
     /// Pac-Man-themed: ASCII-style pellets (`·` dots) line the
     /// path, and a forward-facing Pac-Man wedge follows the cursor
     /// with its mouth open along the current direction. Colour

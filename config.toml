@@ -225,7 +225,7 @@ color-no-match = "#ef4444"
 #                              (5pt cell; `width = 3` lays down a
 #                              3-cell-wide stripe)
 #   ascii                    — thickness in fixed-size glyphs
-#                              (11pt font; `width = 3` lays down a
+#                              (14pt font; `width = 3` lays down a
 #                              3-glyph-wide band)
 # So in pixel / ascii, raising `width` adds more small marks across
 # the path rather than scaling each mark up — a denser cluster of
@@ -241,14 +241,16 @@ width = 3
 #   "dotted"  — short-dash dotted line (0.6:2 dash:gap)
 #   "pixel"   — 8-bit / pixel-art: fixed 5pt cells stepped along the
 #               path; `width` = cells across the path (thickness)
-#   "ascii"   — AA-art: 11pt monospaced glyphs (`* + x o # . : = ~ ^`)
-#               picked randomly per stroke; `width` = glyphs across
-#               the path (thickness)
-#   "tetris"  — pixel cells coloured by the 7-piece tetromino palette
-#               (cyan/yellow/purple/green/red/blue/orange), one
-#               colour per 4-cell unit. Style-specific exception:
-#               `color` is overridden by the palette; `color-no-match`
-#               still wins so the failure signal survives.
+#   "ascii"   — AA-art: 14pt monospaced glyphs (`* + x o # . : = ~ ^`)
+#               picked dynamically — each slot reshuffles a few times
+#               per second so the trail flickers as it draws. `width`
+#               = glyphs across the path (thickness).
+#   "rainbow-road" — pixel cells coloured by a spectrum-ordered
+#               palette (red/orange/yellow/green/blue/indigo/purple),
+#               one colour per 4-cell unit, reading as a rainbow
+#               track. Style-specific exception: `color` is
+#               overridden by the palette; `color-no-match` still
+#               wins so the failure signal survives.
 #   "pacman"  — small pellets along the path + a Pac-Man wedge at the
 #               cursor whose mouth opens along the current direction.
 #               `width` = rows of pellets across the path.

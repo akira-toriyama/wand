@@ -659,8 +659,9 @@ private final class TrailView: NSView {
             drawPixelPath(origin: origin, cursor: cursor, color: color)
         case .ascii:
             drawAsciiPath(origin: origin, cursor: cursor, color: color)
-        case .tetris:
-            drawTetrisPath(origin: origin, cursor: cursor, color: color)
+        case .rainbowRoad:
+            drawRainbowRoadPath(origin: origin, cursor: cursor,
+                                 color: color)
         case .pacman:
             drawPacmanPath(origin: origin, cursor: cursor, color: color)
         }
@@ -777,7 +778,7 @@ private final class TrailView: NSView {
         case .dotted:
             return TrailStyleParams(width: base, glowRadius: 7,
                                      lineDash: [base * 0.6, base * 2])
-        case .pixel, .ascii, .tetris, .pacman:
+        case .pixel, .ascii, .rainbowRoad, .pacman:
             // Unused — these styles route through their own
             // renderers and never call `drawSinglePath`. Returning a
             // safe baseline keeps the switch exhaustive without
@@ -907,11 +908,16 @@ private final class TrailView: NSView {
         return z ^ (z >> 31)
     }
 
-    /// Fixed monospaced font size for the `ascii` style (pt). Kept
-    /// small so the trail reads as a collection of glyphs rather
-    /// than oversized characters. `strokeWidth` is re-purposed as
-    /// the thickness (glyph count perpendicular to the path).
-    private static let asciiFontSize: CGFloat = 11
+    /// Fixed monospaced font size for the `ascii` style (pt).
+    /// `strokeWidth` is re-purposed as the thickness (glyph count
+    /// perpendicular to the path).
+    private static let asciiFontSize: CGFloat = 14
+
+    /// How fast each glyph slot reshuffles. The picker seed is
+    /// quantised by `floor(time * frequency)`, so a frequency of
+    /// 8 means each slot can pick a fresh glyph 8 times per second.
+    /// Slow enough to read as flicker, fast enough to feel alive.
+    private static let asciiGlyphFlickerHz: Double = 8
 
     /// ASCII-art style: place varied glyphs along the path, tinted
     /// with the resolved trail colour. Monospaced font so the
@@ -942,6 +948,13 @@ private final class TrailView: NSView {
         let thickness = max(1, Int(strokeWidth.rounded()))
         let offsetBase = CGFloat(thickness - 1) / 2
         let seed = strokeSeed
+        // Time-quantised component so the picker shuffles each slot
+        // a few times per second — the trail's glyphs flicker as the
+        // animation tick redraws the view, without changing so fast
+        // they smear into noise.
+        let timeTick = UInt64(
+            (CACurrentMediaTime() * Self.asciiGlyphFlickerHz)
+                .rounded(.down))
         var index: UInt64 = 0
         let draw: (CGPoint, CGPoint) -> Void = { p, tangent in
             // Normal to the path: rotate tangent 90°.
@@ -951,8 +964,9 @@ private final class TrailView: NSView {
                 let d = (CGFloat(i) - offsetBase) * glyphSize.width
                 let cx = p.x + nx * d
                 let cy = p.y + ny * d
-                let pick = Int(Self.splitmix(seed &+ index)
-                                % UInt64(glyphs.count))
+                let pick = Int(
+                    Self.splitmix(seed &+ index &+ (timeTick &<< 16))
+                        % UInt64(glyphs.count))
                 index &+= 1
                 // Centre the glyph on the offset point.
                 let r = NSRect(x: cx - glyphSize.width / 2,
@@ -965,24 +979,23 @@ private final class TrailView: NSView {
         walkPath(origin: origin, interval: interval, step: draw)
     }
 
-    /// Tetris guideline palette — one colour per tetromino piece, in
-    /// the standard order (I cyan / O yellow / T purple / S green /
-    /// Z red / J blue / L orange). Indexed by `(cellIndex / 4)` so
-    /// every 4 consecutive cells share a colour, reading as a
-    /// tetromino unit travelling along the path.
-    private static let tetrisColors: [NSColor] = [
-        .systemCyan, .systemYellow, .systemPurple, .systemGreen,
-        .systemRed,  .systemBlue,   .systemOrange,
+    /// Rainbow-road palette — spectrum-ordered (ROYGBIV) so the
+    /// trail reads as a rainbow track. Indexed by `(cellIndex / 4)`
+    /// so every 4 consecutive cells share a colour, giving the
+    /// track its segment-like rhythm.
+    private static let rainbowRoadColors: [NSColor] = [
+        .systemRed, .systemOrange, .systemYellow, .systemGreen,
+        .systemBlue, .systemIndigo, .systemPurple,
     ]
 
-    /// Tetris-themed pixel variant: same fixed-cell grid as
-    /// `drawPixelPath`, but the fill colour rotates through the
-    /// 7-piece guideline palette every 4 cells. When the in-progress
+    /// Rainbow-road-themed pixel variant: same fixed-cell grid as
+    /// `drawPixelPath`, but the fill colour steps through a
+    /// spectrum-ordered palette every 4 cells. When the in-progress
     /// shape can no longer reach any rule (`!valid`), the whole trail
     /// switches to `color` (= the resolved no-match colour) so the
     /// failure signal still reads even with the bespoke palette.
-    private func drawTetrisPath(origin: CGPoint, cursor: CGPoint,
-                                 color: NSColor) {
+    private func drawRainbowRoadPath(origin: CGPoint, cursor: CGPoint,
+                                      color: NSColor) {
         let cell = Self.pixelCellSize
         let thickness = max(1, Int(strokeWidth.rounded()))
         let offsetBase = CGFloat(thickness - 1) / 2
@@ -1009,8 +1022,9 @@ private final class TrailView: NSView {
                 if useFallback {
                     fill = color
                 } else {
-                    let pick = (cellIndex / 4) % Self.tetrisColors.count
-                    fill = Self.tetrisColors[pick]
+                    let pick = (cellIndex / 4)
+                        % Self.rainbowRoadColors.count
+                    fill = Self.rainbowRoadColors[pick]
                 }
                 cellIndex += 1
                 fill.withAlphaComponent(0.95).setFill()
