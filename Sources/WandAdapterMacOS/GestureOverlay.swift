@@ -1378,49 +1378,32 @@ private final class TrailView: NSView {
     // MARK: - Paws style constants
 
     /// Spacing between paw prints along the path (pt at scale=1).
-    /// Has to clear the pad + forward-toe extent (~16pt at scale=1)
-    /// with visible gap, otherwise prints bleed together and the
-    /// trail reads as a continuous line rather than discrete paws.
-    private static let pawsSpacing: CGFloat = 42
-    /// Main heel-pad radius (pt at scale=1). Sized so the pad is
-    /// the obvious anchor of each print at HUD viewing distance —
-    /// smaller than this and the pad + toes merge into a blob.
-    private static let pawsPadRadius: CGFloat = 6
-    /// Toe radius (pt at scale=1). ~half the pad so the print
-    /// reads as "pad + smaller toes" rather than four uniform dots.
-    private static let pawsToeRadius: CGFloat = 3
-    /// How far the toes sit forward of the pad along the tangent
-    /// direction (pt at scale=1). Big enough that the toes clearly
-    /// lead the pad rather than overlap it.
-    private static let pawsToeForward: CGFloat = 9
-    /// Lateral half-spread of the outer two toes from the centre
-    /// toe (pt at scale=1). The 3-toe row sits perpendicular to
-    /// the tangent; bigger spread reads more clearly as multiple
-    /// distinct toes vs. a single elongated mark.
-    private static let pawsToeSpread: CGFloat = 5.5
-    /// How far the centre toe sits forward of the side toes
-    /// (pt at scale=1). Forward offset turns the 3-toe row from
-    /// a straight line into a `∩` arch — reads as a real paw.
-    private static let pawsToeArc: CGFloat = 1.5
+    /// Has to clear the print's rendered size with visible gap,
+    /// otherwise consecutive prints bleed into a continuous line.
+    private static let pawsSpacing: CGFloat = 36
+    /// Base SF Symbol point size for `pawprint.fill` (pt at
+    /// scale=1). The symbol's natural rendered size is bigger than
+    /// the point value because the symbol fills its glyph cell —
+    /// this lands ~22pt of print at scale=1.
+    private static let pawsPointSize: CGFloat = 18
     /// How far each paw print drifts off the path centreline,
-    /// alternating left/right (pt at scale=1). Big enough that the
-    /// L/R alternation is obvious — small offsets read as path
-    /// jitter rather than alternating feet.
+    /// alternating left/right (pt at scale=1). Reads as "footprints
+    /// from two paws walking" instead of a centred chain.
     private static let pawsSideOffset: CGFloat = 5
 
-    /// Stylised paw prints walking along the path: a pad (heel)
-    /// with 3 toes ahead of it, drawn at `pawsSpacing` intervals.
-    /// Each print is oriented along the path tangent (toes face
-    /// the direction of travel) and offset perpendicularly by
-    /// `pawsSideOffset`, alternating side to side so the trail
-    /// reads as alternating L/R footprints.
+    /// Stylised paw prints walking along the path — `pawprint.fill`
+    /// SF Symbol drawn at `pawsSpacing` intervals, rotated so the
+    /// toes face the path tangent (direction of travel), and
+    /// offset perpendicularly by `pawsSideOffset` alternating
+    /// side-to-side so consecutive prints read as L/R footprints.
     ///
-    /// Bezier shapes (no emoji), so the trail colour flows through
-    /// like the other styles — the match-vs-no-match signal stays
-    /// in colour (`color` is already resolved by the caller).
-    /// `colorOutline` (when set) draws a halo around every pad +
-    /// toe so the prints stay legible against busy backgrounds,
-    /// same treatment as the pacman pellets.
+    /// SF Symbol (not emoji), tinted via `hierarchicalColor` so
+    /// the trail colour flows through — the match-vs-no-match
+    /// signal stays in colour like the bezier styles, and dynamic
+    /// modes (`rainbow` / `neon` / `splatoon`) animate naturally.
+    /// `colorOutline` (when set) is drawn as a slightly-larger
+    /// halo of the same symbol behind the main one — same legibility
+    /// treatment as the pacman pellet outline.
     ///
     /// `strokeWidth` is re-purposed as a scale multiplier — `width
     /// = 3` (the default) gives baseline-sized prints; higher
@@ -1429,65 +1412,73 @@ private final class TrailView: NSView {
                                color: NSColor, outline: NSColor?) {
         let scale = max(0.5, strokeWidth / 3)
         let spacing = Self.pawsSpacing * scale
-        let padR = Self.pawsPadRadius * scale
-        let toeR = Self.pawsToeRadius * scale
-        let toeFwd = Self.pawsToeForward * scale
-        let toeSpread = Self.pawsToeSpread * scale
-        let toeArc = Self.pawsToeArc * scale
+        let pointSize = Self.pawsPointSize * scale
         let sideOff = Self.pawsSideOffset * scale
-        let outlinePad = max(1, scale)
-        let fill = color.withAlphaComponent(0.95)
-        let outlineFill = outline?.withAlphaComponent(0.95)
 
-        // Small helper: filled dot with optional outline halo.
-        let dot: (CGPoint, CGFloat) -> Void = { centre, radius in
-            if let outlineFill {
-                let outer = NSRect(
-                    x: centre.x - radius - outlinePad,
-                    y: centre.y - radius - outlinePad,
-                    width: (radius + outlinePad) * 2,
-                    height: (radius + outlinePad) * 2)
-                outlineFill.setFill()
-                NSBezierPath(ovalIn: outer).fill()
-            }
-            fill.setFill()
-            let inner = NSRect(
-                x: centre.x - radius, y: centre.y - radius,
-                width: radius * 2, height: radius * 2)
-            NSBezierPath(ovalIn: inner).fill()
+        // Build the tinted SF Symbol once per frame. drawPawsPath
+        // runs once per redraw (not per print), so rebuilding here
+        // costs one image-build per frame regardless of stroke
+        // length. Dynamic colour modes update the tint as `color`
+        // shifts frame-to-frame.
+        let baseCfg = NSImage.SymbolConfiguration(
+            pointSize: pointSize, weight: .semibold, scale: .medium)
+        let tintedCfg = baseCfg.applying(
+            NSImage.SymbolConfiguration(hierarchicalColor: color))
+        guard let symbol = NSImage(
+                systemSymbolName: "pawprint.fill",
+                accessibilityDescription: nil)?
+            .withSymbolConfiguration(tintedCfg) else { return }
+        let symbolSize = symbol.size
+
+        let outlineSymbol: NSImage?
+        if let outline {
+            let outlineCfg = baseCfg.applying(
+                NSImage.SymbolConfiguration(hierarchicalColor: outline))
+            outlineSymbol = NSImage(
+                systemSymbolName: "pawprint.fill",
+                accessibilityDescription: nil)?
+                .withSymbolConfiguration(outlineCfg)
+        } else {
+            outlineSymbol = nil
         }
+        let outlinePad = max(1.5, scale * 1.2)
 
         var idx: Int = 0
         let plot: (CGPoint, CGPoint) -> Void = { p, tangent in
             let tx = tangent.x, ty = tangent.y
-            // Perpendicular (rotated 90° CCW) for toe spread + the
-            // side-to-side drift.
+            // Perpendicular (rotated 90° CCW) for the L/R drift.
             let nx = -ty, ny = tx
-            // Alternate L/R offset so consecutive prints read as
-            // footprints from two paws walking.
             let side: CGFloat = (idx % 2 == 0) ? 1 : -1
             idx += 1
             let cx = p.x + nx * side * sideOff
             let cy = p.y + ny * side * sideOff
 
-            // 1) Pad (heel).
-            dot(CGPoint(x: cx, y: cy), padR)
+            // SF Symbol `pawprint.fill` renders with toes pointing
+            // toward +y in its native coordinate system. Rotate so
+            // that "natural up" aligns with the tangent direction
+            // (atan2 - π/2 because the symbol's "up" needs to map
+            // onto the tangent vector).
+            let angle = atan2(ty, tx) - .pi / 2
 
-            // 2) Three toes ahead of the pad along the tangent.
-            // Centre toe rides slightly farther forward than the
-            // two side toes, giving the row a subtle arc.
-            let baseFwdX = cx + tx * toeFwd
-            let baseFwdY = cy + ty * toeFwd
-            let toes: [(spread: CGFloat, arc: CGFloat)] = [
-                (-toeSpread, 0),
-                (0, toeArc),
-                (toeSpread, 0),
-            ]
-            for t in toes {
-                let tcx = baseFwdX + tx * t.arc + nx * t.spread
-                let tcy = baseFwdY + ty * t.arc + ny * t.spread
-                dot(CGPoint(x: tcx, y: tcy), toeR)
+            NSGraphicsContext.saveGraphicsState()
+            defer { NSGraphicsContext.restoreGraphicsState() }
+            let xform = NSAffineTransform()
+            xform.translateX(by: cx, yBy: cy)
+            xform.rotate(byRadians: angle)
+            xform.concat()
+
+            let drawRect = NSRect(
+                x: -symbolSize.width / 2,
+                y: -symbolSize.height / 2,
+                width: symbolSize.width,
+                height: symbolSize.height)
+
+            if let outlineSymbol {
+                let outlineRect = drawRect.insetBy(
+                    dx: -outlinePad, dy: -outlinePad)
+                outlineSymbol.draw(in: outlineRect)
             }
+            symbol.draw(in: drawRect)
         }
         walkPath(origin: origin, interval: spacing, step: plot)
     }
