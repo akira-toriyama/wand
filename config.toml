@@ -309,10 +309,21 @@ font-size = 13
 
 # Border stroke colour for assist cards. Empty falls back to the
 # historical 18%-alpha white hairline (which reads against the
-# blurred backing). Accepts the same hex / named grammar as
-# `[cast.overlay.trail].color` — supports an alpha byte
-# (`#RRGGBBAA`) so callers can dial in opacity without losing hue.
+# blurred backing). Accepts the same grammar as
+# `[cast.overlay.trail].color` — hex / named (with optional alpha
+# byte `#RRGGBBAA`), plus the dynamic tokens `"rainbow"` /
+# `"neon"` / `"splatoon"`. Dynamic modes share trail's
+# `color-cycle-ms` cadence and per-stroke seed, so the trail line
+# and the card borders cycle in lockstep.
 border-color = ""
+
+# Body fill colour for **non-firing** (directional) assist cards.
+# Empty leaves the body transparent over the blurred backing
+# (historical behaviour). The firing card is always tinted with
+# the trail accent regardless of this knob — so the "this rule
+# fires on release" signal stays loud. Same grammar as
+# `border-color` above; dynamic modes work here too.
+body-color = ""
 
 
 # -----------------------------------------------------------------

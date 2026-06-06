@@ -140,20 +140,31 @@ public struct GestureOverlayCardsSpec: Sendable, Equatable {
     public let fontSize: Int
     /// Card border colour. Empty falls back to the historical
     /// `NSColor.white.withAlphaComponent(0.18)` (a 1pt hairline that
-    /// reads against the blurred backing). Accepts the same hex /
-    /// named grammar as `[cast.overlay.trail].color`; supports an
-    /// alpha byte (`#RRGGBBAA`) so callers can dial in opacity
-    /// without losing the hue.
+    /// reads against the blurred backing). Accepts the same grammar
+    /// as `[cast.overlay.trail].color` — hex / named, plus the
+    /// dynamic tokens `"rainbow"` / `"neon"` / `"splatoon"`. Dynamic
+    /// modes share `[cast.overlay.trail].color-cycle-ms` for cadence
+    /// and the trail's per-stroke seed for `splatoon` (so the trail
+    /// and the card borders pick the same team colour each stroke).
     public let borderColor: String
+    /// Card body fill colour for the **non-firing** (directional)
+    /// cards. Empty leaves the body transparent over the blurred
+    /// backing (historical behaviour). The firing card is always
+    /// tinted with the trail accent regardless of this knob — so the
+    /// "this rule fires on release" signal stays visible. Same
+    /// grammar as `borderColor`; dynamic modes work here too.
+    public let bodyColor: String
 
     public init(match: Effect = .none,
                 unmatch: Effect = .none,
                 fontSize: Int = 13,
-                borderColor: String = "") {
+                borderColor: String = "",
+                bodyColor: String = "") {
         self.match = match
         self.unmatch = unmatch
         self.fontSize = fontSize
         self.borderColor = borderColor
+        self.bodyColor = bodyColor
     }
 
     public static let `default` = GestureOverlayCardsSpec()

@@ -118,8 +118,13 @@ public final class GestureOverlay {
         view.effectUnmatch = ov.cards.unmatch
         view.effectMatch = ov.cards.match
         view.cardFontSize = CGFloat(ov.cards.fontSize)
-        view.cardBorderColor = NSColorParse.nsColor(ov.cards.borderColor)
-            ?? NSColor.white.withAlphaComponent(0.18)
+        view.cardBorderMode = TrailColorMode.parse(
+            ov.cards.borderColor,
+            fallback: NSColor.white.withAlphaComponent(0.18))
+        view.cardBodyMode = ov.cards.bodyColor.isEmpty
+            ? nil
+            : TrailColorMode.parse(ov.cards.bodyColor,
+                                    fallback: .clear)
         view.effectIntensity = cfg.intensity.multiplier
         view.minStrokePx = CGFloat(cfg.recognition.minStrokePx)
         view.finalHoldDuration = TimeInterval(ov.trail.finalHoldMs) / 1000.0
@@ -205,11 +210,19 @@ private final class TrailView: NSView {
     /// than rule names. The card padding is fixed in pt, so a bigger
     /// font expands the card naturally.
     var cardFontSize: CGFloat = 13
-    /// Border stroke for assist cards (set live from
-    /// `[cast.overlay.cards].border-color`). Falls back at the
-    /// `applyConfig` site to the historical 18%-alpha white hairline
-    /// when the user leaves the knob empty.
-    var cardBorderColor: NSColor = NSColor.white.withAlphaComponent(0.18)
+    /// Border stroke mode for assist cards (set live from
+    /// `[cast.overlay.cards].border-color`). `.static` covers the
+    /// historical hex/named path; dynamic tokens (`rainbow` / `neon`
+    /// / `splatoon`) animate alongside the trail using the same
+    /// cycle period and stroke seed.
+    var cardBorderMode: TrailColorMode = .static(
+        NSColor.white.withAlphaComponent(0.18))
+    /// Body fill mode for **non-firing** assist cards (set live from
+    /// `[cast.overlay.cards].body-color`). `nil` = transparent
+    /// (historical behaviour). The firing card always gets the
+    /// trail-accent tint regardless of this — so the "fires on
+    /// release" signal stays loud.
+    var cardBodyMode: TrailColorMode? = nil
     /// Pre-resolved multiplier from `Intensity.multiplier` — scales
     /// translation distance, scale deltas, vibration amplitude, and
     /// particle birth-rate / velocity.
@@ -1194,11 +1207,27 @@ private final class HUDContentView: NSView {
             tx.translateX(by: -cx, yBy: -cy)
             tx.concat()
         }
-        if let fill = c.fill {
+        // Resolve cycle-driven colours once per card draw. Trail's
+        // strobe period + stroke seed feed cards too, so trail and
+        // borders cycle in lockstep (and splatoon picks the same
+        // team colour each stroke).
+        let now = CACurrentMediaTime()
+        // Fill priority: firing card's accent > body-color knob >
+        // transparent (historical). The firing accent stays loud so
+        // the "fires on release" signal isn't lost when body-color
+        // is set.
+        let bodyFill = c.fill
+            ?? o.cardBodyMode?.currentColor(at: now,
+                                             strokeSeed: o.strokeSeed,
+                                             cyclePeriod: o.colorCyclePeriod)
+        if let fill = bodyFill {
             fill.setFill()
             bg.fill()
         }
-        o.cardBorderColor.setStroke()
+        let border = o.cardBorderMode.currentColor(
+            at: now, strokeSeed: o.strokeSeed,
+            cyclePeriod: o.colorCyclePeriod)
+        border.setStroke()
         bg.lineWidth = 1
         bg.stroke()
         c.text.draw(with: c.rect.insetBy(dx: o.cardPadX, dy: o.cardPadY),
