@@ -29,11 +29,31 @@ public final class BurstManager {
     /// once on daemon teardown.
     private var live: [NSWindow] = []
 
-    /// Footprint of one burst window. Sized to comfortably hold every
-    /// particle's `velocity * lifetime` displacement, with a margin
-    /// for the dot's own radius. Generous on purpose — clipping a
-    /// particle mid-flight reads as a bug.
-    private static let frameSize: CGFloat = 320
+    /// Per-cell motion parameters used by both the emitter
+    /// (`makeOmniBurstEmitter`) and the window-frame sizer
+    /// (`frameSize(for:)`). Kept in one place so the frame can never
+    /// drift smaller than the actual particle reach at the configured
+    /// intensity — earlier we hard-coded 320pt here and particle tips
+    /// clipped once `intensity > ~1.1`.
+    private static let baseVelocity: CGFloat = 220
+    private static let velocityRange: CGFloat = 70
+    private static let lifetime: CGFloat = 0.6
+    private static let lifetimeRange: CGFloat = 0.2
+    /// Extra pad around the particle reach: ~half the dot sprite plus
+    /// a few pixels so the soft edge of a fully-grown dot still has
+    /// room before the window clip.
+    private static let frameMargin: CGFloat = 24
+
+    /// Window footprint that comfortably contains every particle's
+    /// max displacement (`(velocity + velocityRange) * (lifetime +
+    /// lifetimeRange) * intensity`) plus margin. Floored at 320pt so
+    /// low-intensity bursts still have headroom; scales up linearly
+    /// past that.
+    private static func frameSize(for intensity: CGFloat) -> CGFloat {
+        let reach = (baseVelocity + velocityRange)
+            * (lifetime + lifetimeRange) * max(intensity, 0)
+        return max(320, ceil(2 * (reach + frameMargin)))
+    }
 
     /// Drop a single burst at `point` (Cocoa global coords, Y-up)
     /// with the gesture's accent `color` and the configured
@@ -51,9 +71,10 @@ public final class BurstManager {
         // display layouts where the cursor can land in regions not
         // strictly contained by any NSScreen frame (gaps between
         // displays, mirror-with-scaling, scale-boundary quirks).
-        let half = Self.frameSize / 2
+        let size = Self.frameSize(for: intensity)
+        let half = size / 2
         let frame = CGRect(x: point.x - half, y: point.y - half,
-                           width: Self.frameSize, height: Self.frameSize)
+                           width: size, height: size)
         guard NSScreen.screens.contains(where: { $0.frame.intersects(frame) })
         else { return }
 
@@ -130,10 +151,10 @@ public final class BurstManager {
             cell.contents = dot
             cell.color = c.cgColor
             cell.birthRate = 90 * k
-            cell.lifetime = 0.6
-            cell.lifetimeRange = 0.2
-            cell.velocity = 220 * intensity
-            cell.velocityRange = 70 * intensity
+            cell.lifetime = Float(lifetime)
+            cell.lifetimeRange = Float(lifetimeRange)
+            cell.velocity = baseVelocity * intensity
+            cell.velocityRange = velocityRange * intensity
             cell.emissionLongitude = 0
             cell.emissionRange = .pi * 2
             cell.scale = 1.0
