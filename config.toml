@@ -162,10 +162,11 @@ intensity = "normal"
 #                red-ghost no-match. Pairs with
 #                `style = "pacman"` for the canonical arcade
 #                yellow wedge. Cards use a two-state design —
-#                directional cards are yellow pellets with black
-#                text; the firing card is the inverted pair
-#                (black body + yellow text) so "fires on release"
-#                lands as a sharp colour flip.
+#                directional cards are the arcade backdrop
+#                (black body + yellow text); the firing card
+#                INVERTS to a yellow pellet (yellow body +
+#                black text), so "fires on release" reads as
+#                the trail's pellet latching onto its rule.
 #
 # Unknown names clamp to "default". Validate with `wand --validate`.
 theme = "default"

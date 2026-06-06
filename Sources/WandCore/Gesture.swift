@@ -159,20 +159,22 @@ public enum CastTheme: String, Sendable, CaseIterable {
             // canonical arcade yellow.
             //
             // Card scheme is a deliberate two-state design:
-            //   directional cards — yellow pellet body + black text
-            //   firing card       — INVERTED (black body + yellow
-            //                       text), so the "fires on release"
-            //                       moment reads as a sharp colour
-            //                       flip rather than a flashy effect.
+            //   directional cards — black body + yellow text
+            //                       (the arcade backdrop)
+            //   firing card       — INVERTED to yellow pellet body
+            //                       + black text, so the "fires on
+            //                       release" moment reads as the
+            //                       trail's yellow pellet finally
+            //                       latching onto its rule.
             return CastThemePalette(
                 trailColor: "#ffea00",
                 trailColorNoMatch: "#ff0000",
                 trailColorOutline: "#000000",
                 cardsBorderColor: "#ffea00",
-                cardsBodyColor: "#ffea00",
-                cardsTextColor: "#000000",
-                cardsFiresColor: "#000000",
-                cardsFiresTextColor: "#ffea00")
+                cardsBodyColor: "#000000",
+                cardsTextColor: "#ffea00",
+                cardsFiresColor: "#ffea00",
+                cardsFiresTextColor: "#000000")
         }
     }
 }
