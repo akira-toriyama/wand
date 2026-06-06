@@ -321,6 +321,19 @@ Everything below depends on this contract:
   items) live at the higher scope on purpose; the comment at the
   call site explains why. Default to the nested form, and justify
   in a comment when promoting a key upward.
+- **The same discipline applies to CLI options.** Breaking changes
+  to the flag surface are OK (rename + warn, update `--help` /
+  README in the same PR — there is no third-party tooling depending
+  on the flag set). And the loud-reject policy holds end-to-end:
+  unknown flags exit `2`, multiple action flags exit `2`, orphan
+  modifier flags exit `2`. **No silent fallback, no silent drop** —
+  PR #98 set this baseline; new flags must register in the
+  three-pass argument processor in [Main.swift](Sources/WandApp/Main.swift)
+  (action mutex → unknown-flag scan with operand arities → orphan
+  modifier check). If a new flag takes operands, add it to
+  `valueArities` so its operand doesn't get reported as "unknown";
+  if it's only valid with specific actions, add it to `modifierFlags`
+  with the allow-list.
 
 ### TOML parser
 
