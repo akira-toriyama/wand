@@ -1,6 +1,6 @@
 ---
 title: wand 用語集
-tags: [glossary, macos, gesture, launcher]
+tags: [glossary, macos, cast, tome]
 repo: wand
 aliases: []
 ---
@@ -13,7 +13,7 @@ wand を構成する各パーツの **正規の呼び名** をまとめた規範
 1 つに決めて、それで通す。
 
 なお **正規名は英語のまま** 保持する。コード識別子・設定キー
-（`[gesture.overlay]`, `PanelController` など）と一対一に対応させるため。
+（`[cast.overlay]`, `PanelController` など）と一対一に対応させるため。
 日本語化するのは説明文だけ。
 
 用語が足りなければ、その用語を導入する PR で同時にこのファイルへ追記する。
@@ -25,7 +25,7 @@ wand を構成する各パーツの **正規の呼び名** をまとめた規範
 
 ---
 
-## ジェスチャー面
+## cast 面（ジェスチャー描画系）
 
 下の GIF は Chrome 上で `DU`（下→上）を描いて `新しいタブ` ルールを
 発火させた様子。中央の Chrome アイコンが `badge`、カーソルを追う青線が
@@ -37,12 +37,21 @@ wand を構成する各パーツの **正規の呼び名** をまとめた規範
 > 再生成: `swift scripts/capture-demo.swift <x> <y>` で録画し、ヘッダ記載の
 > ffmpeg + gifski でクロップ → `docs/images/gesture-demo.gif` 化。
 
+### cast
+右ボタンドラッグでカーソルを動かして形（LURD 文字列）を描き、
+「呪文を唱える」感覚で `[[cast.rule]]` にマッチさせ cursor-anchored target
+にアクションを実行する第 1 のトリガーファミリー。`[cast]` の
+`button` / `modifiers` で起動条件を切り替える。
+- 設定: `[cast]`
+- 旧名（v6 まで）: `gesture`
+- **Don't call it:** gesture, ジェスチャー（v7 から retired）
+
 ### assist card
 カーソル周囲に配置される小さなカード。**今この瞬間ここから到達可能な方向**
 を 1 方向 = 1 カードで提示する。現在マッチしているルールに対応する
-カードは match color で強調される。退場アニメは `[gesture.overlay.cards]`
+カードは match color で強調される。退場アニメは `[cast.overlay.cards]`
 の `unmatch` / `match` で個別に指定する。
-- 設定: `[gesture.overlay]` / `[gesture.overlay.cards]`
+- 設定: `[cast.overlay]` / `[cast.overlay.cards]`
 - コード: `WandAdapterMacOS` overlay
 - **Don't call it:** tooltip, popup, hint, chip, balloon, label, ツールチップ, ポップアップ, ヒント
 
@@ -57,25 +66,25 @@ wand を構成する各パーツの **正規の呼び名** をまとめた規範
 ジェスチャー開始点に固定表示される小さなマーカー。**ターゲットアプリの
 アイコン** を表示し、キーボードフォーカスが別ウィンドウにあっても
 「wand がどのウィンドウに作用するのか」を一目で示す。
-- 設定: `[gesture.overlay.badge]`（`enabled` / `size` / `anim-enabled`）
+- 設定: `[cast.overlay.badge]`（`enabled` / `size` / `anim-enabled`）
 - **Don't call it:** icon, indicator, marker, anchor, アイコン, インジケータ
 
 ### trail
 ジェスチャー描画中にカーソルを追従する半透明の軌跡。これまでに描いた
 形がルールにマッチしていれば match color、マッチしなければ no-match color。
-- 設定: `[gesture.overlay.trail]`（`color` / `color-no-match` /
+- 設定: `[cast.overlay.trail]`（`color` / `color-no-match` /
   `width` / `style` / `final-hold-ms`）
 - **Don't call it:** path, stroke, line, ink, パス, 軌跡（説明文中の比喩を除く）
 
-### gesture rule
-1 つの `[[gesture.rule]]` エントリ。`pattern`（例: `DR`）と
+### cast rule
+1 つの `[[cast.rule]]` エントリ。`pattern`（例: `DR`）と
 アクションのペアで、必要に応じて `apps` / `filter-title` / `filter-shell`
 で適用範囲を絞る。
-- 設定: `[[gesture.rule]]`
+- 設定: `[[cast.rule]]`
 - **Don't call it:** gesture, binding, mapping, shortcut, バインド, ショートカット
 
 ### wand pattern
-`gesture rule` がマッチ対象とする方向文字列。アルファベットは `L U R D`
+`cast rule` がマッチ対象とする方向文字列。アルファベットは `L U R D`
 のみ、連続同方向は不可（認識器が同方向の動きを 1 セグメントに集約する
 ため）。
 - 例: `DR`, `URD`, `L`
@@ -83,9 +92,9 @@ wand を構成する各パーツの **正規の呼び名** をまとめた規範
 
 ### fire burst
 ジェスチャーが発動した瞬間にカーソル位置でパーティクルを放射する
-クリックスルー演出。`[gesture.overlay].enabled = false` でも独立に
+クリックスルー演出。`[cast.overlay].enabled = false` でも独立に
 動作する。`kind = "burst"` で有効、`kind = "off"` で無効。
-- 設定: `[gesture.fire.burst]`
+- 設定: `[cast.fire.burst]`
 - コード: `WandAdapterMacOS/BurstManager`
 - **Don't call it:** particles, explosion, effect, flare, パーティクル, エフェクト
 
@@ -94,29 +103,38 @@ wand を構成する各パーツの **正規の呼び名** をまとめた規範
 フェードアウトする痕跡。`ink-splatter` / `paint-blob` / `scorch` /
 `star` から選ぶ（`off` で無効）。trail と違って描画中ではなく
 **発動の瞬間に一度だけ**置かれる。
-- 設定: `[gesture.fire.decal]`(`kind` / `duration-ms` / `size`)
+- 設定: `[cast.fire.decal]`(`kind` / `duration-ms` / `size`)
 - コード: `WandAdapterMacOS/DecalManager`
 - **Don't call it:** splash, stain, mark, sticker, スタンプ, シール
 
 ### match color / no-match color
 [[assist card]] の枠色および [[trail]] の線色を切り替える 2 色のペア。
-描画中のジェスチャーが [[gesture rule]] にマッチしている瞬間は
+描画中のジェスチャーが [[cast rule]] にマッチしている瞬間は
 match color、まだマッチしていなければ no-match color。同時に表示中の
 `assist card` のうち、現在マッチしている候補だけが match color で
 強調され、ほかは通常色のまま残る。
-- 設定: `[gesture.overlay]`
+- 設定: `[cast.overlay]`
 - コード: `WandAdapterMacOS/GestureOverlay`
 - **Don't call it:** active color, hit color, highlight color, success color, fail color, アクティブ色, ハイライト色, 成功色
 
 ---
 
-## ランチャー面
+## tome 面（ポップアップメニュー系）
+
+### tome
+中クリック（既定）で開く呪文書スタイルのコンテキストメニュー。
+non-activating NSPanel を cursor 下にアンカーして開き、各
+`[[tome.item]]` がメニュー 1 行に対応する。第 2 のトリガーファミリー。
+opt-in (`[tome].enabled = true`)。
+- 設定: `[tome]`
+- 旧名（v6 まで）: `launcher`
+- **Don't call it:** launcher, ランチャー（v7 から retired）
 
 ### non-activating panel
-ランチャーのメインメニュー。トリガーボタンを押した瞬間に出現する
+tome のメインメニュー。トリガーボタンを押した瞬間に出現する
 **キーボードフォーカスを奪わない浮遊パネル**（PopClip パリティ）。
 ボタン押下時にカーソル下にあったウィンドウにアンカーされる。
-- 設定: `[launcher]`
+- 設定: `[tome]`
 - コード: `PanelController`
 - **Don't call it:** modal, popup, window, menu, dialog, モーダル, ポップアップ, ダイアログ, ウィンドウ
 
@@ -126,31 +144,31 @@ match color、まだマッチしていなければ no-match color。同時に表
 - コード: `PanelController.openChild`
 - **Don't call it:** submenu, dropdown, flyout, nested menu, サブメニュー, ドロップダウン
 
-### launcher item
-1 つの `[[launcher.item]]` エントリ。[[non-activating panel]] もしくは
+### tome entry
+1 つの `[[tome.item]]` エントリ。[[non-activating panel]] もしくは
 [[child panel]] に並ぶ 1 行を指す。静的なもの、`group` で child panel に
 展開されるもの、`dynamic` でメニュー展開時に行を生成するものがある。
-- 設定: `[[launcher.item]]`
+- 設定: `[[tome.item]]`
 - **Don't call it:** entry, row, button, command, action, 項目, ボタン, アクション
 
 ### dynamic submenu
-`dynamic = "<shell>"` を持つ `launcher item` が、メニュー展開時に
+`dynamic = "<shell>"` を持つ `tome entry` が、メニュー展開時に
 シェルコマンドを実行し、その標準出力 1 行 = 1 子行として
 `template-*` フィールドを適用して生成する [[child panel]]。500ms の
 ハードタイムアウトあり。
-- 設定: `[[launcher.item]]` で `dynamic` 指定時
+- 設定: `[[tome.item]]` で `dynamic` 指定時
 - **Don't call it:** generated submenu, shell submenu, computed menu, 動的メニュー
 
-### launcher layout
+### tome layout
 [[non-activating panel]] の並びモード。`list`（縦並び、デフォルト）/
 `toolbar`（横並び、アイコンのみ）/ `labeled-toolbar`（横並び、ラベル付き）
-の 3 つ。`[launcher].layout` でデーモン全体、`--show-menu --items`
-のファイル内の `[launcher].layout` でその呼び出し限定に切り替えられる。
-- 設定: `[launcher].layout`
+の 3 つ。`[tome].layout` でデーモン全体、`--show-menu --items`
+のファイル内の `[tome].layout` でその呼び出し限定に切り替えられる。
+- 設定: `[tome].layout`
 - **Don't call it:** orientation, mode, panel style, 並び順, レイアウト
 
 ### excludes
-ジェスチャーとランチャーを **特定のアプリ内で完全に無効化** する
+cast と tome を **特定のアプリ内で完全に無効化** する
 グローバルブロックリスト。bundle id の glob 配列で、トリガー判定の
 最初に短絡するためルール / アイテム個別の `apps` よりも上位で効く。
 - 設定: `[exclude].apps`
@@ -187,7 +205,7 @@ match color、まだマッチしていなければ no-match color。同時に表
 
 ### `$SELECTION`
 ランチャートリガー発火の瞬間に、フォーカスされている要素で選択
-されていたテキスト。`shell` 系 [[launcher item]] に環境変数として
+されていたテキスト。`shell` 系 [[tome entry]] に環境変数として
 渡される。何も選択されていない場合、もしくはフォーカス先のアプリ
 が AX selection を公開していない場合は空文字列。**信頼できない値**
 としてシェル内では必ずクォートすること。
@@ -201,7 +219,7 @@ match color、まだマッチしていなければ no-match color。同時に表
 - 1 つの概念につき正規名は 1 つ。複数の呼び方が流通しているなら、
   このファイルで勝者を選び、敗者は `Don't call it:` 行に並べる。
 - 正規名は **英語のまま小文字で書く**。コード識別子・設定キー
-  （`[[gesture.rule]]`, `PanelController`）はその表記を維持する。
+  （`[[cast.rule]]`, `PanelController`）はその表記を維持する。
 - 定義は **1〜2 文** に収める。動作の詳細は設定セクションやソース
   ファイルへリンクし、ここで説明し直さない。
 - 用語にスクリーンショットを付ける場合は `docs/images/` に置き、

@@ -6,8 +6,8 @@ Guidance for working in this repository.
 
 All UI / config terminology follows [`docs/glossary.md`](docs/glossary.md) —
 use the canonical names (assist card, badge, trail, fire burst,
-fire decal, non-activating panel, child panel, launcher item,
-launcher layout, dynamic submenu, AX target, external trigger,
+fire decal, non-activating panel, child panel, tome entry,
+tome layout, dynamic submenu, AX target, external trigger,
 excludes, …), **not** the `Don't call it:` synonyms. Adding or
 renaming a term lands in the same PR as the code change.
 
@@ -15,14 +15,14 @@ renaming a term lands in the same PR as the code change.
 
 `wand` — macOS daemon for **cursor-anchored mouse automation**. Two
 trigger families coexist on one daemon, with an external entry point
-for event-driven daemons to share the same launcher UI:
+for event-driven daemons to share the same tome UI:
 
-- **gesture** (right-button + drag, the original "stroke" feature):
+- **cast** (right-button + drag, the original "stroke" feature):
   draw a shape with the cursor; the recogniser turns it into a
   `LURD` string; rules fire actions.
-- **launcher** (middle-click, opt-in via `[launcher].enabled`):
+- **tome** (middle-click, opt-in via `[tome].enabled`):
   pops a **non-activating NSPanel** near the cursor (PopClip parity
-  — does NOT take keyboard focus); each `[[launcher.item]]` is one
+  — does NOT take keyboard focus); each `[[tome.item]]` is one
   row with the same action-type vocabulary. Submenus
   (`group = ["..."]`) open as adjacent child panels on hover.
 - **`wand --show-menu`** (external trigger CLI): other daemons
@@ -36,7 +36,7 @@ Both native triggers share the **single invariant**: actions dispatch
 to the window the cursor was over **at button-down time**, never to
 whichever has focus by the time the action runs. On multi-display
 Macs the focused window is often on a different display from where
-you're pointing, so a gesture / launcher click aimed at e.g. a
+you're pointing, so a cast / tome click aimed at e.g. a
 Chrome tab on display 2 fires against *that* tab — not whatever
 happened to have focus on display 1.
 
@@ -95,7 +95,7 @@ ws-tabs.
   `MouseSource`. Real vs synthetic is picked at app startup.
   Adding a new mouse-input strategy means a new `MouseSource`
   conformer in an Adapter module — never a `#if` in Core.
-- **The launcher trigger has its own seam**: `LauncherSource`
+- **The tome trigger has its own seam**: `LauncherSource`
   protocol in `WandCore`, `MacOSLauncherSource` in `WandAdapterMacOS`
   ([Sources/WandAdapterMacOS/LauncherTap.swift](Sources/WandAdapterMacOS/LauncherTap.swift)).
   It's a separate `CGEventTap` from `MacOSMouseSource` — two taps
@@ -178,10 +178,10 @@ ws-tabs.
   `Matcher.candidates()` is the one place that skips title /
   shell entirely — it runs per-sample for the overlay's assist
   hint, and any extra work blows the frame budget. Net: the
-  gesture trail can paint a rule as "reachable" that ends up
+  cast trail can paint a rule as "reachable" that ends up
   rejected at button-up; deliberate trade-off, documented at the
   call site.
-- **The gesture-trail overlay lives in `WandAdapterMacOS`**, not a
+- **The cast-trail overlay lives in `WandAdapterMacOS`**, not a
   separate View module ([Sources/WandAdapterMacOS/GestureOverlay.swift](Sources/WandAdapterMacOS/GestureOverlay.swift)).
   It's the project's only on-screen UI; it's pure AppKit/CG rendering
   fed by the event-tap sample stream, so it belongs in the macOS
@@ -252,14 +252,110 @@ Everything below depends on this contract:
   The Controller resolves the target via
   `NSWorkspace.frontmostApplication` instead of `AXTarget.
   resolveAt(point:)` — text-selection-anchored, not cursor-
-  anchored. Spine guarantees above apply to gesture and middle-
-  click launcher (the native trigger families); `--show-menu` is
+  anchored. Spine guarantees above apply to cast and middle-
+  click tome (the native trigger families); `--show-menu` is
   documented as the carve-out. `$SELECTION` is the only extra env
   var added (via `Dispatch.execute(extraEnv:)`); the
   `WAND_TARGET_*` set is still populated, just from the
   frontmost app instead of a cursor-anchored window. See
   [Sources/WandApp/Controller.swift](Sources/WandApp/Controller.swift)'s
   `handleShowMenu`.
+
+### Safety invariants — DO NOT regress this
+
+wand grabs low-level mouse via CGEventTap. A bug, a crash, or a
+swallowed event maps directly to **"the user's PC is now
+unusable"** — the worst possible outcome for a tool whose own
+positioning is "mouse enhancement". The rules below apply to every
+current trigger family (cast, tome) and every future one
+(bolt, aura, scry, …).
+
+**The three PC-inoperable failure modes**
+
+These all contradict wand's reason for existing:
+
+- left click cannot be released (stuck mid-drag)
+- right click cannot be released (stuck mid-stroke)
+- DnD cannot be released (synthetic mouseUp lost, or tap holds the
+  drag stream)
+
+**`[failsafe]` is a mandatory config block**
+
+Same top-level scope as `[exclude]`, but with the opposite
+TOML-handling policy: while every other key clamps to a default
+when missing / invalid, **`[failsafe]` block missing → wand
+refuses to start**. Deliberate deviation from the
+clamp-to-default convention. The bundled `config.toml` always
+ships `[failsafe]`; `wand --validate` flags the missing block as
+fatal. Rationale: safety must not silently degrade — if a user
+removes the block, they get a loud error, not a quietly unsafe
+daemon.
+
+**Five layers of defense**
+
+Don't lean on any single layer; combine them so one failure mode
+can't cascade:
+
+1. **Button-hold timeout** — `[failsafe].mouse-hold-timeout-sec`.
+   If any mouse button stays `down` longer than the timeout, the
+   daemon force-posts a mouseUp at the current cursor position.
+   Catches both wand-origin stuck states and external HID layers
+   (Karabiner-Elements / Logitech Options / KVMs) that drop the
+   real up event.
+2. **Emergency release key** — `[failsafe].emergency-release-key`,
+   default `"esc"`. Implemented via
+   `NSEvent.addGlobalMonitorForEvents` (passive observer — Esc
+   still flows to the underlying app, so modals / cancels keep
+   working). The release sequence is **idempotent**: releasing an
+   un-held button and cancelling an inactive state are both no-ops,
+   so the firehose of normal Esc presses is harmless. Only logs
+   `Log.line` when it *actually* released something, so an empty
+   log = healthy.
+3. **CLI escape hatch** — `wand --release-all` over the existing
+   DNC channel. Works from a second shell / ssh / a keyboard
+   shortcut app when the mouse itself is unusable.
+4. **Tap-internal invariants** (see below).
+5. **Tap watchdog** — `[failsafe].tap-watchdog-interval-sec`.
+   `CGEventTap` can be disabled by the OS under load; the daemon
+   periodically checks and reinstalls. `wand --doctor` flags any
+   button held longer than the timeout and suggests
+   `--release-all`.
+
+**Tap-internal invariants (code level)**
+
+- **bolt's synthetic `.leftMouseUp` post is the single most
+  dangerous code path.** Before posting, check
+  `CGEventSource.buttonState`: if it's already `false` (user
+  released naturally), skip the post. After posting, re-check; if
+  still `true`, retry once. bolt is the *only* place in wand that
+  posts a synthetic mouseUp — keep it the only one, and keep this
+  check in place.
+- **The cast tap must never swallow mouseUp on any
+  error path.** A crashed daemon is recoverable (the OS
+  auto-uninstalls the tap); a tap that holds the mouseUp is not.
+  Audit every CGReturn / error branch in
+  [Sources/WandAdapterMacOS/EventTap.swift](Sources/WandAdapterMacOS/EventTap.swift)
+  to confirm mouseUp always reaches AppKit.
+- **No "synthetic-down-in-flight" state** in the daemon. wand
+  posts mouseUp synthetically (bolt); it never posts mouseDown
+  synthetically. The asymmetry is the whole point: if wand
+  crashes between a synthetic-down and the matching synthetic-up,
+  the OS has no way to recover. Crashing with no synthetic-down
+  in flight is safe because the OS uninstalls the tap and every
+  real event flows through.
+
+**Adding a new trigger family**
+
+Every new trigger (bolt's left-drag-shake, scry's AX observation,
+anything future) goes through this checklist:
+
+1. If the daemon crashes mid-trigger, can the user still use the
+   mouse normally?
+2. Does the trigger post synthetic mouse events? If yes, only
+   mouseUp, and only after a `buttonState` precondition check.
+3. Is the trigger's progress state cleared by the emergency
+   release sequence? Wire it into the release path.
+4. Does `wand --doctor` report the trigger's health? Add a probe.
 
 ### Configuration
 
@@ -275,7 +371,7 @@ Everything below depends on this contract:
   every option in one TOML file. Memory: facet's
   `config-default-behavior` pattern.
 - **All TOML keys clamp out-of-range / unknown values to defaults**
-  rather than rejecting. A typo can never break gesture
+  rather than rejecting. A typo can never break cast
   recognition — the rule with the typo silently drops, the rest
   still load. `wand --validate` is the explicit verification
   path.
@@ -315,10 +411,10 @@ Everything below depends on this contract:
 
   This is a *want / better*, not a *must*. The exception is a
   setting that genuinely spans both sub-blocks and would invite
-  drift if duplicated — `[gesture].intensity` (scales both
-  `[gesture.overlay.cards]` and `[gesture.fire.burst]`) and
-  `[exclude].apps` (applies to both gesture rules and launcher
-  items) live at the higher scope on purpose; the comment at the
+  drift if duplicated — `[cast].intensity` (scales both
+  `[cast.overlay.cards]` and `[cast.fire.burst]`) and
+  `[exclude].apps` (applies to both cast rules and tome
+  entries) live at the higher scope on purpose; the comment at the
   call site explains why. Default to the nested form, and justify
   in a comment when promoting a key upward.
 - **The same discipline applies to CLI options.** Breaking changes
@@ -340,7 +436,7 @@ Everything below depends on this contract:
 - **`parseTOMLSubset` is hand-rolled** in
   [Sources/WandCore/TOML.swift](Sources/WandCore/TOML.swift)
   — extended from facet's port with `[[array-of-tables]]`
-  support because `[[gesture.rule]]` needs it. Inline tables (`{a=1,
+  support because `[[cast.rule]]` needs it. Inline tables (`{a=1,
   b=2}`) are **not** supported and rules use dotted-key style
   (`action-type` + `action-keys` / `action-verb` /
   `action-cmd` / `action-url`) instead. Don't add an inline-table
@@ -379,7 +475,7 @@ Everything below depends on this contract:
   `NSEvent.mouseLocation` freezes at the button-down position and
   every sample reports the same coords. We learned this in M2's
   first-run (samples=600, max|dx|=0).
-- **Tunable via `[gesture].min-stroke-px`** in config.toml,
+- **Tunable via `[cast].min-stroke-px`** in config.toml,
   clamped 4..200 by `WandConfig.parse`.
 
 ### Logging
@@ -418,7 +514,7 @@ The workflow:
 2. **Tail the log** from a second shell: `tail -f /tmp/wand.log`.
    This is the single source of observability — there is nothing
    else to inspect.
-3. **Read the trace.** A gesture that fires end-to-end logs, in
+3. **Read the trace.** A cast that fires end-to-end logs, in
    order:
    ```
    event-tap: down at (x,y) → target=com.google.Chrome
@@ -437,7 +533,7 @@ The workflow:
    - `max|dx|`/`max|dy|` both `< threshold` → real motion but too
      small; raise sensitivity or draw bigger.
    - `target=nil` (with a recognised pattern) → cursor was over a
-     non-AX surface (Dock, menu bar, desktop); the gesture is
+     non-AX surface (Dock, menu bar, desktop); the cast is
      dropped on purpose.
 5. **Isolate recognition** with `wand --record` — it streams
    `pattern=… samples=… max|dx|=… target=…` to stdout for every
@@ -516,7 +612,7 @@ stray instances before relaunching.
   upgrade drops the TCC grant.
 - **`--status` is one-way the other direction**: DNC can't reply, so
   the daemon rewrites a small status file (`statusPath` =
-  `/tmp/wand.status`) on start / reload / each recognised gesture,
+  `/tmp/wand.status`) on start / reload / each recognised cast,
   and `--status` just reads it. Don't reach for a request/response
   IPC — the file is enough.
 - **Config auto-reload**: `ConfigWatcher`
@@ -585,7 +681,7 @@ decisions. Subsections ordered broad → narrow.
   *(reviewed 2026-05-23)* — what the hand-rolled
   `parseTOMLSubset` approximates. We intentionally support a strict
   subset (no inline tables, no nested arrays-of-arrays, dotted-key
-  style for `[[gesture.rule]]` rows). New `.toml` features must justify the
+  style for `[[cast.rule]]` rows). New `.toml` features must justify the
   added parser surface against the "≈100-line parser" budget.
 - [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/)
   *(reviewed 2026-05-23)* — type / scope grammar

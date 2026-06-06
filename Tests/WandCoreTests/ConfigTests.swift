@@ -14,7 +14,7 @@ final class ConfigTests: XCTestCase {
         // modifier list → only the known ones (compactMap typo
         // tolerance).
         let cfg = WandConfig.parse("""
-        [gesture]
+        [cast]
         button = "wat"
         modifiers = ["xyz", "cmd"]
         """)
@@ -22,24 +22,24 @@ final class ConfigTests: XCTestCase {
         XCTAssertEqual(cfg.trigger.modifiers, [.cmd])
     }
 
-    // MARK: - [gesture.recognition] clamps
+    // MARK: - [cast.recognition] clamps
 
     func testMinStrokePxClampLowHighDefault() {
         XCTAssertEqual(WandConfig.parse("").recognition.minStrokePx, 16)
         XCTAssertEqual(WandConfig.parse(
-            "[gesture.recognition]\nmin-stroke-px = 2").recognition.minStrokePx, 4)
+            "[cast.recognition]\nmin-stroke-px = 2").recognition.minStrokePx, 4)
         XCTAssertEqual(WandConfig.parse(
-            "[gesture.recognition]\nmin-stroke-px = 999").recognition.minStrokePx, 200)
+            "[cast.recognition]\nmin-stroke-px = 999").recognition.minStrokePx, 200)
     }
 
     func testMaxSegmentMs() {
         XCTAssertEqual(WandConfig.parse("").recognition.maxSegmentMs, 0)
         XCTAssertEqual(WandConfig.parse(
-            "[gesture.recognition]\nmax-segment-ms = 1500").recognition.maxSegmentMs, 1500)
+            "[cast.recognition]\nmax-segment-ms = 1500").recognition.maxSegmentMs, 1500)
         XCTAssertEqual(WandConfig.parse(
-            "[gesture.recognition]\nmax-segment-ms = 50").recognition.maxSegmentMs, 100)
+            "[cast.recognition]\nmax-segment-ms = 50").recognition.maxSegmentMs, 100)
         XCTAssertEqual(WandConfig.parse(
-            "[gesture.recognition]\nmax-segment-ms = 999999").recognition.maxSegmentMs, 60000)
+            "[cast.recognition]\nmax-segment-ms = 999999").recognition.maxSegmentMs, 60000)
     }
 
     func testMaxStrokeMsRemovedInV2() {
@@ -47,29 +47,29 @@ final class ConfigTests: XCTestCase {
         // still uses it gets the default (0 = no timeout) and a
         // log line — it must NOT silently map to maxSegmentMs.
         XCTAssertEqual(WandConfig.parse(
-            "[gesture.recognition]\nmax-stroke-ms = 1500").recognition.maxSegmentMs, 0)
+            "[cast.recognition]\nmax-stroke-ms = 1500").recognition.maxSegmentMs, 0)
     }
 
     func testCancelReversals() {
         XCTAssertEqual(WandConfig.parse("").recognition.cancelReversals, 2)
         XCTAssertEqual(WandConfig.parse(
-            "[gesture.recognition]\ncancel-reversals = 3").recognition.cancelReversals, 3)
+            "[cast.recognition]\ncancel-reversals = 3").recognition.cancelReversals, 3)
         XCTAssertEqual(WandConfig.parse(
-            "[gesture.recognition]\ncancel-reversals = 0").recognition.cancelReversals, 0)
+            "[cast.recognition]\ncancel-reversals = 0").recognition.cancelReversals, 0)
         XCTAssertEqual(WandConfig.parse(
-            "[gesture.recognition]\ncancel-reversals = 999").recognition.cancelReversals, 20)
+            "[cast.recognition]\ncancel-reversals = 999").recognition.cancelReversals, 20)
     }
 
     func testCancelWindowMs() {
         XCTAssertEqual(WandConfig.parse("").recognition.cancelWindowMs, 500)
         XCTAssertEqual(WandConfig.parse(
-            "[gesture.recognition]\ncancel-window-ms = 800").recognition.cancelWindowMs, 800)
+            "[cast.recognition]\ncancel-window-ms = 800").recognition.cancelWindowMs, 800)
         XCTAssertEqual(WandConfig.parse(
-            "[gesture.recognition]\ncancel-window-ms = 0").recognition.cancelWindowMs, 0)
+            "[cast.recognition]\ncancel-window-ms = 0").recognition.cancelWindowMs, 0)
         XCTAssertEqual(WandConfig.parse(
-            "[gesture.recognition]\ncancel-window-ms = 50").recognition.cancelWindowMs, 100)
+            "[cast.recognition]\ncancel-window-ms = 50").recognition.cancelWindowMs, 100)
         XCTAssertEqual(WandConfig.parse(
-            "[gesture.recognition]\ncancel-window-ms = 99999").recognition.cancelWindowMs, 5000)
+            "[cast.recognition]\ncancel-window-ms = 99999").recognition.cancelWindowMs, 5000)
     }
 
     func testExcludeAppsParsed() {
@@ -81,14 +81,14 @@ final class ConfigTests: XCTestCase {
                        ["com.apple.dt.Xcode", "com.example.foo"])
     }
 
-    // MARK: - [gesture.overlay] + sub-blocks
+    // MARK: - [cast.overlay] + sub-blocks
 
     func testOverlayConfigParsed() {
         let cfg = WandConfig.parse("""
-        [gesture.overlay]
+        [cast.overlay]
         enabled = false
 
-        [gesture.overlay.trail]
+        [cast.overlay.trail]
         color = "#ff0000"
         color-no-match = "orange"
         width = 8
@@ -100,7 +100,7 @@ final class ConfigTests: XCTestCase {
     }
 
     func testOverlayDefaultsWhenAbsent() {
-        let cfg = WandConfig.parse("[gesture]\nbutton = \"right\"")
+        let cfg = WandConfig.parse("[cast]\nbutton = \"right\"")
         XCTAssertTrue(cfg.overlay.enabled)
         XCTAssertEqual(cfg.overlay.trail.color, "#3b82f6")
         XCTAssertEqual(cfg.overlay.trail.colorNoMatch, "#ef4444")
@@ -109,9 +109,9 @@ final class ConfigTests: XCTestCase {
 
     func testOverlayWidthClamped() {
         XCTAssertEqual(WandConfig.parse(
-            "[gesture.overlay.trail]\nwidth = 999").overlay.trail.width, 40)
+            "[cast.overlay.trail]\nwidth = 999").overlay.trail.width, 40)
         XCTAssertEqual(WandConfig.parse(
-            "[gesture.overlay.trail]\nwidth = 0").overlay.trail.width, 1)
+            "[cast.overlay.trail]\nwidth = 0").overlay.trail.width, 1)
     }
 
     func testOverlayBadgeKnobs() {
@@ -126,10 +126,10 @@ final class ConfigTests: XCTestCase {
         // Explicit off + custom size — and the size clamps so a typo
         // can't pin the badge to nothing.
         let custom = WandConfig.parse("""
-        [gesture.overlay]
+        [cast.overlay]
         blur-enabled = false
 
-        [gesture.overlay.badge]
+        [cast.overlay.badge]
         enabled = false
         anim-enabled = false
         size = 999
@@ -140,28 +140,28 @@ final class ConfigTests: XCTestCase {
         XCTAssertEqual(custom.overlay.badge.size, 96)
 
         XCTAssertEqual(WandConfig.parse(
-            "[gesture.overlay.badge]\nsize = 4").overlay.badge.size, 32)
+            "[cast.overlay.badge]\nsize = 4").overlay.badge.size, 32)
     }
 
-    // MARK: - [[gesture.rule]]
+    // MARK: - [[cast.rule]]
 
     func testConfigParsesArrayOfTables() {
         let toml = """
-        [gesture]
+        [cast]
         button = "right"
         modifiers = ["cmd"]
 
-        [gesture.recognition]
+        [cast.recognition]
         min-stroke-px = 20
 
-        [[gesture.rule]]
+        [[cast.rule]]
         name = "close tab"
         pattern = "DR"
         apps = ["*chrome*", "*safari*"]
         action-type = "key"
         action-keys = "cmd+w"
 
-        [[gesture.rule]]
+        [[cast.rule]]
         name = "minimize"
         pattern = "L"
         apps = ["*"]
@@ -186,12 +186,12 @@ final class ConfigTests: XCTestCase {
         // Typo'd verb drops at parse time (visible to --validate)
         // rather than loading and silently no-op'ing at dispatch.
         let toml = """
-        [[gesture.rule]]
+        [[cast.rule]]
         pattern = "L"
         action-type = "ax"
         action-verb = "clsoe"
 
-        [[gesture.rule]]
+        [[cast.rule]]
         pattern = "R"
         action-type = "ax"
         action-verb = "ZOOM"
@@ -206,7 +206,7 @@ final class ConfigTests: XCTestCase {
 
     func testRuleNameDefaultsToPattern() {
         let toml = """
-        [[gesture.rule]]
+        [[cast.rule]]
         pattern = "DR"
         action-type = "key"
         action-keys = "cmd+w"
@@ -222,12 +222,12 @@ final class ConfigTests: XCTestCase {
         // pattern like `DRR` can never fire. Parser drops it loudly
         // rather than letting it load and silently no-op.
         let toml = """
-        [[gesture.rule]]
+        [[cast.rule]]
         pattern = "DRR"
         action-type = "key"
         action-keys = "cmd+w"
 
-        [[gesture.rule]]
+        [[cast.rule]]
         pattern = "DR"
         action-type = "key"
         action-keys = "cmd+w"
@@ -241,22 +241,22 @@ final class ConfigTests: XCTestCase {
         // All three should drop: empty pattern, missing action-keys
         // for type=key, unknown action-type.
         let toml = """
-        [[gesture.rule]]
+        [[cast.rule]]
         pattern = ""
         action-type = "key"
         action-keys = "cmd+w"
 
-        [[gesture.rule]]
+        [[cast.rule]]
         pattern = "L"
         action-type = "key"
         action-keys = ""
 
-        [[gesture.rule]]
+        [[cast.rule]]
         pattern = "R"
         action-type = "thing"
         action-keys = "cmd+w"
 
-        [[gesture.rule]]
+        [[cast.rule]]
         pattern = "U"
         action-type = "key"
         action-keys = "cmd+r"
@@ -268,7 +268,7 @@ final class ConfigTests: XCTestCase {
 
     func testRuleShellAction() {
         let toml = """
-        [[gesture.rule]]
+        [[cast.rule]]
         pattern = "L"
         action-type = "shell"
         action-cmd = "open -a Terminal"

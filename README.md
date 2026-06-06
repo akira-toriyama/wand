@@ -12,10 +12,10 @@ action: close a tab, reopen one, minimize a window, run a shell
 command. The action runs against the window the cursor was over when
 you started drawing.
 
-## Gestures
+## Cast — drawn-pattern trigger
 
 Draw with the trigger button held down (right mouse by default). A
-wand is a sequence of cardinal directions:
+cast is a sequence of cardinal directions:
 
 ```
 L = left    U = up    R = right    D = down
@@ -44,19 +44,19 @@ right now is tinted in the match color. At the gesture's start point
 a small badge shows the **target app's icon** so the window wand
 will act on is unambiguous even when keyboard focus sits elsewhere.
 
-Visual knobs live in scoped sub-blocks of `[gesture.overlay]`:
-the trail line itself in `[gesture.overlay.trail]`, the origin
-badge in `[gesture.overlay.badge]`, and the assist-card exit
-animations in `[gesture.overlay.cards]`.
+Visual knobs live in scoped sub-blocks of `[cast.overlay]`:
+the trail line itself in `[cast.overlay.trail]`, the origin
+badge in `[cast.overlay.badge]`, and the assist-card exit
+animations in `[cast.overlay.cards]`.
 
 The assist cards can animate out — drop, slide, explode, vibrate,
 or burst with fireworks / confetti particles. Pick one effect for
 the moment a card becomes unreachable mid-gesture (`unmatch`) and
 another for the moment a rule actually fires (`match`), both in
-`[gesture.overlay.cards]`. Default is silent. Fire-moment effects
+`[cast.overlay.cards]`. Default is silent. Fire-moment effects
 that work even when the trail overlay is off — the trail-end burst
-in `[gesture.fire.burst]` and the post-fire ink decal in
-`[gesture.fire.decal]` — live separately.
+in `[cast.fire.burst]` and the post-fire ink decal in
+`[cast.fire.decal]` — live separately.
 
 Actions target the window **under the cursor**, not whichever window
 holds keyboard focus: `ax` actions operate on it directly, `key`
@@ -64,33 +64,33 @@ actions raise it first and send the keystroke, and `shell` actions
 receive its identity (bundle id, pid, title, frame) as environment
 variables.
 
-## Launcher (opt-in)
+## Tome — middle-click menu (opt-in)
 
 wand also ships a **middle-click contextual menu** as a second
-trigger. Off by default — set `[launcher].enabled = true` in your
+trigger. Off by default — set `[tome].enabled = true` in your
 config and the daemon installs a second event tap alongside the
-gesture one. The launcher renders as a **non-activating panel**
+cast one. The tome renders as a **non-activating panel**
 (PopClip parity): it floats above the underlying app *without*
 stealing keyboard focus, so you can keep typing in your editor
 while picking a row with the mouse. Submenus open on hover as an
 adjacent child panel (`group = ["..."]`). Click outside or press
 Esc to dismiss. The panel is anchored to the **window under the
-cursor at button-down** — same invariant as the gesture path. Each
-`[[launcher.item]]` is one row:
+cursor at button-down** — same invariant as the cast path. Each
+`[[tome.item]]` is one row:
 
 ```toml
-[launcher]
+[tome]
 enabled = true
 button = "middle"                 # or "side1" / "side2" / "right"
 
-[[launcher.item]]
+[[tome.item]]
 name = "New Tab"
 icon = "🌐"                        # emoji / SF:<name> / file path
 apps = ["*chrome*", "*safari*"]
 action-type = "key"
 action-keys = "cmd+t"
 
-[[launcher.item]]
+[[tome.item]]
 name = "By Name"
 icon = "SF:textformat.abc"         # macOS SF Symbol
 group = ["Sort"]                   # nests this row inside a "Sort" submenu
@@ -109,9 +109,9 @@ once to `/tmp/wand.log`.
 Each row also accepts `subtitle`, a `header` separator, and
 `tint` / `tint-colors` / `icon-anim` for SF-Symbol icons — see
 [`config.toml`](config.toml) for the full per-row vocabulary. Panel-
-wide visual settings live in `[launcher.row]`, `[launcher.animation]`
-(`open` / `close` ∈ `off | fade | pop`), and `[launcher.decoration]`
-(`border ∈ off | rainbow`). `[launcher].layout` switches the panel
+wide visual settings live in `[tome.row]`, `[tome.animation]`
+(`open` / `close` ∈ `off | fade | pop`), and `[tome.decoration]`
+(`border ∈ off | rainbow`). `[tome].layout` switches the panel
 between `list`, `toolbar`, and `labeled-toolbar`.
 
 Items can also produce **dynamic submenus**. Set `dynamic` to a
@@ -119,7 +119,7 @@ shell command and provide `template-*` fields; each stdout line
 becomes one child item with `{line}` substituted in the template:
 
 ```toml
-[[launcher.item]]
+[[tome.item]]
 name = "Switch Branch"
 icon = "SF:point.3.connected.trianglepath.dotted"
 dynamic = 'cd ~/repo && git branch --format="%(refname:short)"'
@@ -137,7 +137,7 @@ shell commands — the line content is untrusted.
 Items can also carry a **checkmark state** via `state`:
 
 ```toml
-[[launcher.item]]
+[[tome.item]]
 name = "Dark Mode"
 state = "shell:defaults read -g AppleInterfaceStyle 2>/dev/null | grep -q Dark"
 action-type = "shell"
@@ -163,7 +163,7 @@ focused app doesn't expose AX selection. Use it for translate /
 search / send-to-app workflows:
 
 ```toml
-[[launcher.item]]
+[[tome.item]]
 name = "Translate"
 icon = "SF:globe"
 action-type = "shell"
@@ -180,10 +180,10 @@ is **untrusted** in the same sense `WAND_TARGET_TITLE` is.
 **`filter-title`** narrows that with a window-title glob, and
 **`filter-shell`** is an escape hatch — a `/bin/sh -c` predicate
 that decides at match time whether the row applies. Both work on
-`[[gesture.rule]]` and `[[launcher.item]]`:
+`[[cast.rule]]` and `[[tome.item]]`:
 
 ```toml
-[[launcher.item]]
+[[tome.item]]
 name = "Open as PR"
 icon = "SF:arrow.triangle.pull"
 apps = ["*chrome*"]
@@ -191,7 +191,7 @@ filter-title = "*github.com*/issues/*"      # only on a GitHub issue
 action-type = "url"
 action-url = "..."
 
-[[launcher.item]]
+[[tome.item]]
 name = "Late-night ping"
 filter-shell = "test $(date +%H) -ge 22"    # only after 22:00
 action-type = "shell"
@@ -239,7 +239,7 @@ explicitly with `wand --validate`.
 A rule looks like this:
 
 ```toml
-[[gesture.rule]]
+[[cast.rule]]
 name = "close tab"
 pattern = "DR"                        # down → right
 apps = ["*chrome*", "*safari*"]       # matches the window under the cursor
@@ -271,25 +271,25 @@ exists) **and no `!` entry matches**. Case-insensitive. Examples:
 | `["*", "!*.chrome.beta*"]` | every app except Chrome's beta channel |
 | `["*chrome*", "*safari*"]` | Chrome OR Safari |
 
-Globally suppress gestures and launcher in specific apps via
+Globally suppress cast and tome in specific apps via
 `[exclude].apps` (e.g. block wand inside a remote-desktop client).
 The list short-circuits both trigger families before rule / item
 matching runs.
 
 Trail style, origin-badge size, blur on the overlay, final-hold
 fade time, and many more visual knobs live in
-`[gesture.overlay.trail]`, `[gesture.overlay.badge]`, and
-`[gesture.overlay]` — see [`config.toml`](config.toml) for the
+`[cast.overlay.trail]`, `[cast.overlay.badge]`, and
+`[cast.overlay]` — see [`config.toml`](config.toml) for the
 complete annotated list.
 
-`[gesture.recognition].max-segment-ms` caps how long any one segment
+`[cast.recognition].max-segment-ms` caps how long any one segment
 may take — the clock resets on every turn, so a multi-segment gesture
 gets the full budget per leg and only a stalled single direction (an
 ordinary deliberate right-drag) runs past it and is abandoned. `0`
 (default) = no limit; the trail turns the no-match color once a
 segment runs past the budget.
 
-`[gesture.recognition].cancel-reversals` is the escape hatch: scribble
+`[cast.recognition].cancel-reversals` is the escape hatch: scribble
 the cursor back and forth and the in-progress gesture is abandoned on
 the spot — no waiting for a timeout, and releasing fires nothing. It
 counts 180° direction reversals; the default `2` catches a deliberate
@@ -298,13 +298,13 @@ back-and-forth without tripping on real gestures. `0` = off.
 must land within that window, so a fast scribble cancels but a slow
 deliberate back-and-forth doesn't; `0` = any speed.
 
-`[gesture.overlay.cards]` adds optional exit animations to the
+`[cast.overlay.cards]` adds optional exit animations to the
 assist cards. Each card normally pops out the moment it's no
 longer reachable from the shape you've drawn; with an effect set
 it eases out instead. Two hooks:
 
 ```toml
-[gesture.overlay.cards]
+[cast.overlay.cards]
 unmatch = "drop"        # cards that became unreachable mid-gesture
 match   = "fireworks"   # the firing card, on button-up
 ```
@@ -319,24 +319,24 @@ Fire-moment effects that work independently of the overlay live in
 their own click-through windows:
 
 ```toml
-[gesture.fire.burst]
+[cast.fire.burst]
 kind = "burst"          # off | burst
 
-[gesture.fire.decal]
+[cast.fire.decal]
 kind = "ink-splatter"   # off | ink-splatter | paint-blob | scorch | star
 duration-ms = 3000
 size = 60
 ```
 
-Both fire even when `[gesture.overlay].enabled = false`.
+Both fire even when `[cast.overlay].enabled = false`.
 
-A single `intensity` knob at the top level of `[gesture]` scales
-every visual effect produced by a gesture firing — overlay card
+A single `intensity` knob at the top level of `[cast]` scales
+every visual effect produced by a cast firing — overlay card
 animations AND the trail-end burst (decal has its own size /
 duration knobs and is not affected):
 
 ```toml
-[gesture]
+[cast]
 button = "right"
 intensity = "wild"      # subtle | normal | bold | wild
 ```
@@ -355,7 +355,7 @@ wand --validate --items <PATH>   # also validate an [[item]] file
 wand --doctor           # health check: Accessibility, config, daemon, tap
 wand --test DR [app]    # dry-run: which rule fires for a pattern
 wand --record           # interactive recorder — draw a gesture, get a
-                          # paste-ready [[gesture.rule]] snippet on stdout
+                          # paste-ready [[cast.rule]] snippet on stdout
 
 wand --status           # rule count, trigger, last gesture
 wand --reload           # re-read config.toml (also automatic on save)
@@ -366,8 +366,8 @@ wand --resign           # re-sign the installed Wand.app with the
                           # if the TCC grant drops)
 wand --show-menu --items <PATH> --at <X> <Y> [--selection <TEXT>] \
                  [--title <TEXT>]
-                        # external trigger: pop the launcher with a
-                          # caller-supplied [[item]] file at <X> <Y>
+                        # external trigger: pop the tome with a
+                          # caller-supplied [[tome.item]] file at <X> <Y>
                           # (Cocoa screen coords, Y-up).  Used by
                           # event-driven daemons (eventfx etc).
                           # --selection populates $SELECTION for
@@ -389,9 +389,9 @@ refuses if the daemon *is* running, because both would fight over the
 same CGEventTap.
 
 **Two transitions need a daemon restart** — everything else hot-reloads:
-- `[gesture]` (button / modifiers) — baked into the running tap's
+- `[cast]` (button / modifiers) — baked into the running tap's
   event mask at `tapCreate` time
-- `[gesture.overlay].enabled = false → true` — when the daemon started with
+- `[cast.overlay].enabled = false → true` — when the daemon started with
   overlay disabled, the window was never created; flipping it on
   later has nothing to attach to
 
@@ -444,7 +444,7 @@ cert isn't trusted as a CA. The cert is still in the keychain and
 `codesign --sign "<name>"` finds it by Common Name. Confirm with
 `security find-certificate -c "wand Local Signing"`.
 
-**Gesture doesn't fire on a Chrome page's content area.** The AX
+**Cast doesn't fire on a Chrome page's content area.** The AX
 walk-to-window fails through Chrome's renderer process; wand falls
 back to `CGWindowListCopyWindowInfo`. The log line reads
 `AX: resolved … via cg-window → com.google.Chrome …` — if you see

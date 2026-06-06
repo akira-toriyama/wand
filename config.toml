@@ -15,7 +15,7 @@
 
 
 # -----------------------------------------------------------------
-# Schema layout (v6.0)
+# Schema layout (v7.0)
 # -----------------------------------------------------------------
 # Each block has a single concern. Nested sub-blocks scope fields
 # by what they actually animate / configure, so the section path
@@ -23,32 +23,35 @@
 #
 #   [exclude]                       — global: applies to every trigger
 #
-#   [gesture]                       — gesture trigger (button + modifiers)
-#                                     + the gesture-wide `intensity`
-#                                     multiplier (scope spans both
-#                                     [gesture.overlay].cards and
-#                                     [gesture.fire].burst)
-#   [gesture.recognition]           — sample → direction tuning
-#   [gesture.overlay]               — overlay enabled toggle + blur
-#   [gesture.overlay.trail]         — trail line itself
-#   [gesture.overlay.badge]         — origin badge
-#   [gesture.overlay.cards]         — assist-card exit animations
-#   [gesture.fire.burst]            — fire-moment particle burst
-#   [gesture.fire.decal]            — post-fire ink decal
-#   [[gesture.rule]]                — one gesture pattern → action
+#   [cast]                          — cast trigger (right-button + drag
+#                                     draws a shape; the wand "casts" the
+#                                     matched rule on the cursor-anchored
+#                                     target window) + cast-wide
+#                                     `intensity` multiplier (scope spans
+#                                     both [cast.overlay].cards and
+#                                     [cast.fire].burst)
+#   [cast.recognition]              — sample → direction tuning
+#   [cast.overlay]                  — overlay enabled toggle + blur
+#   [cast.overlay.trail]            — trail line itself
+#   [cast.overlay.badge]            — origin badge
+#   [cast.overlay.cards]            — assist-card exit animations
+#   [cast.fire.burst]               — fire-moment particle burst
+#   [cast.fire.decal]               — post-fire ink decal
+#   [[cast.rule]]                   — one cast pattern → action
 #
-#   [launcher]                      — launcher trigger + layout
-#   [launcher.row]                  — per-row visual cosmetics
-#   [launcher.animation]            — panel open / close animations
-#   [launcher.decoration]           — static panel decoration
-#   [[launcher.item]]               — one menu row
+#   [tome]                          — tome trigger (middle-click pops a
+#                                     contextual menu — your spellbook of
+#                                     rows to pick from) + layout
+#   [tome.row]                      — per-row visual cosmetics
+#   [tome.animation]                — panel open / close animations
+#   [tome.decoration]               — static panel decoration
+#   [[tome.item]]                   — one menu row
 #
-# v5 retired (warned in /tmp/wand.log):
-#   [gesture] flat recognition knobs   → [gesture.recognition].*
-#   [gesture.overlay] flat fields      → [gesture.overlay.{trail,badge,cards}].*
-#   [gesture.fire] flat fields         → [gesture.fire.{burst,decal}].*
-#   [launcher] flat row cosmetics      → [launcher.row].*
-#   [launcher.effect]                  → [launcher.animation] + [launcher.decoration]
+# v6 retired (warned in /tmp/wand.log):
+#   [gesture]            → [cast]               (and every sub-block)
+#   [[gesture.rule]]     → [[cast.rule]]
+#   [launcher]           → [tome]               (and every sub-block)
+#   [[launcher.item]]    → [[tome.item]]
 
 
 # -----------------------------------------------------------------
@@ -58,15 +61,15 @@
 
 # Bundle IDs where wand is completely disabled — useful for apps
 # that already have native gestures (Xcode, video editors, …).
-# Supports `*` / `?` glob. Applies to both gesture rules and
-# launcher items.
+# Supports `*` / `?` glob. Applies to both cast rules and
+# tome entries.
 apps = []
 
 
 # -----------------------------------------------------------------
-# Gesture — right-button + drag draws a shape that fires a rule
+# Cast — right-button + drag draws a shape that fires a rule
 # -----------------------------------------------------------------
-[gesture]
+[cast]
 
 # Which mouse button initiates a stroke.
 #   "right"   — right mouse button (most common)
@@ -81,12 +84,12 @@ button = "right"
 modifiers = []
 
 # Overall multiplier applied to every visual effect produced by a
-# gesture firing — `[gesture.overlay.cards]` particle animations
-# AND the `[gesture.fire.burst]` cursor-anchored explosion. Decal
+# cast firing — `[cast.overlay.cards]` particle animations
+# AND the `[cast.fire.burst]` cursor-anchored explosion. Decal
 # has its own size / duration knobs and is not affected.
 #
-# Stays inline at this gesture-family level because the scope spans
-# both `[gesture.overlay]` and `[gesture.fire]` — placing it inside
+# Stays inline at this cast-family level because the scope spans
+# both `[cast.overlay]` and `[cast.fire]` — placing it inside
 # either sub-block would mislead about which effects it scales.
 #
 #   subtle  ≈ 0.6× (calm)
@@ -97,13 +100,13 @@ intensity = "normal"
 
 
 # -----------------------------------------------------------------
-# Gesture recognition — sample → direction tuning
+# Cast recognition — sample → direction tuning
 # -----------------------------------------------------------------
 # Behaviour knobs that don't affect what wand does, only how
-# sensitive / forgiving the recognizer is. Split out of [gesture]
+# sensitive / forgiving the recognizer is. Split out of [cast]
 # in v6 so trigger identity and recognition tuning don't share a
 # section.
-[gesture.recognition]
+[cast.recognition]
 
 # Minimum displacement (px) before a new direction is emitted.
 # Smaller = more sensitive (catches small flicks), bigger = more
@@ -135,12 +138,12 @@ cancel-window-ms = 500
 
 
 # -----------------------------------------------------------------
-# Gesture overlay — translucent trail drawn while you draw a gesture
+# Cast overlay — translucent trail drawn while you draw a gesture
 # -----------------------------------------------------------------
 # Toggles and shared visuals that apply to the whole HUD (trail +
 # badge + cards). The three components themselves live in dedicated
 # sub-blocks below.
-[gesture.overlay]
+[cast.overlay]
 
 # Show the trail / badge / cards while a stroke is in progress. The
 # overlay is click-through and clears the instant you release the
@@ -156,7 +159,7 @@ blur-enabled = true
 
 # Trail line — the stroke you draw, plus how it recolours when the
 # shape matches / doesn't match any rule.
-[gesture.overlay.trail]
+[cast.overlay.trail]
 
 # The trail is coloured by whether the shape you've drawn so far
 # matches a rule for the window under the cursor:
@@ -179,7 +182,7 @@ width = 3
 # the trail's colour is always sourced from `color` / `color-no-match`
 # above**, so the match-vs-no-match signal isn't lost when the style
 # changes. Colour-decoration variants live on a different axis (see
-# `[launcher.decoration].border`).
+# `[tome.decoration].border`).
 #
 #   "normal"  — single stroke at `width` with a soft glow (default)
 #   "thin"    — `width * 0.5` (1.5pt floor) + reduced glow
@@ -200,7 +203,7 @@ final-hold-ms = 400
 
 
 # Origin badge — small app-icon chip at the gesture's start point.
-[gesture.overlay.badge]
+[cast.overlay.badge]
 
 # Show the target-app icon as a small "badge" at the gesture's
 # start point (where the right button went down). Confirms which
@@ -218,7 +221,7 @@ anim-enabled = true
 
 # Assist-card exit animations — the cards next to the cursor that
 # list reachable rules. These animate cards INSIDE the overlay, so
-# they require `[gesture.overlay].enabled = true`.
+# they require `[cast.overlay].enabled = true`.
 #
 # Pick a kind:
 #   none           — instant disappear (default)
@@ -235,38 +238,38 @@ anim-enabled = true
 #
 # Particle effects (`fireworks` / `confetti`) read most naturally on
 # `match` — the moment a rule actually fires.
-[gesture.overlay.cards]
+[cast.overlay.cards]
 match = "none"        # the firing card, on button-up
 unmatch = "none"      # cards that became unreachable mid-gesture
 
 
 # -----------------------------------------------------------------
-# Gesture fire-moment effects — at the cursor when a rule fires
+# Cast fire-moment effects — at the cursor when a rule fires
 # -----------------------------------------------------------------
 # Both sub-blocks live in their own click-through windows, so they
-# fire even when `[gesture.overlay].enabled = false`. Disable the
+# fire even when `[cast.overlay].enabled = false`. Disable the
 # trail but keep the burst — or vice versa.
 
 # Particle explosion at the cursor the moment a gesture fires.
-[gesture.fire.burst]
+[cast.fire.burst]
 
 #   "off"    — no burst (default)
 #   "burst"  — omnidirectional particle explosion (~0.7s)
-# Burst color rides `[gesture.overlay.trail].color` (the same accent
+# Burst color rides `[cast.overlay.trail].color` (the same accent
 # the trail uses), so the burst reads as tied to the action.
 kind = "off"
 
 
 # Post-fire ink decal — a Splatoon-style splatter / blob / scorch /
 # star left at the cursor when a gesture fires.
-[gesture.fire.decal]
+[cast.fire.decal]
 
 #   "off"           — no decal (default)
 #   "ink-splatter"  — main blob + 3-6 satellite spatters; vivid
 #   "paint-blob"    — single irregular paint stamp
 #   "scorch"        — radial gradient burn mark
 #   "star"          — 5-pointed sparkle
-# Color comes from `[gesture.overlay.trail].color`.
+# Color comes from `[cast.overlay.trail].color`.
 kind = "off"
 
 # How long (ms) the decal stays visible before fading out.
@@ -278,27 +281,27 @@ size = 60
 
 
 # -----------------------------------------------------------------
-# Launcher — middle-click pops a contextual menu near the cursor
+# Tome — middle-click pops a contextual menu near the cursor
 # -----------------------------------------------------------------
-# Off by default. Set `enabled = true` to install the launcher tap
-# alongside the gesture tap; both coexist on the same daemon.
+# Off by default. Set `enabled = true` to install the tome tap
+# alongside the cast tap; both coexist on the same daemon.
 #
-# The launcher renders as a non-activating panel (PopClip parity) —
+# The tome renders as a non-activating panel (PopClip parity) —
 # it does NOT take keyboard focus, so the user keeps typing in the
 # underlying app while picking a row with the mouse. Submenus
 # (`group = ["..."]`) open on hover as adjacent child panels. Click
-# outside or press Esc to dismiss. Each `[[launcher.item]]` is one
-# row with the same action-type vocabulary as `[[gesture.rule]]`.
+# outside or press Esc to dismiss. Each `[[tome.item]]` is one
+# row with the same action-type vocabulary as `[[cast.rule]]`.
 #
 # The cursor-anchored target is captured at button-down, exactly
-# like the gesture path, so the chosen item dispatches against the
+# like the cast path, so the chosen item dispatches against the
 # window you middle-clicked on — not whatever happens to have focus
 # by the time you choose.
 #
 # Two changes that need a daemon restart (the tap is baked into the
 # event mask at install): `enabled = false ↔ true` and `button`.
 # Surfaced in `wand --status` as `pending-restart`.
-[launcher]
+[tome]
 enabled = false                # opt-in
 button = "middle"              # "middle" | "side1" | "side2" | "right"
 modifiers = []                 # e.g. ["ctrl"] to require ctrl + middle
@@ -308,14 +311,14 @@ modifiers = []                 # e.g. ["ctrl"] to require ctrl + middle
 #   "toolbar"         — horizontal icon-only buttons (PopClip vibe)
 #   "labeled-toolbar" — horizontal icon + label "pill" buttons
 # Toolbar variants ignore `header` / `subtitle` / `separator-before`
-# / `[launcher.row].shortcut-badge` (no room to render them); only
+# / `[tome.row].shortcut-badge` (no room to render them); only
 # `.list` shows every feature.
 layout = "list"
 
 
 # Per-row visual conventions that apply uniformly to every
-# `[[launcher.item]]`.
-[launcher.row]
+# `[[tome.item]]`.
+[tome.row]
 
 # Auto-display a right-aligned ⌘W-style glyph badge on `.list` rows
 # whose action is `action-type = "key"`. The badge is derived from
@@ -335,9 +338,9 @@ icon-chip = true
 # Panel open / close animations. Temporal — they play once each
 # transition. Root + child panels animate in parallel so the cascade
 # unwinds together.
-[launcher.animation]
+[tome.animation]
 
-# Open animation. Plays when a launcher panel pops up (root panel
+# Open animation. Plays when a tome panel pops up (root panel
 # on middle-click; child panels when a folder / dynamic row is
 # hovered open). Default "off" keeps the historical instant pop.
 # Unknown values log + clamp to "off".
@@ -353,8 +356,8 @@ close = "off"
 
 
 # Static panel decoration — paints once and stays still. Distinct
-# from `[launcher.animation]` (which moves in time).
-[launcher.decoration]
+# from `[tome.animation]` (which moves in time).
+[tome.decoration]
 
 # Decorative panel border. Sits on the colour-decoration axis (paired
 # with the trail's shape-only `style`). Inherited by child panels for
@@ -370,17 +373,17 @@ border = "off"
 
 
 # -----------------------------------------------------------------
-# Items (launcher) and rules (gesture) — shared field reference
+# Items (tome) and rules (cast) — shared field reference
 # -----------------------------------------------------------------
-# Both `[[gesture.rule]]` and `[[launcher.item]]` use the same
+# Both `[[cast.rule]]` and `[[tome.item]]` use the same
 # action-* vocabulary and app-filter syntax. Differences:
 #
-#   [[gesture.rule]]    needs `pattern` (LURD sequence)
-#   [[launcher.item]]   needs `name` (menu label); supports
+#   [[cast.rule]]    needs `pattern` (LURD sequence)
+#   [[tome.item]]   needs `name` (menu label); supports
 #                        icon / group / separator-before / state /
 #                        dynamic / template-* for richer menu UI
 #
-# Pattern alphabet (gesture rules):
+# Pattern alphabet (cast rules):
 #   L  = left      U  = up
 #   R  = right     D  = down
 # Sequences combine: "DR" = down then right; "URD" = up, right, down.
@@ -433,7 +436,7 @@ border = "off"
 # Shell actions receive these env vars describing the target:
 #   WAND_TARGET_BUNDLE_ID, WAND_TARGET_PID,
 #   WAND_TARGET_TITLE,     WAND_TARGET_FRAME (x,y,w,h)
-# Launcher items additionally receive:
+# Tome items additionally receive:
 #   SELECTION              the text selected in the focused element
 #                          at button-down (empty if none / AX not
 #                          granted). Use for translate / search /
@@ -442,34 +445,34 @@ border = "off"
 
 
 # -----------------------------------------------------------------
-# Gesture rules — first match wins, applied to the cursor-anchored
+# Cast rules — first match wins, applied to the cursor-anchored
 # target. `name` is shown in the overlay while drawing a shape that
 # matches this rule, so you can see what it'll do before releasing
 # — make it human-readable.
 # -----------------------------------------------------------------
 
-[[gesture.rule]]
+[[cast.rule]]
 name = "close tab"
 pattern = "DR"
 apps = ["*chrome*", "*safari*"]
 action-type = "key"
 action-keys = "cmd+w"
 
-[[gesture.rule]]
+[[cast.rule]]
 name = "reopen tab"
 pattern = "UR"
 apps = ["*chrome*", "*safari*"]
 action-type = "key"
 action-keys = "cmd+shift+t"
 
-[[gesture.rule]]
+[[cast.rule]]
 name = "close window"
 pattern = "DRU"
 apps = ["*"]
 action-type = "ax"
 action-verb = "close"
 
-[[gesture.rule]]
+[[cast.rule]]
 name = "minimize"
 pattern = "L"
 apps = ["*"]
@@ -478,8 +481,8 @@ action-verb = "minimize"
 
 
 # -----------------------------------------------------------------
-# Launcher items — sample blocks below. Uncomment after
-# `[launcher].enabled = true`.
+# Tome items — sample blocks below. Uncomment after
+# `[tome].enabled = true`.
 # -----------------------------------------------------------------
 
 # Each item supports an optional `icon` field (drawn to the left of
@@ -495,7 +498,7 @@ action-verb = "minimize"
 # Unrecognised values fall back to no icon (logged to /tmp/wand.log).
 #
 # # Basic row:
-# [[launcher.item]]
+# [[tome.item]]
 # name = "New Tab"
 # icon = "🌐"
 # apps = ["*chrome*", "*safari*"]
@@ -503,7 +506,7 @@ action-verb = "minimize"
 # action-keys = "cmd+t"
 #
 # # Separator before this row + SF Symbol icon:
-# [[launcher.item]]
+# [[tome.item]]
 # name = "Reload"
 # icon = "SF:arrow.clockwise"
 # apps = ["*chrome*", "*safari*"]
@@ -516,7 +519,7 @@ action-verb = "minimize"
 # # identically-named items. Empty subtitle keeps the single-line row
 # # height. Only renders in list layout (toolbar variants ignore it).
 # # `{line}` substitution works on dynamic-item templates too.
-# [[launcher.item]]
+# [[tome.item]]
 # name = "Translate"
 # subtitle = "選択テキストを日本語へ"
 # icon = "SF:globe"
@@ -527,7 +530,7 @@ action-verb = "minimize"
 # # installed app (running OR installed-but-inactive). Works for any
 # # app LaunchServices knows about. Falls back to no icon if the
 # # bundle id isn't installed.
-# [[launcher.item]]
+# [[tome.item]]
 # name = "Open Chrome"
 # icon = "app:com.google.Chrome"
 # action-type = "shell"
@@ -539,7 +542,7 @@ action-verb = "minimize"
 # # ("systemRed" / "red" / "orange" / … / "accent" for the system
 # # accent), or hex ("#rgb" / "#rrggbb" / "#rrggbbaa"). File / emoji
 # # / text icons ignore this — they have no hierarchical-colour path.
-# [[launcher.item]]
+# [[tome.item]]
 # name = "Move to Trash"
 # icon = "SF:trash"
 # tint = "systemRed"
@@ -550,7 +553,7 @@ action-verb = "minimize"
 # # hierarchical / multicolor palette. Each entry uses the same
 # # grammar as `tint`. Wins over a single `tint` when both are set.
 # # File / emoji / text icons ignore this.
-# [[launcher.item]]
+# [[tome.item]]
 # name = "Battery Low"
 # icon = "SF:battery.25.fill"
 # tint-colors = ["red", "orange"]
@@ -561,7 +564,7 @@ action-verb = "minimize"
 # # on the icon when the row is hovered. Older macOS silently ignores
 # # the field. Supported effects: "bounce" / "pulse". Only affects
 # # SF Symbol icons.
-# [[launcher.item]]
+# [[tome.item]]
 # name = "Notifications"
 # icon = "SF:bell.fill"
 # icon-anim = "bounce"
@@ -571,7 +574,7 @@ action-verb = "minimize"
 # # Nested submenu — `group = ["..."]` is the path to the parent
 # # submenu. The folder is created on first reference; subsequent
 # # items with the same group land inside it.
-# [[launcher.item]]
+# [[tome.item]]
 # name = "By Name"
 # group = ["Sort"]
 # action-type = "shell"
@@ -583,21 +586,21 @@ action-verb = "minimize"
 # # a run can share one label without repeating it. After filters
 # # drop every item in a section, the header is omitted automatically
 # # — no orphan band. List layout only; toolbar variants ignore it.
-# [[launcher.item]]
+# [[tome.item]]
 # header = "Editing"
 # name = "Copy"
 # icon = "SF:doc.on.doc"
 # action-type = "key"
 # action-keys = "cmd+c"
 #
-# [[launcher.item]]
+# [[tome.item]]
 # header = "Editing"
 # name = "Paste"
 # icon = "SF:doc.on.clipboard"
 # action-type = "key"
 # action-keys = "cmd+v"
 #
-# [[launcher.item]]
+# [[tome.item]]
 # header = "Window"
 # name = "Close"
 # icon = "SF:xmark"
@@ -612,7 +615,7 @@ action-verb = "minimize"
 # # SECURITY: `{line}` carries untrusted text. When the line ends up
 # # in a shell command, quote it: 'git switch "{line}"', not
 # # 'git switch {line}'.
-# [[launcher.item]]
+# [[tome.item]]
 # name = "Switch Branch"
 # icon = "SF:point.3.connected.trianglepath.dotted"
 # dynamic = 'cd ~/repo && git branch --format="%(refname:short)"'
@@ -626,7 +629,7 @@ action-verb = "minimize"
 # # Dynamic: "shell:<cmd>" → evaluated at menu-open, exit 0 → ✓.
 # # 100ms timeout (state should be a cheap check; longer probes
 # # belong in `dynamic` items).
-# [[launcher.item]]
+# [[tome.item]]
 # name = "Dark Mode"
 # state = "shell:defaults read -g AppleInterfaceStyle 2>/dev/null | grep -q Dark"
 # action-type = "shell"
