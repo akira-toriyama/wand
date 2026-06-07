@@ -247,6 +247,14 @@ public enum LauncherBorder: String, Sendable, Hashable, CaseIterable {
     /// Yellow PAC-MAN rim. Renamed from `pacman` in v8 to match
     /// `TomeTheme.pacMan`.
     case pacMan = "pac-man"
+    /// Arcade pac-man maze-wall border: a neon-blue double-line frame
+    /// (outer thick blue + inner thin blue with a black gap between)
+    /// plus small yellow pellet dots along the gap. Reads as the
+    /// classic Pac-Man corridor wrapping the panel. Larger visual
+    /// footprint than the single-line static rims, so suits saturated
+    /// themes (`mono` / `terminal` / `pac-man`) more than the frosted
+    /// default.
+    case pacManTail = "pac-man-tail"
 }
 
 /// Launcher panel open-animation. Default `.off` (panel pops in

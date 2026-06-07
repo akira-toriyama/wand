@@ -66,11 +66,13 @@ extension LauncherBorder {
         case .pacMan:    return NSColor(srgbRed: 0xff / 255.0,
                                          green: 0xea / 255.0,
                                          blue:  0x00 / 255.0, alpha: 1)
-        case .off, .rainbow:
-            // Animated / no-border kinds carry their colour another
-            // way; reaching here means the caller used the wrong
-            // accessor. Fall back loudly rather than render a silent
-            // mystery colour.
+        case .off, .rainbow, .pacManTail:
+            // Animated kinds (`.rainbow`) + multi-element kinds
+            // (`.pacManTail` paints its own layers in
+            // `installBorderDecoration`) and the off case all carry
+            // their colour another way. Reaching here means the
+            // caller used the wrong accessor — fall back loudly
+            // rather than render a silent mystery colour.
             assertionFailure(
                 "LauncherBorder.staticColor accessed for \(self)")
             return .controlAccentColor
@@ -1176,6 +1178,106 @@ private final class PanelController {
             // `borderColor` that lived on `TomeThemePalette` through
             // PR #111. Pair freely with any `[tome].theme`.
             layer.borderColor = border.staticColor.cgColor
+        case .pacManTail:
+            installPacManTailBorder(on: bg)
+        }
+    }
+
+    /// Arcade pac-man maze-wall border: a thick outer neon-blue line
+    /// + a thin inner blue line (with bg's black showing through the
+    /// gap between) + small yellow pellet dots along the gap. Reads
+    /// as the classic Pac-Man corridor wrapping the panel.
+    ///
+    /// Outer line uses `CALayer.borderColor` so it composes with the
+    /// rounded mask natively (no AA fringe). Inner line + dots live
+    /// on a single CAShapeLayer sublayer of `bg.layer` — they sit
+    /// INSIDE bg's rounded mask, so any AA they emit blends with
+    /// bg's black (the gap) instead of leaking past the rim.
+    private func installPacManTailBorder(on bg: NSView) {
+        guard let host = bg.layer else { return }
+        let blue = NSColor(srgbRed: 0x21 / 255.0,
+                            green: 0x21 / 255.0,
+                            blue: 0xde / 255.0, alpha: 1)
+        let pellet = NSColor(srgbRed: 0xff / 255.0,
+                              green: 0xd9 / 255.0,
+                              blue: 0x00 / 255.0, alpha: 1)
+        // Outer line: lean on bg's native cornerRadius + borderWidth
+        // pair so the curve and the rim anti-alias together.
+        let outerWidth = CGFloat(borderWidth)
+        host.borderWidth = outerWidth
+        host.borderColor = blue.cgColor
+
+        // Resolve bg's bounds NOW (Auto Layout hasn't run yet — the
+        // panel hasn't been ordered front). Without this the inner
+        // shape ends up at a degenerate (0, 0, 0, 0) and nothing
+        // paints.
+        panel.contentView?.layoutSubtreeIfNeeded()
+        let cornerR = PanelLayout.cornerRadius
+        // Gap (where bg's black shows through) sits one outerWidth
+        // inset from the outer edge. The inner line then sits two
+        // outerWidths in. Math: outer covers [0, outerW]; gap covers
+        // [outerW, 2 outerW]; inner covers [2 outerW, ~2.5 outerW].
+        let gapInset = outerWidth
+        let innerInset = outerWidth * 2
+        let innerLineWidth: CGFloat = max(1, outerWidth * 0.45)
+        let innerRect = bg.bounds.insetBy(
+            dx: innerInset + innerLineWidth / 2,
+            dy: innerInset + innerLineWidth / 2)
+        let innerCorner = max(0, cornerR - innerInset - innerLineWidth / 2)
+        // Inner blue line — a stroke (not a fill) sitting one
+        // `outerWidth` inset from bg's edge.
+        let innerStroke = CAShapeLayer()
+        innerStroke.path = CGPath(roundedRect: innerRect,
+                                   cornerWidth: innerCorner,
+                                   cornerHeight: innerCorner,
+                                   transform: nil)
+        innerStroke.strokeColor = blue.cgColor
+        innerStroke.fillColor = nil
+        innerStroke.lineWidth = innerLineWidth
+        host.addSublayer(innerStroke)
+
+        // Pellet pass: small dots along the centre-line of the gap.
+        // Spacing scales with the panel size — a tall menu spreads
+        // them out, a short one keeps at least a handful per side.
+        let dotR: CGFloat = max(1.0, outerWidth * 0.35)
+        let gapRect = bg.bounds.insetBy(
+            dx: outerWidth + (innerInset - outerWidth) * 0.5,
+            dy: outerWidth + (innerInset - outerWidth) * 0.5)
+        let perim = 2 * (gapRect.width + gapRect.height)
+        let dotSpacing: CGFloat = max(20, outerWidth * 5)
+        let dotCount = max(8, Int((perim / dotSpacing).rounded()))
+        let step = perim / CGFloat(dotCount)
+        let dotsPath = CGMutablePath()
+        for i in 0..<dotCount {
+            let t = CGFloat(i) * step
+            let (x, y) = perimeterPoint(rect: gapRect, distance: t)
+            dotsPath.addEllipse(in: CGRect(
+                x: x - dotR, y: y - dotR,
+                width: 2 * dotR, height: 2 * dotR))
+        }
+        let dotsLayer = CAShapeLayer()
+        dotsLayer.path = dotsPath
+        dotsLayer.fillColor = pellet.cgColor
+        host.addSublayer(dotsLayer)
+    }
+
+    /// Walk `rect`'s perimeter linearly and return the point at the
+    /// given distance from the top-left corner (top → right → bottom
+    /// → left). Used to lay out pellets evenly along the panel edge.
+    private func perimeterPoint(rect r: CGRect, distance t: CGFloat)
+        -> (x: CGFloat, y: CGFloat) {
+        let topLen = r.width
+        let rightLen = r.height
+        let bottomLen = r.width
+        if t < topLen {
+            return (r.minX + t, r.maxY)
+        } else if t < topLen + rightLen {
+            return (r.maxX, r.maxY - (t - topLen))
+        } else if t < topLen + rightLen + bottomLen {
+            return (r.maxX - (t - topLen - rightLen), r.minY)
+        } else {
+            return (r.minX,
+                    r.minY + (t - topLen - rightLen - bottomLen))
         }
     }
 

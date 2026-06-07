@@ -719,10 +719,19 @@ close = "off"
 #   "mono"     — static white rim
 #   "vapor"    — static synthwave pink rim (#ff79c6)
 #   "pac-man"  — static arcade yellow rim (#ffea00)
+#   "pac-man-tail" — arcade maze-wall: thick outer neon-blue line +
+#                thin inner blue line (black gap between) + small
+#                yellow pellet dots along the gap. Reads as the
+#                Pac-Man corridor wrapping the panel. Suits saturated
+#                themes (`mono` / `pac-man` / `terminal`); on the
+#                frosted `default` theme the dots can read as noise.
 #
-# Static kinds were lifted from each theme's old `borderColor` slot
-# (retired in PR #111 follow-up) so the same look survives but is
-# now decoupled from the colour theme — pick one rim, pick one theme.
+# Static kinds (except `pac-man-tail`) were lifted from each theme's
+# old `borderColor` slot (retired in PR #111 follow-up) so the same
+# look survives but is now decoupled from the colour theme — pick
+# one rim, pick one theme. `pac-man-tail` is a multi-element rim and
+# uses `border-width` as the OUTER line width (inner line is
+# proportionally thinner).
 border = "off"
 
 # Cycle period (ms) for any animated `border` kind — currently only
