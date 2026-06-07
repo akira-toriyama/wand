@@ -280,6 +280,13 @@ public struct WandConfig: Sendable {
         // per-call via their own `[tome].layout`. Default `.list`.
         let launcherLayout: LauncherLayout = parseEnum(
             lr, key: "layout", section: "tome", default: .list)
+        // `[tome].theme` — coordinated colour palette for the
+        // launcher panel. Independent of `[cast].theme`: the two
+        // surfaces have different visual constraints (HUD overlay
+        // vs system-styled menu blur), so a user can pair them
+        // freely or run different looks per family.
+        let launcherTheme: TomeTheme = parseEnum(
+            lr, key: "theme", section: "tome", default: .default)
 
         // [tome.row] — per-row visual cosmetics (split from the
         // bare [tome] block so trigger identity stays clean).
@@ -365,7 +372,8 @@ public struct WandConfig: Sendable {
             items: items,
             row: launcherRow,
             animation: launcherAnimation,
-            decoration: launcherDecoration)
+            decoration: launcherDecoration,
+            theme: launcherTheme)
 
         // [[cast.rule]] — gesture pattern → action mappings.
         // Log every dropped rule with its position + reason so

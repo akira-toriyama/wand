@@ -515,6 +515,35 @@ modifiers = []                 # e.g. ["ctrl"] to require ctrl + middle
 # `.list` shows every feature.
 layout = "list"
 
+# Coordinated colour palette for the tome panel — sets the hover
+# accent, idle row text, a static outline, AND the panel backdrop.
+# Themes other than "default" REPLACE the system frosted blur with
+# a solid colour (the `.menu` material has no tint API, so
+# saturated themes can't ride on the blur). Independent of
+# `[cast].theme` (the two surfaces have different visual
+# constraints), so you can pair them freely or run different looks
+# per family.
+#
+#   "default"  — frosted-glass system blur, controlAccent hover,
+#                .labelColor rows. The historical look.
+#   "terminal" — Tokyo-Night green-on-black; green hover with
+#                black text. Solid black backdrop.
+#   "neon"     — electric cyan hover on white rows; deep blue-black
+#                backdrop.
+#   "splatoon" — hot-pink hover with a lime outline on dark
+#                charcoal (statically picked — the panel doesn't
+#                redraw per-frame, so the per-stroke team rotation
+#                isn't a fit).
+#   "mono"     — stark white-on-black; inverted on hover.
+#   "vapor"    — synthwave pink hover on Dracula charcoal,
+#                off-white rows.
+#   "pacman"   — yellow accent on black with yellow rows; pairs
+#                with `[cast].theme = "pacman"` for a coordinated
+#                arcade look across both surfaces.
+#
+# Unknown names clamp to "default". Validate with `wand --validate`.
+theme = "default"
+
 
 # Per-row visual conventions that apply uniformly to every
 # `[[tome.item]]`.

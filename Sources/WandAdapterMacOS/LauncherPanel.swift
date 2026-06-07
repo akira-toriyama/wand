@@ -37,6 +37,42 @@ import AppKit
 import Foundation
 import WandCore
 
+// MARK: - Theme
+
+/// Resolved theme colours for the panel. Each field is `nil` when the
+/// corresponding `TomeThemePalette` slot was empty (or its colour
+/// string didn't parse), in which case the row/panel falls back to
+/// the system semantic colour. Adapter-layer mirror of
+/// `TomeThemePalette` — Core stays free of AppKit.
+@MainActor
+struct TomeColors {
+    let accent: NSColor?        // hover background fill
+    let accentText: NSColor?    // text colour while hovered
+    let text: NSColor?          // idle row text colour
+    let border: NSColor?        // static panel outline
+    /// Solid panel backdrop. When non-nil the system frosted blur is
+    /// **replaced** with a solid colour view — required for themes
+    /// that need a saturated backdrop the blur can't deliver
+    /// (pacman / terminal black, mono OLED, etc).
+    let background: NSColor?
+
+    static func resolve(_ palette: TomeThemePalette) -> TomeColors {
+        let pick: (String) -> NSColor? = { s in
+            s.isEmpty ? nil : NSColorParse.nsColor(s)
+        }
+        return TomeColors(
+            accent: pick(palette.accentColor),
+            accentText: pick(palette.accentTextColor),
+            text: pick(palette.textColor),
+            border: pick(palette.borderColor),
+            background: pick(palette.backgroundColor))
+    }
+
+    static let none = TomeColors(accent: nil, accentText: nil,
+                                  text: nil, border: nil,
+                                  background: nil)
+}
+
 // MARK: - Public entry
 
 @MainActor
@@ -55,6 +91,7 @@ public enum LauncherPanel {
                                 openAnim: LauncherOpenAnim = .off,
                                 closeAnim: LauncherCloseAnim = .off,
                                 border: LauncherBorder = .off,
+                                palette: TomeThemePalette = TomeThemePalette(),
                                 onSelect: @escaping (LauncherItem, Target) -> Void) {
         current?.dismiss()
         guard !items.isEmpty else {
@@ -63,6 +100,7 @@ public enum LauncherPanel {
             return
         }
         let nodes = PanelTree.build(from: items)
+        let colors = TomeColors.resolve(palette)
         // Header (app icon + name) only makes sense on the vertical
         // list — in toolbar mode the panel is a single horizontal row
         // and a header banner doesn't fit visually.
@@ -71,7 +109,8 @@ public enum LauncherPanel {
             : nil
         let (content, rows) = PanelLayout.buildContent(
             nodes: nodes, header: header, layout: layout,
-            shortcutBadge: shortcutBadge, iconChip: iconChip)
+            shortcutBadge: shortcutBadge, iconChip: iconChip,
+            colors: colors)
         let frame = PanelLayout.placeRoot(
             atCursor: cocoaPoint, contentSize: content.fittingSize)
         let controller = PanelController(
@@ -82,6 +121,7 @@ public enum LauncherPanel {
             openAnim: openAnim,
             closeAnim: closeAnim,
             border: border,
+            colors: colors,
             onDismissRoot: { current = nil })
         current = controller
         controller.show()
@@ -191,16 +231,43 @@ private enum PanelLayout {
                               header: HeaderSpec?,
                               layout: LauncherLayout,
                               shortcutBadge: Bool = true,
-                              iconChip: Bool = true)
+                              iconChip: Bool = true,
+                              colors: TomeColors = .none)
         -> (view: NSView, rows: [ItemRow]) {
-        let bg = NSVisualEffectView()
-        bg.material = .menu
-        bg.blendingMode = .behindWindow
-        bg.state = .active
+        // Backdrop: themed solid colour replaces the system frosted
+        // blur when `colors.background` is set. The blur can't be
+        // tinted (NSVisualEffectView's `.menu` material has no colour
+        // knob), so saturated themes like pacman / terminal need a
+        // full surface swap — at the cost of losing vibrancy. The
+        // default (`background == nil`) keeps the historical
+        // frosted-glass `.menu` look.
+        let bg: NSView
+        if let bgColor = colors.background {
+            let solid = NSView()
+            solid.wantsLayer = true
+            solid.layer?.backgroundColor = bgColor.cgColor
+            bg = solid
+        } else {
+            let blur = NSVisualEffectView()
+            blur.material = .menu
+            blur.blendingMode = .behindWindow
+            blur.state = .active
+            bg = blur
+        }
         bg.wantsLayer = true
         bg.layer?.cornerRadius = cornerRadius
         bg.layer?.masksToBounds = true
         bg.translatesAutoresizingMaskIntoConstraints = false
+        // Static theme outline. Independent of the animated
+        // [tome.decoration].border — that's a moving rim drawn by
+        // PanelController.installBorderDecoration. This static one
+        // just paints a single hairline frame around the panel
+        // surface so themes like terminal/pacman get their signature
+        // edge.
+        if let borderColor = colors.border {
+            bg.layer?.borderColor = borderColor.cgColor
+            bg.layer?.borderWidth = 1
+        }
 
         let stack = NSStackView()
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -310,6 +377,11 @@ private enum PanelLayout {
             bg.bottomAnchor.constraint(equalTo: content.bottomAnchor),
         ])
         content.frame = NSRect(origin: .zero, size: stack.fittingSize)
+        // Apply the resolved theme to every row built above. Cheap —
+        // each call re-runs `applyIdleStyle`, no view rebuild — and
+        // keeping it post-build means the factory functions stay
+        // theme-unaware.
+        for r in rows { r.applyTheme(colors) }
         return (content, rows)
     }
 
@@ -825,6 +897,11 @@ private final class PanelController {
     private var globalMouseMonitor: Any?
     private var globalKeyMonitor: Any?
 
+    /// Resolved theme colours. Carried so child panels (submenus,
+    /// dynamic expansions) inherit the same look — `openChild`
+    /// threads this into the child's `buildContent`.
+    let colors: TomeColors
+
     init(content: NSView, rows: [ItemRow], frame: NSRect,
          layout: LauncherLayout = .list,
          target: Target,
@@ -833,6 +910,7 @@ private final class PanelController {
          openAnim: LauncherOpenAnim = .off,
          closeAnim: LauncherCloseAnim = .off,
          border: LauncherBorder = .off,
+         colors: TomeColors = .none,
          onDismissRoot: (() -> Void)? = nil) {
         self.layout = layout
         self.target = target
@@ -841,6 +919,7 @@ private final class PanelController {
         self.openAnim = openAnim
         self.closeAnim = closeAnim
         self.border = border
+        self.colors = colors
         self.onDismissRoot = isRoot ? onDismissRoot : nil
 
         self.panel = NonActivatingPanel(
@@ -1076,7 +1155,8 @@ private final class PanelController {
         // submenu would feel chaotic, and submenus typically benefit
         // from rows-with-labels anyway.
         let (content, rows) = PanelLayout.buildContent(
-            nodes: children, header: nil, layout: .list)
+            nodes: children, header: nil, layout: .list,
+            colors: colors)
         let frame = PanelLayout.placeChild(
             rowFrameOnScreen: rowOnScreen,
             parentPanelFrame: panel.frame,
@@ -1089,7 +1169,8 @@ private final class PanelController {
             isRoot: false,
             openAnim: openAnim,
             closeAnim: closeAnim,
-            border: border)
+            border: border,
+            colors: colors)
         c.parent = self
         child = c
         childAnchor = row
@@ -1178,6 +1259,16 @@ private final class ItemRow: NSView {
     let layout: LauncherLayout
     var onClick: (() -> Void)?
     var onHover: (() -> Void)?
+    /// Theme-resolved colours. Defaults to `.none` (every field nil →
+    /// system colours). The panel re-applies these after building the
+    /// row tree via `applyTheme(_:)`, which kicks `applyIdleStyle` so
+    /// theme-tinted idle text takes effect before first paint.
+    private var themeColors: TomeColors = .none
+
+    func applyTheme(_ colors: TomeColors) {
+        themeColors = colors
+        applyIdleStyle()
+    }
 
     private let iconView = NSImageView()
     private let titleField = NSTextField(labelWithString: "")
@@ -1466,18 +1557,19 @@ private final class ItemRow: NSView {
     private func applyIdleStyle() {
         layer?.backgroundColor = NSColor.clear.cgColor
         layer?.cornerRadius = Self.idleCornerRadius
+        // Theme idle text overrides only the regular interactive row
+        // text — headers / section bands / placeholders keep their
+        // quieter system semantics so the visual hierarchy survives.
+        let themedText = themeColors.text
         switch kind {
         case .header:
             titleField.textColor = .secondaryLabelColor
         case .sectionHeader:
-            // Section bands read as quieter labels than item rows —
-            // matched to placeholder weight so the band recedes and
-            // the items themselves remain the primary read.
             titleField.textColor = .tertiaryLabelColor
         case .placeholder:
             titleField.textColor = .tertiaryLabelColor
         case .leaf, .folder, .dynamic:
-            titleField.textColor = .labelColor
+            titleField.textColor = themedText ?? .labelColor
         }
         subtitleField?.textColor = .secondaryLabelColor
         shortcutField?.textColor = .tertiaryLabelColor
@@ -1487,7 +1579,7 @@ private final class ItemRow: NSView {
         // default grey. No effect on .icns / emoji rendered icons.
         if layout != .list {
             iconView.contentTintColor = isInteractive
-                ? .labelColor : .tertiaryLabelColor
+                ? (themedText ?? .labelColor) : .tertiaryLabelColor
         }
     }
 
@@ -1495,17 +1587,20 @@ private final class ItemRow: NSView {
         // Fully-opaque accent so the hovered row reads as THE
         // selection target, with no risk of being washed out by the
         // vibrancy underneath.
-        layer?.backgroundColor = NSColor.controlAccentColor.cgColor
+        let accent = themeColors.accent ?? .controlAccentColor
+        let accentText = themeColors.accentText ?? .white
+        layer?.backgroundColor = accent.cgColor
         layer?.cornerRadius = Self.hoverCornerRadius
-        titleField.textColor = .white
-        chevronView?.contentTintColor = .white
-        // The subtitle / shortcut badges live on the same row as
-        // titleField, so they need to flip alongside it — otherwise
-        // their muted-grey would read as smudged on the accent fill.
-        subtitleField?.textColor = NSColor.white.withAlphaComponent(0.85)
-        shortcutField?.textColor = NSColor.white.withAlphaComponent(0.85)
+        titleField.textColor = accentText
+        chevronView?.contentTintColor = accentText
+        // Subtitle / shortcut badges share the row with the title, so
+        // they flip alongside it — otherwise muted greys read as
+        // smudged on the accent fill. Use 85% alpha for the same
+        // visual hierarchy idle had with `secondary` / `tertiary`.
+        subtitleField?.textColor = accentText.withAlphaComponent(0.85)
+        shortcutField?.textColor = accentText.withAlphaComponent(0.85)
         if layout != .list {
-            iconView.contentTintColor = .white
+            iconView.contentTintColor = accentText
         }
     }
 
