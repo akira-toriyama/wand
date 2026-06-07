@@ -381,6 +381,18 @@ public struct GestureOverlayCardsSpec: Sendable, Equatable {
     public let match: Effect
     /// Animation when a card becomes unreachable mid-gesture.
     public let unmatch: Effect
+    /// Live decoration on the currently-armed firing card while the
+    /// stroke is still in progress. Distinct from `match` (one-shot
+    /// at button-up) — `armed` is a continuous, looping cue layered
+    /// on top of the existing rainbow-border firing signal.
+    public let armed: ArmedEffect
+    /// pac-man theme-specific: when `true`, an animated yellow pellet
+    /// orbits the firing card's perimeter, chomping as it travels.
+    /// Independent of `armed` (the in-card cue) so the two can stack
+    /// — e.g. `armed = .pulse` + `chomp = true` breathes the card
+    /// while a pellet circles it. No-op outside the pac-man theme;
+    /// the rest of the kinds still render.
+    public let chomp: Bool
     /// Card-text base font size in points. The arrow column rides at
     /// `fontSize + 1` so the directional glyphs stay a hair taller
     /// than the rule name (legibility on dense layouts). The card's
@@ -397,9 +409,13 @@ public struct GestureOverlayCardsSpec: Sendable, Equatable {
 
     public init(match: Effect = .none,
                 unmatch: Effect = .none,
+                armed: ArmedEffect = .none,
+                chomp: Bool = false,
                 fontSize: Int = 13) {
         self.match = match
         self.unmatch = unmatch
+        self.armed = armed
+        self.chomp = chomp
         self.fontSize = fontSize
     }
 

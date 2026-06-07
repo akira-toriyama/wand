@@ -430,9 +430,30 @@ anim-enabled = true
 #
 # Particle effects (`fireworks` / `confetti`) read most naturally on
 # `match` — the moment a rule actually fires.
+#
+# `armed` is a separate, *continuous* cue layered on top of the
+# rainbow firing border while the stroke is still in progress (the
+# card whose pattern would dispatch if you released right now).
+# Distinct from `match` (one-shot at button-up); designed to read at
+# a glance without being distracting over a long stroke. Kinds:
+#   none      — no extra cue beyond the rainbow border (default)
+#   pulse     — gentle scale breathing (~0.6s loop); calm
+#   glow      — outer halo pulsing alpha (~0.7s loop)
+#   shake     — high-frequency ±1 px tremor; "about to fire"
+#   sparkle   — twinkles around the card's perimeter
+#   marching  — dashed border that scrolls ("marching ants")
+#
+# `chomp` is an orthogonal bool — when true, an animated yellow pac-
+# man pellet orbits the firing card's perimeter, chomping as it goes.
+# Independent of `armed`, so the two stack (`armed = "pulse"` +
+# `chomp = true` breathes the card while a pellet circles it). Only
+# renders under `[cast].theme = "pac-man"`; under other themes the
+# flag is silently a no-op.
 [cast.overlay.cards]
 match = "none"        # the firing card, on button-up
 unmatch = "none"      # cards that became unreachable mid-gesture
+armed = "none"        # live cue on the firing card mid-stroke
+chomp = false         # pac-man pellet orbiting the firing card
 
 # Card-text base font size in points. The arrow column rides at
 # `font-size + 1` so directional glyphs stay a hair taller than
