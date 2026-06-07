@@ -1181,32 +1181,43 @@ private final class TrailView: NSView {
     /// trail rather than sitting flat on the cursor.
     private static let pacmanPelletDiameter: CGFloat = 4
     private static let pacmanPelletInterval: CGFloat = 14
-    /// Face silhouette radius (pt). Bumped slightly above the
-    /// smooth-arc baseline because the pixel-grid rasterisation
-    /// loses a little visual mass at the corners.
-    private static let pacmanFaceRadius: CGFloat = 12
+    /// Face silhouette radius (pt). Tuned for the pixel sprite —
+    /// large enough that 14-ish cells across the diameter still
+    /// leave room for the eyes / mouth detail without crowding.
+    private static let pacmanFaceRadius: CGFloat = 16
     /// Cell size of the face's pixel grid, as a fraction of the
-    /// face radius. ~0.13 gives ~15 cells across the diameter,
-    /// landing near the arcade sprite's pixel density. Smaller
-    /// values smooth the edge back toward an arc; larger values
-    /// turn the wedge into a coarse polygon.
-    private static let pacmanPixelCellRatio: CGFloat = 0.13
+    /// face radius. ~0.14 gives ~14 cells across the diameter,
+    /// landing on the chunky side of the arcade sprite range.
+    /// Smaller values smooth the edge back toward an arc; larger
+    /// values turn the wedge into a coarse polygon.
+    private static let pacmanPixelCellRatio: CGFloat = 0.14
     /// Mouth half-angle bounds (degrees). The face animates between
     /// these via `cos`, giving the classic open-close chomp.
     /// `min` is just above zero so the mouth doesn't fully close
     /// (a sealed circle reads as "not Pac-Man anymore").
     private static let pacmanMouthHalfAngleMinDeg: CGFloat = 5
     private static let pacmanMouthHalfAngleMaxDeg: CGFloat = 60
-    /// Chomp frequency (Hz). The cosine drive makes one full
-    /// open→close→open cycle per period; ~4 Hz lands near the feel
-    /// of the original arcade animation.
-    private static let pacmanChompHz: Double = 4
+    /// Chomp frequency (Hz). One stepped 4-frame cycle per period
+    /// (closed → half → open → half → …); ~5 Hz lands ~50 ms per
+    /// frame, matching the original arcade's snappy sprite cadence.
+    private static let pacmanChompHz: Double = 5
+    /// Discrete mouth phases that the chomp animation cycles
+    /// through, one per stepped frame. Triangle pattern (closed →
+    /// mid → open → mid) so the open/close motion is symmetric
+    /// without doubling the frame count.
+    private static let pacmanChompFrames: [CGFloat] = [0, 0.5, 1, 0.5]
     /// How far back along the path Pac-Man's face sits behind the
     /// live cursor (pt). Tuned by feel — too small reads as
     /// "Pac-Man sitting on the cursor" (no chase), too large feels
-    /// like Pac-Man can never catch up. 50pt = roughly 2.5 face
-    /// widths of gap, which lands as "actively chasing".
-    private static let pacmanFaceLag: CGFloat = 50
+    /// like Pac-Man can never catch up. 60pt ≈ 2 face widths of
+    /// gap, which lands as "actively chasing" without hiding the
+    /// sprite off the live cursor end.
+    private static let pacmanFaceLag: CGFloat = 60
+    /// Toggle rate of the ghost-skirt 2-frame leg animation (Hz).
+    /// Slower than the chomp because the leg shuffle is meant to
+    /// pulse in the background rather than draw attention; 2.5 Hz
+    /// gives ~200 ms per leg pose.
+    private static let ghostSkirtHz: Double = 2.5
 
     /// Pac-Man-themed trail: the cursor lays a single line of pellet
     /// dots along the path (origin → cursor), and the Pac-Man face
@@ -1284,16 +1295,21 @@ private final class TrailView: NSView {
     /// context is rotated so the whole pixel sprite turns as one
     /// rigid block along `tangent`, matching the arcade aesthetic
     /// where the body's pixels stay aligned to the sprite frame as
-    /// it changes direction. Mouth half-angle oscillates between
-    /// `pacmanMouthHalfAngleMin/MaxDeg` at `pacmanChompHz` for the
-    /// chomp animation.
+    /// it changes direction. The chomp **snaps** between the
+    /// discrete `pacmanChompFrames` at `pacmanChompHz` instead of
+    /// being smoothly interpolated, so the open/close cadence reads
+    /// as arcade sprite-swapping rather than analog easing.
     private func drawPacmanFace(at p: CGPoint, tangent: CGPoint,
                                  radius: CGFloat, color: NSColor) {
-        let phase = (1 - cos(CACurrentMediaTime() * 2 * .pi
-                              * Self.pacmanChompHz)) / 2
+        let frames = Self.pacmanChompFrames
+        let cyclePos = (CACurrentMediaTime() * Self.pacmanChompHz)
+            .truncatingRemainder(dividingBy: 1)
+        let frameIdx = min(frames.count - 1,
+                            Int(cyclePos * Double(frames.count)))
+        let phase = frames[frameIdx]
         let mouthHalfRad = (Self.pacmanMouthHalfAngleMinDeg
             + (Self.pacmanMouthHalfAngleMaxDeg
-                - Self.pacmanMouthHalfAngleMinDeg) * CGFloat(phase))
+                - Self.pacmanMouthHalfAngleMinDeg) * phase)
             * .pi / 180
 
         NSGraphicsContext.saveGraphicsState()
@@ -1329,22 +1345,25 @@ private final class TrailView: NSView {
     /// Draw the no-match ghost sprite — arcade-style "Blinky" shape
     /// rasterised onto the same pixel grid as the pacman face: a
     /// dome on top, square body below, and a wavy skirt of 3 humps
-    /// along the bottom edge. Body sits upright (arcade ghosts
-    /// don't rotate); only the eyes look along `tangent` so the
-    /// sprite still feels like it's tracking the cursor. Body
-    /// colour flows from `color` (= `trailColorNoMatch`, typically
-    /// red) so the failure signal pairs with the pellet trail's
-    /// no-match tint.
+    /// along the bottom edge that **alternates between two leg
+    /// poses** at `ghostSkirtHz` (humps on the outside vs humps on
+    /// the inside) so the sprite reads as walking. Body sits
+    /// upright (arcade ghosts don't rotate); only the eyes look
+    /// along `tangent`. Body colour flows from `color`
+    /// (= `trailColorNoMatch`, typically red) so the failure signal
+    /// pairs with the pellet trail's no-match tint.
     private func drawGhostFace(at p: CGPoint, tangent: CGPoint,
                                 radius: CGFloat, color: NSColor) {
         let cell = max(2, radius * Self.pacmanPixelCellRatio)
-        // Body is slightly taller than wide so the dome + skirt
-        // both have room — matches the arcade ghost's vertical
-        // proportions.
         let bodyHeight = radius                 // square body below dome
-        let skirtAmp = radius * 0.18            // hump depth below body
+        let skirtAmp = radius * 0.34            // hump depth below body
         let totalBottom = -bodyHeight - skirtAmp
         let r2 = radius * radius
+        // Skirt frame: 0 = humps centred at hump-A positions, 1 =
+        // humps shifted by half a hump-width (the A-frame's valleys
+        // become humps and vice versa). Synced off wall time so
+        // every ghost on screen pulses together.
+        let legFrame = Int(CACurrentMediaTime() * Self.ghostSkirtHz) & 1
 
         NSGraphicsContext.saveGraphicsState()
         defer { NSGraphicsContext.restoreGraphicsState() }
@@ -1352,7 +1371,6 @@ private final class TrailView: NSView {
         xform.translateX(by: p.x, yBy: p.y)
         xform.concat()
 
-        // Body fill.
         color.withAlphaComponent(0.95).setFill()
         let extentX = Int(ceil(radius / cell))
         let extentYTop = Int(ceil(radius / cell))
@@ -1364,7 +1382,8 @@ private final class TrailView: NSView {
                 if !ghostBodyFilled(cx: cx, cy: cy,
                                      radius: radius, r2: r2,
                                      bodyHeight: bodyHeight,
-                                     skirtAmp: skirtAmp) { continue }
+                                     skirtAmp: skirtAmp,
+                                     legFrame: legFrame) { continue }
                 let rect = NSRect(
                     x: CGFloat(ix) * cell,
                     y: CGFloat(iy) * cell,
@@ -1373,20 +1392,25 @@ private final class TrailView: NSView {
             }
         }
 
-        // Eyes — two 2×3 white blocks set into the upper body, with
-        // a 1×1 dark pupil whose offset within the eye tracks the
-        // tangent direction (snapped to a single-cell shift so the
-        // pupil never sits between cells). At rest (no tangent), the
-        // pupil centres so the ghost stares straight ahead.
-        let eyeOffsetX = radius * 0.42     // outward from centre
-        let eyeY = radius * 0.20           // upper body band
-        let eyeHalfW = cell * 1.0          // 2-cell wide
-        let eyeHalfH = cell * 1.5          // 3-cell tall
-        let pupilSize = cell
+        // Eyes — two 4×4 white blocks set into the upper body, each
+        // with a 2×2 blue pupil whose offset within the eye tracks
+        // the tangent direction. Eye / pupil sizing matches the
+        // arcade ghost sprite where the eyes dominate the visual
+        // mass. Pupil shift is symmetric in both axes so diagonal
+        // travel reads as a true diagonal gaze.
+        let eyeOffsetX = radius * 0.42
+        let eyeY = radius * 0.22
+        let eyeHalfW = cell * 2.0          // 4 cells wide
+        let eyeHalfH = cell * 2.0          // 4 cells tall
+        let pupilSize = cell * 2
         let len = max(hypot(tangent.x, tangent.y), 0.0001)
-        let pupilShift = cell  // 1-cell shift in tangent direction
+        let pupilShift = cell              // 1 cell — pupil rides
+                                            // flush against the eye
+                                            // edge at full tangent.
         let pupilDx = (tangent.x / len) * pupilShift
         let pupilDy = (tangent.y / len) * pupilShift
+        let pupilColor = NSColor(srgbRed: 0.13, green: 0.13,
+                                  blue: 1.0, alpha: 1.0)
 
         for side: CGFloat in [-1, 1] {
             let ex = side * eyeOffsetX
@@ -1400,7 +1424,7 @@ private final class TrailView: NSView {
                 x: ex - pupilSize / 2 + pupilDx,
                 y: eyeY - pupilSize / 2 + pupilDy,
                 width: pupilSize, height: pupilSize)
-            NSColor.black.setFill()
+            pupilColor.setFill()
             NSBezierPath(rect: pupilRect).fill()
         }
     }
@@ -1408,27 +1432,34 @@ private final class TrailView: NSView {
     /// Predicate: is the cell at local (cx, cy) inside the ghost
     /// silhouette? Top half is a circle (dome); middle is a
     /// rectangle (body); bottom is a 3-hump skirt — each hump is a
-    /// triangle wedge extending below the body baseline at three
-    /// evenly-spaced x positions across the width.
+    /// triangle wedge extending below the body baseline. `legFrame`
+    /// (0 or 1) shifts the hump pattern by half a hump-width so
+    /// alternating frames give the classic arcade "leg shuffle".
     private func ghostBodyFilled(cx: CGFloat, cy: CGFloat,
                                   radius: CGFloat, r2: CGFloat,
                                   bodyHeight: CGFloat,
-                                  skirtAmp: CGFloat) -> Bool {
+                                  skirtAmp: CGFloat,
+                                  legFrame: Int) -> Bool {
         if abs(cx) > radius { return false }
         // Dome: cy >= 0, inside circle.
         if cy >= 0 { return cx * cx + cy * cy <= r2 }
         // Body rectangle: -bodyHeight <= cy <= 0.
         if cy >= -bodyHeight { return true }
-        // Skirt: 3 evenly-spaced humps. Compute distance to nearest
-        // hump centre as a fraction of the hump's half-width; cell
-        // is filled when its depth below the body baseline stays
-        // above the triangle slope at this x.
+        // Skirt humps. Frame 0 places hump centres at the segment
+        // midpoints; frame 1 shifts them by half a hump-width so
+        // the gaps and humps swap and the sprite reads as walking.
         let humpWidth = (2 * radius) / 3
         let humpHalf = humpWidth / 2
+        let phaseShift: CGFloat = (legFrame == 0) ? 0 : humpHalf
+        // Wrap into the [-radius, radius) band so a shifted hump
+        // that pokes off one side is folded back onto the other.
+        let shifted = cx + phaseShift
+        let wrapped = shifted - 2 * radius
+            * floor((shifted + radius) / (2 * radius))
         let segIdx = min(2, max(0,
-            Int(floor((cx + radius) / humpWidth))))
+            Int(floor((wrapped + radius) / humpWidth))))
         let humpCentre = -radius + (CGFloat(segIdx) + 0.5) * humpWidth
-        let distFromCentre = abs(cx - humpCentre) / humpHalf
+        let distFromCentre = abs(wrapped - humpCentre) / humpHalf
         let depthAllowed = (1 - distFromCentre) * skirtAmp
         return cy >= -bodyHeight - depthAllowed
     }
