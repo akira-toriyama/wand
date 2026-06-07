@@ -1254,8 +1254,7 @@ private final class TrailView: NSView {
         // cursor at button-down.
         if let anchor = faceAnchor {
             drawPacmanFace(at: anchor.point, tangent: anchor.tangent,
-                            radius: faceRadius,
-                            color: color, outline: outline)
+                            radius: faceRadius, color: color)
         }
     }
 
@@ -1268,8 +1267,7 @@ private final class TrailView: NSView {
     /// around (counter-clockwise from `+mouthHalf` to `-mouthHalf`)
     /// so the "closed" portion of the face fills.
     private func drawPacmanFace(at p: CGPoint, tangent: CGPoint,
-                                 radius: CGFloat,
-                                 color: NSColor, outline: NSColor?) {
+                                 radius: CGFloat, color: NSColor) {
         // Cosine remap to [0, 1]: 0 at min mouth, 1 at max mouth.
         let phase = (1 - cos(CACurrentMediaTime() * 2 * .pi
                               * Self.pacmanChompHz)) / 2
@@ -1279,20 +1277,6 @@ private final class TrailView: NSView {
         let dirDeg = atan2(tangent.y, tangent.x) * 180 / .pi
         let startDeg = dirDeg + mouthHalf
         let endDeg = dirDeg - mouthHalf
-        // Optional outer wedge in the outline colour. Rim width
-        // scales with the face radius so it stays proportionally
-        // visible at any `strokeWidth`.
-        if let outline {
-            let outer = NSBezierPath()
-            outer.move(to: p)
-            outer.appendArc(withCenter: p,
-                             radius: radius + max(1.5, radius * 0.15),
-                             startAngle: startDeg, endAngle: endDeg,
-                             clockwise: false)
-            outer.close()
-            outline.withAlphaComponent(0.95).setFill()
-            outer.fill()
-        }
         let path = NSBezierPath()
         path.move(to: p)
         path.appendArc(withCenter: p, radius: radius,
