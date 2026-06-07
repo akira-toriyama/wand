@@ -484,8 +484,18 @@ size = "m"
 # Particle explosion at the cursor the moment a gesture fires.
 [cast.fire.burst]
 
-#   "off"    — no burst (default)
-#   "burst"  — omnidirectional particle explosion (~0.7s)
+#   "off"           — no burst (default)
+#   "burst"         — omnidirectional particle explosion (~0.7s)
+#   "arcade-score"  — arcade Pac-Man bonus-tile readout: a yellow
+#                     monospaced "+N" floats up from the cursor
+#                     (~40pt over 800ms) and fades. The value is
+#                     picked at random per fire from the eight
+#                     canonical arcade scores (100 / 200 / 300 /
+#                     500 / 700 / 1000 / 2000 / 5000), so successive
+#                     fires don't repeat. Works under any theme,
+#                     but reads best paired with `[cast].theme =
+#                     "pac-man"` where the rest of the arcade
+#                     flourishes show up too.
 kind = "off"
 
 # Burst particle colour. Same three-mode grammar as

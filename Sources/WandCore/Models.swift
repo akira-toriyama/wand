@@ -169,13 +169,20 @@ public enum Intensity: String, Sendable, Hashable, CaseIterable {
     }
 }
 
-/// Trail-end burst — particle effect emitted at the cursor position
-/// when a gesture rule fires. Independent of the static `DecalKind`
-/// (which lingers at the same point) and the assist-card `Effect`
-/// (which animates the HUD card). Default `.off`.
+/// Trail-end burst — fire-moment effect emitted at the cursor
+/// position when a gesture rule fires. Independent of the static
+/// `DecalKind` (which lingers at the same point) and the assist-
+/// card `Effect` (which animates the HUD card). Default `.off`.
 public enum TrailEndKind: String, Sendable, Hashable, CaseIterable {
     case off
     case burst
+    /// Arcade bonus-score popup: a yellow monospaced "+N" floats up
+    /// from the cursor and fades, mirroring the arcade Pac-Man
+    /// bonus-tile flash. Works regardless of `[cast].theme`, but
+    /// reads best alongside the pac-man theme's other arcade
+    /// flourishes. Picks a random value per fire from the
+    /// canonical eight arcade bonus scores (100..5000).
+    case arcadeScore = "arcade-score"
 }
 
 /// Launcher panel border decoration. Default `.off` (no border).

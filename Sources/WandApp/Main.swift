@@ -401,6 +401,7 @@ enum WandApp {
         // stroke.
         let decalManager = DecalManager()
         let burstManager = BurstManager()
+        let arcadeScoreManager = ArcadeScoreManager()
         controller.onGestureFire = { [weak controller] cgPoint in
             MainActor.assumeIsolated {
                 guard let cfg = controller?.config else { return }
@@ -432,7 +433,7 @@ enum WandApp {
                             / 1000.0,
                         size: CGFloat(decalSpec.size))
                 }
-                if cfg.fire.burst.kind == .burst {
+                if cfg.fire.burst.kind != .off {
                     // Resolve burst colour with the same three-mode
                     // grammar as decal: `""` / `"trail"` inherits the
                     // trail accent, `"splatoon"` picks a random ink,
@@ -449,15 +450,23 @@ enum WandApp {
                         burstColor = NSColorParse.nsColor(
                             burstSpec.color) ?? color
                     }
+                    // Dispatch by kind — only one of the managers
+                    // gates on the kind it handles (others no-op),
+                    // so the same call shape works regardless of
+                    // which arcade-flavour the user picked.
                     burstManager.emit(
                         at: cocoaPoint, color: burstColor,
                         kind: burstSpec.kind,
                         intensity: cfg.intensity.multiplier)
+                    arcadeScoreManager.emit(
+                        at: cocoaPoint, color: burstColor,
+                        kind: burstSpec.kind)
                 }
             }
         }
         _ = decalManager   // hold a reference for the process lifetime
         _ = burstManager   // ditto — fire-moment effects need both alive
+        _ = arcadeScoreManager   // arcade-score popup manager
 
         controller.start()
 
