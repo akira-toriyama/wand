@@ -600,13 +600,15 @@ modifiers = []                 # e.g. ["ctrl"] to require ctrl + middle
 layout = "list"
 
 # Coordinated colour palette for the tome panel — sets the hover
-# accent, idle row text, a static outline, AND the panel backdrop.
-# Themes other than "default" REPLACE the system frosted blur with
-# a solid colour (the `.menu` material has no tint API, so
-# saturated themes can't ride on the blur). Independent of
-# `[cast].theme` (the two surfaces have different visual
-# constraints), so you can pair them freely or run different looks
-# per family.
+# accent, idle row text, AND the panel backdrop. Themes other than
+# "default" REPLACE the system frosted blur with a solid colour
+# (the `.menu` material has no tint API, so saturated themes can't
+# ride on the blur). The panel rim is **not** a theme axis — pick
+# `[tome.decoration].border` for an outline; themes never paint a
+# static frame of their own (would overlap and swallow the animated
+# rim). Independent of `[cast].theme` (the two surfaces have
+# different visual constraints), so you can pair them freely or
+# run different looks per family.
 #
 #   "default"  — frosted-glass system blur, controlAccent hover,
 #                .labelColor rows. The historical look.
@@ -625,15 +627,13 @@ layout = "list"
 #                with `[cast].theme = "pac-man"` for a coordinated
 #                arcade look across both surfaces.
 #   "rainbow"  — vivid rainbow palette inspired by facet: white
-#                rows on deep violet-black, hot-rose hover, electric
-#                cyan static rim. Pair with
-#                `[tome.decoration].border = "rainbow"` to add the
-#                animated spectrum outline — that's where the
+#                rows on deep violet-black, hot-rose hover. Pair
+#                with `[tome.decoration].border = "rainbow"` to add
+#                the animated spectrum outline — that's where the
 #                "rainbow" name comes alive on this static surface.
 #   "aurora"   — polar-lights variant: deep navy backdrop, pastel-
-#                mint hover, gold rim, off-white rows. Calmer
-#                counterpart to "rainbow" — same colour family,
-#                softer contrast.
+#                mint hover, off-white rows. Calmer counterpart to
+#                "rainbow" — same colour family, softer contrast.
 #
 # Unknown names clamp to "default". Validate with `wand --validate`.
 theme = "default"

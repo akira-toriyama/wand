@@ -247,11 +247,6 @@ public struct TomeThemePalette: Sendable, Equatable {
     /// semantic). Terminal-style themes use this to keep every row
     /// in the theme's signature hue.
     public let textColor: String
-    /// Static panel outline colour. Empty = no extra outline; the
-    /// system blur's edge is used. The animated `[tome.decoration]
-    /// .border` is independent — that's a moving rim, this is a
-    /// static frame.
-    public let borderColor: String
     /// Panel background fill. Empty (the default) keeps the system
     /// `NSVisualEffectView .menu` frosted blur (vibrancy). Non-empty
     /// **replaces** the blur with a solid colour — required for
@@ -261,15 +256,19 @@ public struct TomeThemePalette: Sendable, Equatable {
     /// "tinted blur" rather than "themed surface".
     public let backgroundColor: String
 
+    // Note: a `borderColor` field lived here through PR #111 to draw a
+    // 1pt static frame in the theme's signature hue. Retired because
+    // it overlapped (and visually swallowed) the animated rim drawn
+    // by `[tome.decoration].border`. Panel outlines are now solely a
+    // `[tome.decoration]` axis concern.
+
     public init(accentColor: String = "",
                 accentTextColor: String = "",
                 textColor: String = "",
-                borderColor: String = "",
                 backgroundColor: String = "") {
         self.accentColor = accentColor
         self.accentTextColor = accentTextColor
         self.textColor = textColor
-        self.borderColor = borderColor
         self.backgroundColor = backgroundColor
     }
 }
@@ -322,14 +321,12 @@ public enum TomeTheme: String, Sendable, CaseIterable {
                 accentColor: "#22c55e",
                 accentTextColor: "#000000",
                 textColor: "#22c55e",
-                borderColor: "#22c55e",
                 backgroundColor: "#000000")
         case .neon:
             return TomeThemePalette(
                 accentColor: "#22d3ee",
                 accentTextColor: "#0f0a1f",
                 textColor: "#ffffff",
-                borderColor: "#22d3ee",
                 backgroundColor: "#0f0a1f")
         case .splatoon:
             // Splatoon's per-stroke team-colour rotation isn't a fit
@@ -340,21 +337,18 @@ public enum TomeTheme: String, Sendable, CaseIterable {
                 accentColor: "#ff3399",
                 accentTextColor: "#ffffff",
                 textColor: "#ffffff",
-                borderColor: "#bfff00",
                 backgroundColor: "#1a1a1a")
         case .mono:
             return TomeThemePalette(
                 accentColor: "#ffffff",
                 accentTextColor: "#000000",
                 textColor: "#ffffff",
-                borderColor: "#ffffff",
                 backgroundColor: "#000000")
         case .vapor:
             return TomeThemePalette(
                 accentColor: "#ff79c6",
                 accentTextColor: "#282a36",
                 textColor: "#f8f8f2",
-                borderColor: "#ff79c6",
                 backgroundColor: "#282a36")
         case .pacMan:
             // Yellow PAC-MAN accent with black hover text on the
@@ -365,30 +359,27 @@ public enum TomeTheme: String, Sendable, CaseIterable {
                 accentColor: "#ffea00",
                 accentTextColor: "#000000",
                 textColor: "#ffea00",
-                borderColor: "#ffea00",
                 backgroundColor: "#000000")
         case .rainbow:
             // facet's `rainbow` shape: deep violet-black backdrop,
             // white rows, hot-rose hover (so the selection reads
-            // unambiguously even against the saturated bg),
-            // electric-cyan static rim. Pairs with
-            // `[tome.decoration].border = "rainbow"` for the animated
-            // outline that supplies the spectrum cycle.
+            // unambiguously even against the saturated bg). Pairs
+            // with `[tome.decoration].border = "rainbow"` for the
+            // animated outline that supplies the spectrum cycle —
+            // the panel rim is now solely a decoration concern.
             return TomeThemePalette(
                 accentColor: "#ff3b6e",
                 accentTextColor: "#ffffff",
                 textColor: "#ffffff",
-                borderColor: "#22d3ee",
                 backgroundColor: "#1a0a2e")
         case .aurora:
             // Polar-lights variant: deep navy backdrop, pastel-mint
-            // hover, gold rim, off-white rows. Calmer counterpart to
-            // `rainbow` — same colour family, softer contrast.
+            // hover, off-white rows. Calmer counterpart to `rainbow`
+            // — same colour family, softer contrast.
             return TomeThemePalette(
                 accentColor: "#88e1c9",
                 accentTextColor: "#0a0e27",
                 textColor: "#f0f0f5",
-                borderColor: "#d4af37",
                 backgroundColor: "#0a0e27")
         }
     }

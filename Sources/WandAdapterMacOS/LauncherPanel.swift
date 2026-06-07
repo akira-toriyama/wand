@@ -49,7 +49,6 @@ struct TomeColors {
     let accent: NSColor?        // hover background fill
     let accentText: NSColor?    // text colour while hovered
     let text: NSColor?          // idle row text colour
-    let border: NSColor?        // static panel outline
     /// Solid panel backdrop. When non-nil the system frosted blur is
     /// **replaced** with a solid colour view — required for themes
     /// that need a saturated backdrop the blur can't deliver
@@ -64,13 +63,11 @@ struct TomeColors {
             accent: pick(palette.accentColor),
             accentText: pick(palette.accentTextColor),
             text: pick(palette.textColor),
-            border: pick(palette.borderColor),
             background: pick(palette.backgroundColor))
     }
 
     static let none = TomeColors(accent: nil, accentText: nil,
-                                  text: nil, border: nil,
-                                  background: nil)
+                                  text: nil, background: nil)
 }
 
 // MARK: - Public entry
@@ -262,16 +259,12 @@ private enum PanelLayout {
         bg.layer?.cornerRadius = cornerRadius
         bg.layer?.masksToBounds = true
         bg.translatesAutoresizingMaskIntoConstraints = false
-        // Static theme outline. Independent of the animated
-        // [tome.decoration].border — that's a moving rim drawn by
-        // PanelController.installBorderDecoration. This static one
-        // just paints a single hairline frame around the panel
-        // surface so themes like terminal/pac-man get their signature
-        // edge.
-        if let borderColor = colors.border {
-            bg.layer?.borderColor = borderColor.cgColor
-            bg.layer?.borderWidth = 1
-        }
+        // Panel rim is solely a `[tome.decoration].border` concern now
+        // — a theme-supplied static frame at this layer overlapped
+        // (and visually swallowed) the animated rim drawn by
+        // `PanelController.installBorderDecoration`, so the
+        // `borderColor` palette key was retired in PR #111's follow-
+        // up.
 
         let stack = NSStackView()
         stack.translatesAutoresizingMaskIntoConstraints = false
