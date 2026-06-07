@@ -1531,19 +1531,33 @@ private final class TrailView: NSView {
                         break
                     }
                 }
-                // Firing card body: theme/config can override the
-                // historical "trail accent as fill" with its own
-                // palette (e.g. pac-man's rainbow flash) via
-                // `cardFiresMode`. Fall back to the trail accent
-                // when unset.
-                let firesBase = cardFiresMode?.currentColor(
-                    at: CACurrentMediaTime(),
-                    strokeSeed: strokeSeed,
-                    cyclePeriod: colorCyclePeriod) ?? accent
+                // Firing card body fill priority:
+                //   1. `cardFiresMode` (palette's `cardsFiresColor`)
+                //      → flash colour explicitly chosen by theme.
+                //   2. `nil` under pac-man when `cardFiresMode` is
+                //      empty → the firing card opts out of the
+                //      accent fallback so it lands on the same
+                //      frosted backdrop as the directional cards;
+                //      the rainbow border carries the "fires on
+                //      release" signal alone.
+                //   3. trail `accent` — historical default for
+                //      every other theme that doesn't override.
+                let firesFill: NSColor?
+                if let mode = cardFiresMode {
+                    let base = mode.currentColor(
+                        at: CACurrentMediaTime(),
+                        strokeSeed: strokeSeed,
+                        cyclePeriod: colorCyclePeriod)
+                    firesFill = base.withAlphaComponent(firesAlpha)
+                } else if pacMan != nil {
+                    firesFill = nil
+                } else {
+                    firesFill = accent.withAlphaComponent(firesAlpha)
+                }
                 cardLayouts.append(CardLayout(
                     kind: .fires,
                     rect: firesRect, text: s,
-                    fill: firesBase.withAlphaComponent(firesAlpha)))
+                    fill: firesFill))
             }
             // With blur disabled, regular cards still need a fill —
             // the frost would have been their backdrop. Re-run and
@@ -1919,14 +1933,16 @@ private final class HUDContentView: NSView {
                           in o: TrailView,
                           alpha: CGFloat,
                           dx: CGFloat, dy: CGFloat, scale: CGFloat) {
-        // Firing card under `[cast].theme = "pac-man"` gets the
-        // PAC-MAN-logo treatment: angular corners, thicker black
-        // border, and a hard red drop-shadow rectangle behind it so
-        // the card reads as the arcade marquee's 3D-extruded letters.
-        let arcadeMarquee = c.kind == .fires
-            && o.pacMan != nil
-        let cornerR: CGFloat = arcadeMarquee ? 2 : 10
-        let borderW: CGFloat = arcadeMarquee ? 2.5 : 1
+        // Pac-man theme thickens every card border (the default
+        // 1pt reads too thin against the neon-blue / rainbow
+        // palette this theme uses); standard themes keep the 1pt
+        // baseline. Corner radius stays uniform across both card
+        // states — under pac-man the firing card distinguishes
+        // itself via the rainbow border (palette's
+        // `cardsFiresBorderColor`) rather than a separate shape
+        // treatment.
+        let cornerR: CGFloat = 10
+        let borderW: CGFloat = o.pacMan != nil ? 3 : 1
 
         NSGraphicsContext.saveGraphicsState()
         if alpha < 1 {
@@ -1939,21 +1955,6 @@ private final class HUDContentView: NSView {
             tx.scaleX(by: scale, yBy: scale)
             tx.translateX(by: -cx, yBy: -cy)
             tx.concat()
-        }
-        if arcadeMarquee {
-            // 3D shadow rectangle, drawn first so the card body
-            // covers it on the top-left. Offset toward screen
-            // bottom-right by `shadowOffset` pt — matches the
-            // PAC-MAN logo's extruded look.
-            let shadowOffset: CGFloat = 4
-            let shadowRect = c.rect.offsetBy(dx: shadowOffset,
-                                              dy: -shadowOffset)
-            let shadowPath = NSBezierPath(roundedRect: shadowRect,
-                                           xRadius: cornerR,
-                                           yRadius: cornerR)
-            NSColor(srgbRed: 0.85, green: 0.05,
-                     blue: 0.10, alpha: 1.0).setFill()
-            shadowPath.fill()
         }
         let bg = NSBezierPath(roundedRect: c.rect,
                               xRadius: cornerR, yRadius: cornerR)

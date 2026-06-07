@@ -200,23 +200,27 @@ public enum CastTheme: String, Sendable, CaseIterable {
             // wedge face inherits the trail colour and ends up the
             // canonical arcade yellow.
             //
-            // Card scheme is a deliberate two-state design:
+            // Card scheme is "uniform body, border tells the
+            // state":
             //   directional cards — black body + yellow text +
             //                       arcade-maze neon-blue border
             //                       (matches the corridor walls;
-            //                       cards read as arcade maze tiles
-            //                       cut from the same palette).
-            //   firing card       — INVERTED to yellow pellet body
-            //                       + black text, with a YELLOW
-            //                       (body-matched) border so the
-            //                       blue maze-wall accent stays
-            //                       reserved for the "still on the
-            //                       playfield" directional state.
-            //                       The "fires on release" moment
-            //                       reads as the trail's yellow
-            //                       pellet finally latching onto
-            //                       its rule, distinct from the
-            //                       blue-bordered approach cards.
+            //                       cards read as arcade maze
+            //                       tiles cut from the same
+            //                       palette).
+            //   firing card       — SAME black body + yellow text
+            //                       as the directional cards, but
+            //                       with a **rainbow** animated
+            //                       border so the "fires on
+            //                       release" tile reads as the
+            //                       special-bonus glow against the
+            //                       solid-blue approach cards.
+            //                       Empty `cardsFiresColor` /
+            //                       `cardsFiresTextColor` means the
+            //                       firing card inherits the
+            //                       directional body / text — only
+            //                       the border distinguishes the
+            //                       two states.
             // Outline = arcade-maze neon blue (#2121ff). Same hue
             // drives the corridor walls AND the directional cards'
             // border, so HUD + trail share one signature blue
@@ -228,9 +232,17 @@ public enum CastTheme: String, Sendable, CaseIterable {
                 cardsBorderColor: "#2121ff",
                 cardsBodyColor: "#000000",
                 cardsTextColor: "#ffea00",
-                cardsFiresColor: "#ffea00",
-                cardsFiresTextColor: "#000000",
-                cardsFiresBorderColor: "#ffea00",
+                // Empty `cardsFiresColor` / `cardsFiresTextColor`
+                // make the firing card share the directional
+                // card's body / text — the layout code special-
+                // cases pac-man to leave the firing card's `fill`
+                // nil (= same frosted backdrop as directional)
+                // instead of the historical accent fallback. The
+                // rainbow border is then the sole "fires on
+                // release" signal.
+                cardsFiresColor: "",
+                cardsFiresTextColor: "",
+                cardsFiresBorderColor: "rainbow",
                 badgeBackgroundColor: "#000000")
         }
     }
