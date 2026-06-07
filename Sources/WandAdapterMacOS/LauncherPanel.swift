@@ -37,6 +37,47 @@ import AppKit
 import Foundation
 import WandCore
 
+// MARK: - Static border colour
+
+/// Per-kind stroke colour for non-animated `LauncherBorder` cases.
+/// Lives in the adapter (Core stays AppKit-free) and mirrors the
+/// signature hex each themed rim used to carry on `TomeThemePalette`
+/// (retired in the PR #111 follow-up that decoupled rim from theme).
+/// `.off` and `.rainbow` are handled by their own code paths and never
+/// query this — they trap with a clear message if the switch is ever
+/// reached out-of-context.
+extension LauncherBorder {
+    @MainActor
+    var staticColor: NSColor {
+        switch self {
+        case .terminal:  return NSColor(srgbRed: 0x22 / 255.0,
+                                         green: 0xc5 / 255.0,
+                                         blue:  0x5e / 255.0, alpha: 1)
+        case .neon:      return NSColor(srgbRed: 0x22 / 255.0,
+                                         green: 0xd3 / 255.0,
+                                         blue:  0xee / 255.0, alpha: 1)
+        case .splatoon:  return NSColor(srgbRed: 0xbf / 255.0,
+                                         green: 0xff / 255.0,
+                                         blue:  0x00 / 255.0, alpha: 1)
+        case .mono:      return .white
+        case .vapor:     return NSColor(srgbRed: 0xff / 255.0,
+                                         green: 0x79 / 255.0,
+                                         blue:  0xc6 / 255.0, alpha: 1)
+        case .pacMan:    return NSColor(srgbRed: 0xff / 255.0,
+                                         green: 0xea / 255.0,
+                                         blue:  0x00 / 255.0, alpha: 1)
+        case .off, .rainbow:
+            // Animated / no-border kinds carry their colour another
+            // way; reaching here means the caller used the wrong
+            // accessor. Fall back loudly rather than render a silent
+            // mystery colour.
+            assertionFailure(
+                "LauncherBorder.staticColor accessed for \(self)")
+            return .controlAccentColor
+        }
+    }
+}
+
 // MARK: - Theme
 
 /// Resolved theme colours for the panel. Each field is `nil` when the
@@ -1012,40 +1053,68 @@ private final class PanelController {
         if isRoot { installDismissMonitors() }
     }
 
-    /// Lay a `CAShapeLayer` over the panel's contentView that strokes
-    /// the rounded outline with the configured `border` decoration.
-    /// No-op for `.off`.
+    /// Lay a `CAShapeLayer` on the rounded panel background that
+    /// strokes the configured `border` decoration. No-op for `.off`.
+    ///
+    /// Hosting note: the stroke layer goes on `bg.layer` (the rounded,
+    /// `masksToBounds=true` background view) rather than
+    /// `contentView.layer`. Attaching to the contentView's layer puts
+    /// the stroke as a sibling sublayer of bg's implicit layer, and
+    /// the bg subview ends up painting OVER the stroke along the
+    /// panel's straight edges (the corners stay visible because bg's
+    /// rounded mask makes those regions transparent — the user saw
+    /// "4 corners only" in PR #111 follow-up). Hosting on bg.layer
+    /// places the stroke inside bg's mask, so the entire rounded rim
+    /// renders cleanly.
     private func installBorderDecoration() {
-        guard border == .rainbow,
-              let host = panel.contentView else { return }
-        host.wantsLayer = true
+        guard border != .off,
+              let bg = panel.contentView?.subviews.first,
+              let host = bg.layer else { return }
         let stroke = CAShapeLayer()
-        let inset: CGFloat = 1.0
+        // Inset by half the line width so the centerline of the stroke
+        // sits at `(borderWidth / 2)` from the edge — the entire stroke
+        // is inside bg's rounded mask and reads as a clean rim.
+        let lw = CGFloat(borderWidth)
+        let inset = lw / 2
         let corner: CGFloat = PanelLayout.cornerRadius
-        // `host.bounds` is locked at `frame.size` here — the panel
-        // doesn't resize after show, so a static path is safe.
-        let rect = host.bounds.insetBy(dx: inset, dy: inset)
+        // `bg.bounds` is locked at panel `frame.size` once the panel is
+        // shown — bg pins to all four edges of contentView and the
+        // panel doesn't resize, so a static path is safe.
+        let rect = bg.bounds.insetBy(dx: inset, dy: inset)
         stroke.path = CGPath(roundedRect: rect,
-                              cornerWidth: corner - inset,
-                              cornerHeight: corner - inset,
+                              cornerWidth: max(0, corner - inset),
+                              cornerHeight: max(0, corner - inset),
                               transform: nil)
         stroke.fillColor = nil
-        stroke.lineWidth = CGFloat(borderWidth)
-        stroke.strokeColor = NSColor.systemBlue.cgColor   // starting hue
-        // Hue rotation: 8 keyframes around the wheel over 4s, looped.
-        // CAKeyframeAnimation interpolates across CGColors smoothly
-        // — gives the panel an animated rainbow outline.
-        let anim = CAKeyframeAnimation(keyPath: "strokeColor")
-        anim.values = (0..<9).map { i in
-            NSColor(hue: CGFloat(i) / 8.0,
-                    saturation: 0.85, brightness: 1.0,
-                    alpha: 0.95).cgColor
+        stroke.lineWidth = lw
+
+        switch border {
+        case .off:
+            return  // unreachable; guarded above
+        case .rainbow:
+            // Hue rotation around the wheel over `borderCycleMs`.
+            // CAKeyframeAnimation interpolates across CGColors so the
+            // outline cycles smoothly through the spectrum.
+            stroke.strokeColor = NSColor.systemBlue.cgColor  // starting hue
+            let anim = CAKeyframeAnimation(keyPath: "strokeColor")
+            anim.values = (0..<9).map { i in
+                NSColor(hue: CGFloat(i) / 8.0,
+                        saturation: 0.85, brightness: 1.0,
+                        alpha: 0.95).cgColor
+            }
+            anim.duration = Double(borderCycleMs) / 1000.0
+            anim.repeatCount = .infinity
+            anim.calculationMode = .linear
+            stroke.add(anim, forKey: "rainbow")
+        case .terminal, .neon, .splatoon, .mono, .vapor, .pacMan:
+            // Static signature-colour rim — ports the per-theme
+            // `borderColor` that lived on `TomeThemePalette` through
+            // PR #111 before the rim was decoupled from the theme.
+            // Users opt in via `[tome.decoration].border = "<theme>"`
+            // and pair freely with any `[tome].theme`.
+            stroke.strokeColor = border.staticColor.cgColor
         }
-        anim.duration = Double(borderCycleMs) / 1000.0
-        anim.repeatCount = .infinity
-        anim.calculationMode = .linear
-        stroke.add(anim, forKey: "rainbow")
-        host.layer?.addSublayer(stroke)
+        host.addSublayer(stroke)
     }
 
     /// Dismiss the entire tree from any level. Walks up to root, then

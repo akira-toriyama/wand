@@ -214,13 +214,24 @@ public enum TrailEndKind: String, Sendable, Hashable, CaseIterable {
 
 /// Launcher panel border decoration. Default `.off` (no border).
 /// `.rainbow` strokes the panel's rounded rect with a continuously
-/// hue-rotating colour cycle — purely cosmetic, sits on the colour-
-/// decoration axis (paired with the trail's `TrailStyle` which is
-/// shape-only). Other colour-decoration kinds (`vapor`, `pencil`,
-/// solid hues) will land in follow-ups.
+/// hue-rotating colour cycle. The remaining cases (`.terminal` etc)
+/// are **static signature-colour rims** lifted from the per-theme
+/// `borderColor` that lived on `TomeThemePalette` through PR #111
+/// before the rim was decoupled from the theme. Each pairs visually
+/// with the same-named `TomeTheme`, but the two are independent so
+/// users can mix-and-match (e.g. `[tome].theme = "rainbow"` +
+/// `[tome.decoration].border = "neon"`).
 public enum LauncherBorder: String, Sendable, Hashable, CaseIterable {
     case off
     case rainbow
+    case terminal
+    case neon
+    case splatoon
+    case mono
+    case vapor
+    /// Yellow PAC-MAN rim. Renamed from `pacman` in v8 to match
+    /// `TomeTheme.pacMan`.
+    case pacMan = "pac-man"
 }
 
 /// Launcher panel open-animation. Default `.off` (panel pops in
