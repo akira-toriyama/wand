@@ -340,12 +340,12 @@ width = 3
 #               tangent so the direction reads at every point — not
 #               just at the cursor tip. Replaces the retired
 #               `arrowhead = true` knob.
-#   "paws"    — stylised paw prints (heel pad + 3 toes) walking
-#               along the path, oriented along the tangent and
-#               alternating left/right of the centreline. Bezier
-#               shapes — the trail colour flows through like the
-#               other styles, so match-vs-no-match stays in
-#               colour. `width` scales paw size + spacing.
+#   "paws"    — `pawprint.fill` SF Symbol drawn along the path,
+#               rotated along the tangent and alternating
+#               left/right of the centreline. Tinted so the trail
+#               colour flows through like the other styles, so
+#               match-vs-no-match stays in colour. `width` scales
+#               paw size + spacing.
 style = "normal"
 
 # How long (ms) the trail lingers after a gesture fires. The

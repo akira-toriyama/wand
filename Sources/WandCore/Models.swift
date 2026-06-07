@@ -274,18 +274,14 @@ public enum TrailStyle: String, Sendable, Hashable, CaseIterable {
     /// the arrowhead-on-cursor look in mind needs to switch to
     /// `arrow` explicitly.
     case arrow
-    // Note: a `city` style (skyline of buildings rising from the
-    // path) lived here through #117 but was retired on review —
-    // the skyline metaphor read poorly when the gesture turned and
-    // buildings rotated against the path's tangent. Re-evaluate
-    // if a future style needs ground-line + vertical-growth render.
-    /// Paw prints walking along the path — a stylised pad + 3 toes
-    /// drawn at fixed intervals, alternating slightly left / right
-    /// of the path to evoke "footprints from two paws". Bezier
-    /// shapes (not emoji), so the trail colour flows through and
-    /// the match-vs-no-match signal stays in colour like the other
-    /// styles. `width` is re-purposed as a scale multiplier on
-    /// paw size + spacing.
+    /// Paw prints walking along the path — `pawprint.fill` SF
+    /// Symbol drawn at fixed intervals, rotated to face the path
+    /// tangent and offset alternately left / right of the
+    /// centreline so consecutive prints read as L/R footprints.
+    /// Tinted via `hierarchicalColor` so the trail colour flows
+    /// through and match-vs-no-match stays in colour like the
+    /// other styles. `width` is re-purposed as a scale multiplier
+    /// on print size + spacing.
     case paws
 }
 

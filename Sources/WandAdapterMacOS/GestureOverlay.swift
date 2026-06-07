@@ -1393,21 +1393,15 @@ private final class TrailView: NSView {
 
     /// Stylised paw prints walking along the path — `pawprint.fill`
     /// SF Symbol drawn at `pawsSpacing` intervals, rotated so the
-    /// toes face the path tangent (direction of travel), and
-    /// offset perpendicularly by `pawsSideOffset` alternating
-    /// side-to-side so consecutive prints read as L/R footprints.
-    ///
-    /// SF Symbol (not emoji), tinted via `hierarchicalColor` so
-    /// the trail colour flows through — the match-vs-no-match
-    /// signal stays in colour like the bezier styles, and dynamic
-    /// modes (`rainbow` / `neon` / `splatoon`) animate naturally.
-    /// `colorOutline` (when set) is drawn as a slightly-larger
+    /// toes face the path tangent and offset perpendicularly by
+    /// `pawsSideOffset` alternating side-to-side so consecutive
+    /// prints read as L/R footprints. Tinted via `hierarchicalColor`
+    /// so the trail colour flows through like the other styles, and
+    /// dynamic colour modes (`rainbow` / `neon` / `splatoon`) animate
+    /// naturally. `outline` (when set) is drawn as a slightly-larger
     /// halo of the same symbol behind the main one — same legibility
-    /// treatment as the pacman pellet outline.
-    ///
-    /// `strokeWidth` is re-purposed as a scale multiplier — `width
-    /// = 3` (the default) gives baseline-sized prints; higher
-    /// widths scale every dimension proportionally.
+    /// treatment as the pacman pellet outline. `strokeWidth` is
+    /// re-purposed as a scale multiplier on every dimension.
     private func drawPawsPath(origin: CGPoint, cursor: CGPoint,
                                color: NSColor, outline: NSColor?) {
         let scale = max(0.5, strokeWidth / 3)
@@ -1453,11 +1447,8 @@ private final class TrailView: NSView {
             let cx = p.x + nx * side * sideOff
             let cy = p.y + ny * side * sideOff
 
-            // SF Symbol `pawprint.fill` renders with toes pointing
-            // toward +y in its native coordinate system. Rotate so
-            // that "natural up" aligns with the tangent direction
-            // (atan2 - π/2 because the symbol's "up" needs to map
-            // onto the tangent vector).
+            // `pawprint.fill` renders toes-toward-+y natively, so
+            // map "up" onto the tangent (atan2 - π/2).
             let angle = atan2(ty, tx) - .pi / 2
 
             NSGraphicsContext.saveGraphicsState()
