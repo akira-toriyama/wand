@@ -135,7 +135,6 @@ public enum LauncherPanel {
                                 borderCycleMs: Int = 4000,
                                 borderWidth: Int = 2,
                                 shadow: Bool = false,
-                                linePets: [LinePet] = [],
                                 palette: TomeThemePalette = TomeThemePalette(),
                                 onSelect: @escaping (LauncherItem, Target) -> Void) {
         current?.dismiss()
@@ -152,24 +151,15 @@ public enum LauncherPanel {
         let header = layout == .list
             ? PanelLayout.makeHeaderSpec(for: target)
             : nil
-        // Outer margin around bg — needed by any decoration that sits
-        // OUTSIDE the panel content rather than inside it. Two sources
-        // contribute; take the max so different surfaces don't fight
-        // over the same margin budget:
-        //   1. line-pets ride the rim and need ~14 pt (scaled) so
-        //      the panel window doesn't clip their outer half.
-        //   2. pac-man-tail draws a wide maze-wall frame in the
-        //      margin so bg's interior stays untouched. The width
-        //      is anchored to `borderWidth` (the outer wall thickness
-        //      knob) and sized to fit a pac-man pet at that scale —
-        //      `outer + gap + inner ≈ 2.5× borderWidth`, with a
-        //      floor that keeps the wall readable at small widths.
-        let petScale = max(1.0, CGFloat(fontSize) / 13.0)
-        let petMargin: CGFloat = linePets.isEmpty
-            ? 0 : round(14 * petScale)
-        let borderMargin: CGFloat = (border == .pacManTail)
+        // Outer margin around bg — `pac-man-tail` paints its wide
+        // maze-wall frame in this gap so bg's interior keeps its
+        // full footprint regardless of `border-width`. The margin
+        // is anchored to `borderWidth` (the outer wall thickness)
+        // and sized to fit a pac-man pet riding the dot path —
+        // `outer + gap + inner ≈ 2.5× borderWidth`, with a 20 pt
+        // floor that keeps the wall readable at small widths.
+        let outerMargin: CGFloat = (border == .pacManTail)
             ? max(20, round(CGFloat(borderWidth) * 2.5)) : 0
-        let outerMargin = max(petMargin, borderMargin)
         let (content, rows) = PanelLayout.buildContent(
             nodes: nodes, header: header, layout: layout,
             shortcutBadge: shortcutBadge, iconChip: iconChip,
@@ -188,7 +178,6 @@ public enum LauncherPanel {
             borderCycleMs: borderCycleMs,
             borderWidth: borderWidth,
             shadow: shadow,
-            linePets: linePets,
             fontSize: fontSize,
             colors: colors,
             onDismissRoot: { current = nil })
@@ -1000,10 +989,6 @@ private final class PanelController {
     /// fringe on the border decoration, so the project default is
     /// no shadow. Child panels inherit from the root.
     private let shadow: Bool
-    /// Pac-man "pets" walking the panel's outer edge. Empty array
-    /// = no decoration. Theme-agnostic; child panels inherit from
-    /// the root.
-    private let linePets: [LinePet]
     /// Title font size (points) — forwarded to every row built for
     /// child panels (`openChild`) so submenus stay at the same text
     /// scale as the root.
@@ -1045,7 +1030,6 @@ private final class PanelController {
          borderCycleMs: Int = 4000,
          borderWidth: Int = 2,
          shadow: Bool = false,
-         linePets: [LinePet] = [],
          fontSize: Int = 13,
          colors: TomeColors = .none,
          onDismissRoot: (() -> Void)? = nil) {
@@ -1059,7 +1043,6 @@ private final class PanelController {
         self.borderCycleMs = borderCycleMs
         self.borderWidth = borderWidth
         self.shadow = shadow
-        self.linePets = linePets
         self.fontSize = fontSize
         self.colors = colors
         self.onDismissRoot = isRoot ? onDismissRoot : nil
@@ -1100,7 +1083,6 @@ private final class PanelController {
         // ramp without flicker. Auto-released when the panel orders
         // out (the layer's parent view goes away with the window).
         installBorderDecoration()
-        installChompDecoration()
         switch openAnim {
         case .off:
             panel.orderFront(nil)
@@ -1214,28 +1196,6 @@ private final class PanelController {
             bgFrameInView: bg.frame,
             cornerRadius: PanelLayout.cornerRadius,
             outerWidth: CGFloat(borderWidth))
-        view.autoresizingMask = [.width, .height]
-        content.addSubview(view)
-    }
-
-    /// Install the line-pet overlay above `bg` when at least one pet
-    /// is configured. The view spans `content` (which is bg + the
-    /// outer margin set in `buildContent`) so the pets have room to
-    /// ride along bg's rounded edge without being clipped. Its own
-    /// 60 fps timer drives the orbit + per-pet animations; the timer
-    /// dies with the view (cleaned up in `viewWillMove(toWindow:)`),
-    /// so no explicit cleanup is needed here.
-    private func installChompDecoration() {
-        guard !linePets.isEmpty,
-              let content = panel.contentView,
-              let bg = content.subviews.first else { return }
-        panel.contentView?.layoutSubtreeIfNeeded()
-        let view = TomePetsView(
-            frame: content.bounds,
-            bgFrameInView: bg.frame,    // bg.frame is in content coords
-            cornerRadius: PanelLayout.cornerRadius,
-            pets: linePets,
-            petScale: max(1.0, CGFloat(fontSize) / 13.0))
         view.autoresizingMask = [.width, .height]
         content.addSubview(view)
     }
@@ -1356,16 +1316,13 @@ private final class PanelController {
         // parent's layout — a horizontal grandchild from a toolbar's
         // submenu would feel chaotic, and submenus typically benefit
         // from rows-with-labels anyway.
-        let petScale = max(1.0, CGFloat(fontSize) / 13.0)
-        let petMargin: CGFloat = linePets.isEmpty
-            ? 0 : round(14 * petScale)
         let borderMargin: CGFloat = (border == .pacManTail)
             ? max(20, round(CGFloat(borderWidth) * 2.5)) : 0
         let (content, rows) = PanelLayout.buildContent(
             nodes: children, header: nil, layout: .list,
             fontSize: fontSize,
             colors: colors,
-            outerMargin: max(petMargin, borderMargin))
+            outerMargin: borderMargin)
         let frame = PanelLayout.placeChild(
             rowFrameOnScreen: rowOnScreen,
             parentPanelFrame: panel.frame,
@@ -1382,7 +1339,6 @@ private final class PanelController {
             borderCycleMs: borderCycleMs,
             borderWidth: borderWidth,
             shadow: shadow,
-            linePets: linePets,
             fontSize: fontSize,
             colors: colors)
         c.parent = self
@@ -1429,40 +1385,89 @@ private final class PanelController {
 // MARK: - Pac-man maze-wall border overlay
 
 /// Click-through view that paints the arcade pac-man maze-wall
-/// border in the panel's outer margin. Three elements:
+/// border in the panel's outer margin. Four elements (three static,
+/// one animated):
 ///   1. Outer thick neon-blue rounded stroke at the view's edge.
 ///   2. Inner thin neon-blue rounded stroke at bg's edge.
-///   3. Small yellow pellet dots along the centre-line of the gap.
+///   3. Small yellow pellet dots along the gap centreline.
+///   4. Animated pac-man + ghost walking that same centreline,
+///      pac-man leading, ghost trailing by a fixed chase gap. So the
+///      pets read as eating the dots on the path.
 ///
 /// Bg's interior is untouched — the margin reserved by
 /// `present` / `openChild` (via `outerMargin`) hosts the maze, and
-/// bg sits inside it. No timer is needed because the whole frame is
-/// static.
+/// bg sits inside it. A 60 fps timer drives the pet motion;
+/// everything else paints once at install.
 @MainActor
 private final class TomeMazeView: NSView {
+    private let startedAt: CFTimeInterval = CACurrentMediaTime()
     private let bgFrameInView: CGRect
     private let outerCornerRadius: CGFloat
     private let outerWidth: CGFloat
+    /// Rect whose perimeter pac-man + ghost walk along. Lies on the
+    /// gap centre between the outer and inner walls — the same path
+    /// the static dots sit on, so the pets read as eating the dots.
+    private let petPathRect: CGRect
+    /// Scale factor for pet silhouettes. Anchored to `outerWidth` so
+    /// a thicker wall (= wider gap) gets a proportionally bigger
+    /// pac-man / ghost without spilling out of the corridor.
+    private let petScale: CGFloat
+    private var timer: Timer?
 
     init(frame: NSRect, bgFrameInView: CGRect,
          cornerRadius: CGFloat, outerWidth: CGFloat) {
         self.bgFrameInView = bgFrameInView
         self.outerCornerRadius = cornerRadius
         self.outerWidth = outerWidth
+        // Gap centre rect — pets and dots share this path. `bg.minX`
+        // is the outer-margin distance (which equals the maze's
+        // overall depth from view edge to bg edge), so the gap
+        // centre sits halfway between `outerWidth` (inner edge of
+        // outer wall) and `bg.minX` (outer edge of bg = inner wall).
+        let gapInset = (outerWidth + bgFrameInView.minX) / 2
+        self.petPathRect = CGRect(
+            x: gapInset, y: gapInset,
+            width: frame.width - 2 * gapInset,
+            height: frame.height - 2 * gapInset)
+        // Gap width = (bgFrameInView.minX - outerWidth). Pets need
+        // their footprint to fit inside that, so scale = gapWidth /
+        // baseline 14 pt with a 1.0 floor.
+        let gapWidth = max(1, bgFrameInView.minX - outerWidth)
+        self.petScale = max(1.0, gapWidth / 14.0 * 0.9)
         super.init(frame: frame)
         wantsLayer = true
         autoresizingMask = [.width, .height]
         translatesAutoresizingMaskIntoConstraints = true
-        installMazeLayers()
+        installStaticLayers()
+        // 60 fps timer drives pac-man + ghost motion. Timer holds
+        // the block, block captures self weakly — no retain cycle.
+        timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60,
+                                      repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.needsDisplay = true }
+        }
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
+    /// Stop the redraw timer when the view leaves its window —
+    /// covers panel dismissal cleanly. (`deinit` would have crossed
+    /// the main-actor isolation boundary.)
+    override func viewWillMove(toWindow newWindow: NSWindow?) {
+        super.viewWillMove(toWindow: newWindow)
+        if newWindow == nil {
+            timer?.invalidate()
+            timer = nil
+        }
+    }
+
     override var isFlipped: Bool { false }
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
-    private func installMazeLayers() {
+    /// One-time install of the layers that DON'T move: outer wall,
+    /// inner wall, pellet dots. Pets are painted per-frame in
+    /// `draw(_:)` since they animate.
+    private func installStaticLayers() {
         guard let host = layer else { return }
         let blue = NSColor(srgbRed: 0x21 / 255.0,
                             green: 0x21 / 255.0,
@@ -1471,10 +1476,6 @@ private final class TomeMazeView: NSView {
                               green: 0xd9 / 255.0,
                               blue: 0x00 / 255.0, alpha: 1)
         // Outer wall: rounded stroke aligned to the view's edge.
-        // Path centerline inset by `outerWidth / 2` so the outer
-        // edge of the stroke sits flush with the view (and panel)
-        // boundary, mirroring how `CALayer.borderColor` would have
-        // composed if we still owned bg's mask.
         let outerInset = outerWidth / 2
         let outerRect = bounds.insetBy(dx: outerInset, dy: outerInset)
         let outerStroke = CAShapeLayer()
@@ -1488,9 +1489,7 @@ private final class TomeMazeView: NSView {
         outerStroke.lineWidth = outerWidth
         host.addSublayer(outerStroke)
 
-        // Inner wall: thin stroke at bg's outer edge. bg has its
-        // own cornerRadius (`PanelLayout.cornerRadius`), so the
-        // inner curve uses that radius directly.
+        // Inner wall: thin stroke at bg's outer edge.
         let innerLineWidth = max(1, outerWidth * 0.45)
         let innerRect = bgFrameInView.insetBy(
             dx: -innerLineWidth / 2,
@@ -1506,17 +1505,9 @@ private final class TomeMazeView: NSView {
         innerStroke.lineWidth = innerLineWidth
         host.addSublayer(innerStroke)
 
-        // Pellet pass: dots along the gap centre between the two
-        // walls. In this view's coords, the outer wall's inner edge
-        // sits at `outerWidth` from each side, and bg's outer edge
-        // sits at `bgFrameInView.minX` / `.minY` from the matching
-        // side. The gap centre is the midpoint of those.
-        let gapInset = (outerWidth + bgFrameInView.minX) / 2
-        let dotPathRect = CGRect(
-            x: gapInset, y: gapInset,
-            width: bounds.width - 2 * gapInset,
-            height: bounds.height - 2 * gapInset)
-        let perim = 2 * (dotPathRect.width + dotPathRect.height)
+        // Pellet dots along the petPathRect — exactly where pets
+        // walk, so the chase reads as eating dots.
+        let perim = 2 * (petPathRect.width + petPathRect.height)
         guard perim > 0 else { return }
         let dotR: CGFloat = max(1.0, outerWidth * 0.35)
         let dotSpacing: CGFloat = max(20, outerWidth * 5)
@@ -1525,7 +1516,8 @@ private final class TomeMazeView: NSView {
         let dotsPath = CGMutablePath()
         for i in 0..<dotCount {
             let t = CGFloat(i) * step
-            let (x, y) = perimeterPoint(rect: dotPathRect, distance: t)
+            let (x, y, _) = positionOnPerimeter(rect: petPathRect,
+                                                  distance: t)
             dotsPath.addEllipse(in: CGRect(
                 x: x - dotR, y: y - dotR,
                 width: 2 * dotR, height: 2 * dotR))
@@ -1536,116 +1528,25 @@ private final class TomeMazeView: NSView {
         host.addSublayer(dotsLayer)
     }
 
-    /// Walk `rect`'s perimeter linearly (top → right → bottom →
-    /// left) and return the point at the given distance from the
-    /// top-left corner. Used to lay out pellets evenly along the
-    /// maze's gap-centre rectangle.
-    private func perimeterPoint(rect r: CGRect, distance t: CGFloat)
-        -> (x: CGFloat, y: CGFloat) {
-        let topLen = r.width
-        let rightLen = r.height
-        let bottomLen = r.width
-        if t < topLen {
-            return (r.minX + t, r.maxY)
-        } else if t < topLen + rightLen {
-            return (r.maxX, r.maxY - (t - topLen))
-        } else if t < topLen + rightLen + bottomLen {
-            return (r.maxX - (t - topLen - rightLen), r.minY)
-        } else {
-            return (r.minX,
-                    r.minY + (t - topLen - rightLen - bottomLen))
-        }
-    }
-}
-
-// MARK: - Pac-man line-pet overlay
-
-/// Click-through view that paints one or more pac-man "pets"
-/// (`pac-man`, `ghost`) walking the panel's rounded outline. Pets
-/// share a single 60 fps timer so the rim doesn't accumulate
-/// independent animation loops. Each pet's centre traces `bgFrame`
-/// directly; the configured outer margin gives them room to spill
-/// past the border. The leader is at the live time `t`; subsequent
-/// pets trail by a fixed gap (28 pt) so they read as a chase rather
-/// than evenly spaced.
-@MainActor
-private final class TomePetsView: NSView {
-    private let startedAt: CFTimeInterval = CACurrentMediaTime()
-    private let bgFrameInView: CGRect
-    private let cornerRadius: CGFloat
-    private let pets: [LinePet]
-    /// Scale factor multiplied into every pet's geometry (pellet
-    /// radius / ghost dimensions) and the chase gap. Derived from
-    /// `[tome.row].font-size` so a larger panel gets proportionally
-    /// larger pets — without this, the ghost shrinks visually as the
-    /// panel grows.
-    private let petScale: CGFloat
-    private var timer: Timer?
-
-    /// Travel speed of the chase along the rim. A typical panel
-    /// (~250 × 200 pt → perimeter ~900 pt) completes a lap in 5-6 s
-    /// at 160 pt/s. Speed stays constant across `petScale` — a
-    /// larger pet at the same pt/s reads as "the same pet, just
-    /// bigger", not as a slower one.
-    private static let petSpeedPtPerSec: CGFloat = 160
-
-    init(frame: NSRect, bgFrameInView: CGRect,
-         cornerRadius: CGFloat, pets: [LinePet],
-         petScale: CGFloat) {
-        self.bgFrameInView = bgFrameInView
-        self.cornerRadius = cornerRadius
-        self.pets = pets
-        self.petScale = petScale
-        super.init(frame: frame)
-        wantsLayer = true
-        autoresizingMask = [.width, .height]
-        translatesAutoresizingMaskIntoConstraints = true
-        // 60 fps. Timer holds the block, block captures self weakly
-        // — no retain cycle.
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60,
-                                      repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.needsDisplay = true }
-        }
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) { fatalError() }
-
-    /// Stop the redraw timer when the view leaves its window — covers
-    /// panel dismissal cleanly. (`deinit` would have crossed the
-    /// main-actor isolation boundary.)
-    override func viewWillMove(toWindow newWindow: NSWindow?) {
-        super.viewWillMove(toWindow: newWindow)
-        if newWindow == nil {
-            timer?.invalidate()
-            timer = nil
-        }
-    }
-
-    override var isFlipped: Bool { false }
-    override func hitTest(_ point: NSPoint) -> NSView? { nil }
-
     override func draw(_ dirtyRect: NSRect) {
         let now = CACurrentMediaTime() - startedAt
-        let path = bgFrameInView
-        guard path.width > 0, path.height > 0, !pets.isEmpty
-        else { return }
+        let path = petPathRect
+        guard path.width > 0, path.height > 0 else { return }
         let perim = 2 * (path.width + path.height)
-        // Leader's traversed distance, wrapped to the perimeter.
+        // pac-man + ghost are always present in this border kind;
+        // pac-man leads, ghost trails by a fixed chase-gap.
+        let speed: CGFloat = 110 * petScale
         let leader = CGFloat(now).truncatingRemainder(
-            dividingBy: perim / Self.petSpeedPtPerSec
-        ) * Self.petSpeedPtPerSec
-        // Chase gap also scales with `petScale` so the trailing pet
-        // doesn't get tangled into the leader at large sizes.
+            dividingBy: perim / speed
+        ) * speed
         let chaseGap: CGFloat = 28 * petScale
-        for (i, pet) in pets.enumerated() {
-            // Lag each follower by the chase gap (mod the perimeter
-            // so a wrapped value lands cleanly on the path).
+        let order: [LinePet] = [.pacMan, .ghost]
+        for (i, pet) in order.enumerated() {
             var pos = leader - CGFloat(i) * chaseGap
             pos = pos.truncatingRemainder(dividingBy: perim)
             if pos < 0 { pos += perim }
             let (px, py, rot) = positionOnPerimeter(rect: path,
-                                                     distance: pos)
+                                                      distance: pos)
             NSGraphicsContext.saveGraphicsState()
             let tx = NSAffineTransform()
             tx.translateX(by: px, yBy: py)
@@ -1659,12 +1560,9 @@ private final class TomePetsView: NSView {
         }
     }
 
-    /// Walk `rect`'s perimeter linearly (top → right → bottom → left)
-    /// and return the centre + facing rotation at the given distance.
-    /// Rotation is the local +x axis direction (= direction of
-    /// travel), so per-pet draw code can stay in a canonical
-    /// "facing-right" frame and the transform supplies the lap-aware
-    /// orientation.
+    /// Walk `rect`'s perimeter linearly (top → right → bottom →
+    /// left) and return the centre + travel-direction rotation at
+    /// the given distance.
     private func positionOnPerimeter(rect r: CGRect,
                                       distance t: CGFloat)
         -> (x: CGFloat, y: CGFloat, rot: CGFloat) {
@@ -1686,7 +1584,6 @@ private final class TomePetsView: NSView {
 
     /// Yellow pac-man wedge with the mouth opening / closing on a
     /// ~0.25 s cycle, drawn centred on the current transform origin.
-    /// Geometry mirrors the cast-overlay variant.
     private func drawPacMan(now: CFTimeInterval) {
         let r: CGFloat = 7 * petScale
         let chompPhase = 0.5 - 0.5 * cos(now * (2 * .pi / 0.25))
@@ -1705,30 +1602,16 @@ private final class TomePetsView: NSView {
         p.lineWidth = 0.5; p.stroke()
     }
 
-    /// Red Blinky-style ghost: rounded dome over a rectangular body
-    /// with a 3-wave scalloped skirt, two white eyes with blue
-    /// pupils pointing along the travel direction (= local +x).
-    /// Baseline silhouette is 14 × 16 pt at `petScale = 1`; multiplied
-    /// by `petScale` so a larger panel gets a larger ghost.
+    /// Red Blinky-style ghost: rounded dome + 3-wave skirt + eyes
+    /// pointing along the travel direction.
     private func drawGhost(now: CFTimeInterval) {
         let w: CGFloat = 14 * petScale
         let h: CGFloat = 16 * petScale
-        // Skirt waves bob on a ~0.4 s cycle so the ghost reads as
-        // moving rather than stamped on the rim. Phase is the same
-        // for every ghost on the panel (one timer / one `now`).
-        // Amplitude scales with `petScale` so the bob stays
-        // proportional to the larger silhouette.
         let bob = CGFloat(sin(now * (2 * .pi / 0.4))) * 0.6 * petScale
-
         let halfW = w / 2
         let halfH = h / 2
-        // Use the standing-still arcade ghost as the canonical
-        // orientation (dome on top, eyes facing local +x).
         let red = NSColor(calibratedRed: 1.0, green: 0.0,
                           blue: 0.10, alpha: 1.0)
-
-        // Outline path: dome (top half) → right side → 3-wave skirt
-        // → left side, closed.
         let body = NSBezierPath()
         body.move(to: CGPoint(x: -halfW, y: 0))
         body.appendArc(withCenter: CGPoint(x: 0, y: 0),
@@ -1736,7 +1619,6 @@ private final class TomePetsView: NSView {
                         startAngle: 180, endAngle: 0,
                         clockwise: false)
         body.line(to: CGPoint(x: halfW, y: -halfH + bob))
-        // 3 waves across the skirt.
         let segments = 3
         let segW = w / CGFloat(segments)
         let waveDepth: CGFloat = 1.5 * petScale
@@ -1755,11 +1637,6 @@ private final class TomePetsView: NSView {
         red.setFill(); body.fill()
         NSColor.black.withAlphaComponent(0.35).setStroke()
         body.lineWidth = 0.5 * petScale; body.stroke()
-
-        // Two eyes — white sclera + blue pupil, both nudged toward
-        // local +x to telegraph the chase direction. All sizes /
-        // offsets scale with `petScale` so the proportions stay
-        // identical to the baseline.
         let eyeR: CGFloat = 2.0 * petScale
         let pupilR: CGFloat = 1.0 * petScale
         let eyeY: CGFloat = halfH * 0.35
@@ -1767,7 +1644,7 @@ private final class TomePetsView: NSView {
         let pupilOffset: CGFloat = 0.7 * petScale
         let eyeShift: CGFloat = 1.0 * petScale
         for sign in [-1.0, 1.0] {
-            let cx = CGFloat(sign) * eyeDx + eyeShift  // both nudged +x
+            let cx = CGFloat(sign) * eyeDx + eyeShift
             let sclera = NSBezierPath(ovalIn: CGRect(
                 x: cx - eyeR, y: eyeY - eyeR,
                 width: 2 * eyeR, height: 2 * eyeR))
@@ -1781,6 +1658,7 @@ private final class TomePetsView: NSView {
         }
     }
 }
+
 
 // MARK: - Row view
 

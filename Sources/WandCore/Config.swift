@@ -422,32 +422,29 @@ public struct WandConfig: Sendable {
         let launcherDecorBorderWidth = clampInt(
             ld, key: "border-width", default: 2, lo: 1, hi: 10)
         let launcherDecorShadow = ld.bool("shadow", false)
-        // `chomp = true` was retired in favour of the more general
-        // `line-pet = ["pac-man", "ghost", …]` array. Honour the old
-        // key for one release with a loud warning so a user who
-        // copy-pasted it from an earlier README sees what to change.
+        // `chomp = true` (PR #112 and earlier) was retired in favour
+        // of `line-pet = ["pac-man", …]`. `line-pet` itself was then
+        // retired (PR #113) in favour of bundling the pets into
+        // `border = "pac-man-tail"`. Both old keys still parse but
+        // log a warning and are silently ignored.
         if ld.bool("chomp", false) {
             Log.line("config: [tome.decoration].chomp = true was retired"
-                     + " — use line-pet = [\"pac-man\"] instead "
-                     + "(the value has been silently ignored)")
+                     + " — use border = \"pac-man-tail\" for the"
+                     + " full maze (the value has been silently ignored)")
         }
-        let launcherDecorLinePets: [LinePet] =
-            ld.strings("line-pet").compactMap { raw in
-                let v = raw.lowercased()
-                if let pet = LinePet(rawValue: v) { return pet }
-                let valid = LinePet.allCases.map(\.rawValue)
-                    .sorted().joined(separator: ", ")
-                Log.line("config: [tome.decoration].line-pet contains"
-                         + " unrecognised entry \"\(raw)\" — dropped"
-                         + " (valid: \(valid))")
-                return nil
-            }
+        if !ld.strings("line-pet").isEmpty {
+            Log.line("config: [tome.decoration].line-pet was retired"
+                     + " — the pac-man / ghost pets are now bundled"
+                     + " into border = \"pac-man-tail\". Drop this"
+                     + " key; set border = \"pac-man-tail\" to keep"
+                     + " the look (the value has been silently"
+                     + " ignored).")
+        }
         let launcherDecoration = LauncherDecorationSpec(
             border: launcherDecorBorder,
             cycleMs: launcherDecorCycleMs,
             borderWidth: launcherDecorBorderWidth,
-            shadow: launcherDecorShadow,
-            linePets: launcherDecorLinePets)
+            shadow: launcherDecorShadow)
 
         // Warn when the user opted out of the launcher but still
         // configured non-default panel cosmetics — those only fire

@@ -721,14 +721,16 @@ close = "off"
 #   "pac-man"  — static arcade yellow rim (#ffea00)
 #   "pac-man-tail" — arcade maze-wall: thick outer neon-blue line +
 #                thin inner blue line (black gap between) + small
-#                yellow pellet dots along the gap. Reads as the
-#                Pac-Man corridor wrapping the panel. The maze lives
-#                in a margin AROUND bg (~2.5× `border-width`, min
-#                20 pt) so the panel's interior — rows + icons — keeps
-#                its full footprint regardless of how thick the wall
-#                gets. Suits saturated themes (`mono` / `pac-man` /
-#                `terminal`); on the frosted `default` theme the dots
-#                can read as noise.
+#                yellow pellet dots along the gap + an animated
+#                pac-man chasing along the dot path with a red ghost
+#                following close behind. Reads as the Pac-Man
+#                corridor wrapping the panel, the chase included.
+#                The maze lives in a margin AROUND bg (~2.5×
+#                `border-width`, min 20 pt) so the panel's interior
+#                — rows + icons — keeps its full footprint regardless
+#                of how thick the wall gets. Suits saturated themes
+#                (`mono` / `pac-man` / `terminal`); on the frosted
+#                `default` theme the dots can read as noise.
 #
 # Static kinds (except `pac-man-tail`) were lifted from each theme's
 # old `borderColor` slot (retired in PR #111 follow-up) so the same
@@ -765,23 +767,14 @@ border-width = 2
 # shadow.
 shadow = false
 
-# Pac-man "pets" that walk the panel's rounded outline. Default
-# `[]` (no pets). Theme-agnostic — each pet's silhouette is its own
-# colour signature, so they stand alongside any `[tome].theme`.
-# When more than one is listed they chase each other around the rim
-# in array order (first leads, the rest trail at a fixed gap).
-#
-#   "pac-man" — classic yellow chomping wedge
-#   "ghost"   — red Blinky-style ghost (dome + eyes + skirt)
-#
-# Pet sizes scale with `[tome.row].font-size` so a larger panel gets
-# proportionally larger pets — the ghost stays readable at any
-# font-size. `outer-margin` is auto-managed to match.
-#
-# Retired in this PR: `chomp = true`. Equivalent to
-# `line-pet = ["pac-man"]` — the old key still parses but logs a
-# warning to /tmp/wand.log and is silently ignored.
-line-pet = []
+# Note: `line-pet = [...]` lived in this block briefly (and
+# `chomp = true` before it) as a stand-alone way to add walking
+# pac-man / ghost pets to the panel rim. Both were retired in
+# favour of bundling the pets into `border = "pac-man-tail"` —
+# the pac-man maze identity already implies a chase along its
+# corridor, so a separate axis duplicated the look. Stale
+# `line-pet` / `chomp` keys here log a warning to
+# `/tmp/wand.log` and are silently ignored.
 
 
 # -----------------------------------------------------------------

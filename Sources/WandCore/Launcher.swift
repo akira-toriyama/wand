@@ -453,26 +453,24 @@ public struct LauncherDecorationSpec: Sendable, Equatable {
     /// read as a fringe on the border decoration. Set `true` to
     /// restore the system menu shadow look.
     public let shadow: Bool
-    /// Pac-man "pets" that walk the panel's rounded outline. Default
-    /// `[]` (no pets). Theme-agnostic — each pet's silhouette is
-    /// baked in, so they stand alongside any `[tome].theme`. When
-    /// more than one is configured they chase each other in array
-    /// order around the rim. Replaces the `chomp = true` boolean
-    /// retired in this PR — config-side, `chomp = true` now logs a
-    /// warning and is silently ignored (use `line-pet = ["pac-man"]`
-    /// instead).
-    public let linePets: [LinePet]
+    // Note: `linePets: [LinePet]` lived here briefly (and `chomp =
+    // true` before that) to add walking pac-man / ghost pets to the
+    // panel rim as a stand-alone decoration. Retired in favour of
+    // bundling those pets into `border = "pac-man-tail"` — the
+    // pac-man maze identity already implies a chase along its
+    // corridor, so a separate axis just duplicated the look.
+    // Migration: `[tome.decoration].line-pet` logs a warning and is
+    // ignored; if a user wants the pets, `border = "pac-man-tail"`
+    // now includes them automatically.
 
     public init(border: LauncherBorder = .off,
                 cycleMs: Int = 4000,
                 borderWidth: Int = 2,
-                shadow: Bool = false,
-                linePets: [LinePet] = []) {
+                shadow: Bool = false) {
         self.border = border
         self.cycleMs = cycleMs
         self.borderWidth = borderWidth
         self.shadow = shadow
-        self.linePets = linePets
     }
 
     public static let `default` = LauncherDecorationSpec()
