@@ -126,6 +126,7 @@ public enum LauncherPanel {
                                 layout: LauncherLayout = .list,
                                 shortcutBadge: Bool = true,
                                 iconChip: Bool = true,
+                                fontSize: Int = 13,
                                 openAnim: LauncherOpenAnim = .off,
                                 closeAnim: LauncherCloseAnim = .off,
                                 border: LauncherBorder = .off,
@@ -158,6 +159,7 @@ public enum LauncherPanel {
         let (content, rows) = PanelLayout.buildContent(
             nodes: nodes, header: header, layout: layout,
             shortcutBadge: shortcutBadge, iconChip: iconChip,
+            fontSize: fontSize,
             colors: colors, outerMargin: outerMargin)
         let frame = PanelLayout.placeRoot(
             atCursor: cocoaPoint, contentSize: content.fittingSize)
@@ -173,6 +175,7 @@ public enum LauncherPanel {
             borderWidth: borderWidth,
             shadow: shadow,
             linePets: linePets,
+            fontSize: fontSize,
             colors: colors,
             onDismissRoot: { current = nil })
         current = controller
@@ -284,6 +287,7 @@ private enum PanelLayout {
                               layout: LauncherLayout,
                               shortcutBadge: Bool = true,
                               iconChip: Bool = true,
+                              fontSize: Int = 13,
                               colors: TomeColors = .none,
                               outerMargin: CGFloat = 0)
         -> (view: NSView, rows: [ItemRow]) {
@@ -345,7 +349,8 @@ private enum PanelLayout {
 
         if let h = header, layout == .list {
             let hr = ItemRow(kind: .header, label: h.name, icon: h.icon,
-                              layout: layout)
+                              layout: layout,
+                              fontSize: fontSize)
             rows.append(hr)
             views.append(hr)
             views.append(makeSeparator(layout: layout))
@@ -371,6 +376,7 @@ private enum PanelLayout {
                     && item.header != currentSection {
                     views.append(makeSectionHeaderRow(name: item.header,
                                                        layout: layout,
+                                                       fontSize: fontSize,
                                                        sink: &rows))
                     currentSection = item.header
                 }
@@ -384,13 +390,18 @@ private enum PanelLayout {
                 views.append(makeItemRow(item, layout: layout,
                                           shortcutBadge: shortcutBadge,
                                           iconChip: iconChip,
+                                          fontSize: fontSize,
                                           sink: &rows))
             case .folder(let name, let children):
                 views.append(makeFolderRow(name: name, children: children,
-                                            layout: layout, sink: &rows))
+                                            layout: layout,
+                                            fontSize: fontSize,
+                                            sink: &rows))
             case .placeholder(let label):
                 views.append(makePlaceholderRow(label: label,
-                                                 layout: layout, sink: &rows))
+                                                 layout: layout,
+                                                 fontSize: fontSize,
+                                                 sink: &rows))
             }
         }
 
@@ -532,21 +543,25 @@ private enum PanelLayout {
                                      layout: LauncherLayout,
                                      shortcutBadge: Bool,
                                      iconChip: Bool,
+                                     fontSize: Int,
                                      sink rows: inout [ItemRow]) -> NSView {
         if !item.dynamic.isEmpty {
             // Dynamic item — render as a folder-style row that
             // hover-expands into a child panel populated by running
             // `item.dynamic` (see `PanelController.openDynamicChild`).
             let icon = resolveItemIconWithFallback(item: item, layout: layout,
-                                                    iconChip: iconChip)
+                                                    iconChip: iconChip,
+                                                    fontSize: fontSize)
             let r = ItemRow(kind: .dynamic(item),
-                            label: item.name, icon: icon, layout: layout)
+                            label: item.name, icon: icon, layout: layout,
+                            fontSize: fontSize)
             rows.append(r)
             return r
         }
         let label = renderItemLabel(item, layout: layout)
         let icon = resolveItemIconWithFallback(item: item, layout: layout,
-                                                iconChip: iconChip)
+                                                iconChip: iconChip,
+                                                fontSize: fontSize)
         // Auto-derive a shortcut glyph for `.key(...)` actions so list
         // rows can show the underlying ⌘W next to the label — pure
         // documentation, never intercepts the actual key. Other action
@@ -561,7 +576,8 @@ private enum PanelLayout {
         let subtitle = layout == .list ? item.subtitle : ""
         let r = ItemRow(kind: .leaf(item), label: label, icon: icon,
                          layout: layout, shortcut: shortcut,
-                         subtitle: subtitle, iconAnim: item.iconAnim)
+                         subtitle: subtitle, iconAnim: item.iconAnim,
+                         fontSize: fontSize)
         rows.append(r)
         return r
     }
@@ -575,13 +591,15 @@ private enum PanelLayout {
     /// the item's `name` as a text glyph. Same trick the existing
     /// `resolveItemIcon` uses for emoji / short-text icon specs.
     private static func resolveItemIconWithFallback(
-        item: LauncherItem, layout: LauncherLayout, iconChip: Bool
+        item: LauncherItem, layout: LauncherLayout, iconChip: Bool,
+        fontSize: Int
     ) -> NSImage? {
         if !item.icon.isEmpty {
             return resolveItemIcon(item.icon,
                                     tint: item.tint,
                                     tintColors: item.tintColors,
-                                    iconChip: iconChip)
+                                    iconChip: iconChip,
+                                    fontSize: fontSize)
         }
         switch layout {
         case .list:
@@ -591,7 +609,9 @@ private enum PanelLayout {
             // buttons — these are always rendered as text, so they
             // benefit from the chip the same way an emoji icon would.
             let glyph = String(item.name.prefix(2))
-            return textIcon(glyph, pointSize: ItemRow.iconRenderPt,
+            return textIcon(glyph,
+                             pointSize: ItemRow.iconRenderPt(
+                                forFontSize: fontSize),
                              chip: iconChip)
         }
     }
@@ -599,18 +619,21 @@ private enum PanelLayout {
     private static func makeFolderRow(name: String,
                                        children: [PanelNode],
                                        layout: LauncherLayout,
+                                       fontSize: Int,
                                        sink rows: inout [ItemRow]) -> NSView {
         let r = ItemRow(kind: .folder(name: name, children: children),
-                        label: name, icon: nil, layout: layout)
+                        label: name, icon: nil, layout: layout,
+                        fontSize: fontSize)
         rows.append(r)
         return r
     }
 
     private static func makePlaceholderRow(label: String,
                                             layout: LauncherLayout,
+                                            fontSize: Int,
                                             sink rows: inout [ItemRow]) -> NSView {
         let r = ItemRow(kind: .placeholder, label: label, icon: nil,
-                         layout: layout)
+                         layout: layout, fontSize: fontSize)
         rows.append(r)
         return r
     }
@@ -621,9 +644,17 @@ private enum PanelLayout {
     /// the same panel. Only emitted in `.list` layout.
     private static func makeSectionHeaderRow(name: String,
                                               layout: LauncherLayout,
+                                              fontSize: Int,
                                               sink rows: inout [ItemRow]) -> NSView {
+        // Section headers keep their compact small-caps style at the
+        // same fixed point size regardless of `fontSize` — the band
+        // is a visual rest between item runs, not a title that
+        // should scale with body content. Passing fontSize through
+        // anyway so future tweaks have it available without another
+        // signature change.
         let r = ItemRow(kind: .sectionHeader(name), label: name,
-                         icon: nil, layout: layout)
+                         icon: nil, layout: layout,
+                         fontSize: fontSize)
         rows.append(r)
         return r
     }
@@ -761,8 +792,9 @@ private enum PanelLayout {
     static func resolveItemIcon(_ spec: String,
                                  tint: String = "",
                                  tintColors: [String] = [],
-                                 iconChip: Bool = false) -> NSImage? {
-        let pt: CGFloat = ItemRow.iconRenderPt
+                                 iconChip: Bool = false,
+                                 fontSize: Int = 13) -> NSImage? {
+        let pt: CGFloat = ItemRow.iconRenderPt(forFontSize: fontSize)
 
         // `app:<bundle-id>` — resolve to an installed app's icon via
         // the same AppIconCache the panel header uses. Works for
@@ -958,6 +990,10 @@ private final class PanelController {
     /// = no decoration. Theme-agnostic; child panels inherit from
     /// the root.
     private let linePets: [LinePet]
+    /// Title font size (points) — forwarded to every row built for
+    /// child panels (`openChild`) so submenus stay at the same text
+    /// scale as the root.
+    private let fontSize: Int
     /// Re-entry guard: a fade-out can dispatch async, and a global
     /// click or follow-up `dismiss()` could land mid-fade. Once `true`
     /// the panel is committed to its current teardown path and any
@@ -996,6 +1032,7 @@ private final class PanelController {
          borderWidth: Int = 2,
          shadow: Bool = false,
          linePets: [LinePet] = [],
+         fontSize: Int = 13,
          colors: TomeColors = .none,
          onDismissRoot: (() -> Void)? = nil) {
         self.layout = layout
@@ -1009,6 +1046,7 @@ private final class PanelController {
         self.borderWidth = borderWidth
         self.shadow = shadow
         self.linePets = linePets
+        self.fontSize = fontSize
         self.colors = colors
         self.onDismissRoot = isRoot ? onDismissRoot : nil
 
@@ -1278,6 +1316,7 @@ private final class PanelController {
         // from rows-with-labels anyway.
         let (content, rows) = PanelLayout.buildContent(
             nodes: children, header: nil, layout: .list,
+            fontSize: fontSize,
             colors: colors,
             outerMargin: linePets.isEmpty ? 0 : 14)
         let frame = PanelLayout.placeChild(
@@ -1297,6 +1336,7 @@ private final class PanelController {
             borderWidth: borderWidth,
             shadow: shadow,
             linePets: linePets,
+            fontSize: fontSize,
             colors: colors)
         c.parent = self
         child = c
@@ -1628,20 +1668,39 @@ private final class ItemRow: NSView {
     /// `mouseEntered`. macOS 14+ only; older OS silently ignores.
     /// Empty (default) means static icon.
     private let iconAnim: String
+    /// Title font size (points). Scales the row's icon size and
+    /// height proportionally — the row reads at the user's preferred
+    /// text scale rather than truncating. Default 13 matches macOS'
+    /// menu baseline; `[tome.row].font-size` overrides it.
+    private let fontSize: CGFloat
+    /// Per-instance scale factor against the baseline (13 pt). Used
+    /// to derive icon box, row height, and `iconRenderPt` so the
+    /// whole row grows or shrinks coherently.
+    private var fontScale: CGFloat { fontSize / 13.0 }
     /// Bounding box in points for the icon view. The actual rendered
     /// SF Symbol is sized to `iconRenderPt` and scaled `.large`, so it
     /// fills the box optically.
-    private static let iconSize: CGFloat = 17
+    private var iconSize: CGFloat { round(17 * fontScale) }
     /// `pointSize` passed to `NSImage.SymbolConfiguration` — see the
     /// comment in `PanelLayout.resolveItemIcon` for why this is paired
     /// with `.medium` weight + `.large` scale.
     static let iconRenderPt: CGFloat = 17
-    private static let listRowHeight: CGFloat = 26
+    /// Per-row scaled equivalent of the static `iconRenderPt`. Used
+    /// by `PanelLayout.resolveItemIcon` callers that have a live
+    /// row's `fontSize` in hand (the bare `iconRenderPt` constant
+    /// remains the unscaled baseline for non-row icon callers like
+    /// the header).
+    static func iconRenderPt(forFontSize pt: Int) -> CGFloat {
+        round(17 * CGFloat(pt) / 13.0)
+    }
+    private var listRowHeight: CGFloat { round(26 * fontScale) }
     /// Taller row variant for items that supply a non-empty subtitle.
-    /// Just enough to fit the 11pt secondary caption under the title
-    /// without making single-line rows in the same panel feel
-    /// inconsistent — the icon stays centred, captions hang below.
-    private static let listRowHeightWithSubtitle: CGFloat = 38
+    /// Scales with `fontSize` like the single-line variant so a tall
+    /// `font-size` panel keeps captioned rows proportional to plain
+    /// rows.
+    private var listRowHeightWithSubtitle: CGFloat {
+        round(38 * fontScale)
+    }
     /// Section-header band height. Just enough to breathe a small-caps
     /// 10pt label without the band dominating the panel.
     private static let sectionHeaderHeight: CGFloat = 22
@@ -1661,13 +1720,15 @@ private final class ItemRow: NSView {
 
     init(kind: RowKind, label: String, icon: NSImage?,
          layout: LauncherLayout, shortcut: String = "",
-         subtitle: String = "", iconAnim: String = "") {
+         subtitle: String = "", iconAnim: String = "",
+         fontSize: Int = 13) {
         self.kind = kind
         self.layout = layout
         self.rawLabel = label
         self.shortcutText = shortcut
         self.subtitleText = subtitle
         self.iconAnim = iconAnim
+        self.fontSize = CGFloat(fontSize)
         super.init(frame: .zero)
 
         translatesAutoresizingMaskIntoConstraints = false
@@ -1726,7 +1787,7 @@ private final class ItemRow: NSView {
     private func installListLayout(label: String) {
         titleField.translatesAutoresizingMaskIntoConstraints = false
         titleField.stringValue = label
-        titleField.font = .menuFont(ofSize: 0)
+        titleField.font = .menuFont(ofSize: fontSize)
         titleField.lineBreakMode = .byTruncatingTail
         titleField.maximumNumberOfLines = 1
         titleField.cell?.usesSingleLineMode = true
@@ -1794,7 +1855,7 @@ private final class ItemRow: NSView {
         // stays centred so the visual baseline doesn't drift.
         let hasSubtitle = !subtitleText.isEmpty
         let rowHeight: CGFloat = hasSubtitle
-            ? Self.listRowHeightWithSubtitle : Self.listRowHeight
+            ? listRowHeightWithSubtitle : listRowHeight
 
         var verticalConstraints: [NSLayoutConstraint] = []
         if hasSubtitle {
@@ -1826,8 +1887,8 @@ private final class ItemRow: NSView {
 
             iconView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
             iconView.centerYAnchor.constraint(equalTo: centerYAnchor),
-            iconView.widthAnchor.constraint(equalToConstant: Self.iconSize),
-            iconView.heightAnchor.constraint(equalToConstant: Self.iconSize),
+            iconView.widthAnchor.constraint(equalToConstant: iconSize),
+            iconView.heightAnchor.constraint(equalToConstant: iconSize),
 
             titleField.leadingAnchor.constraint(equalTo: iconView.trailingAnchor,
                                                 constant: 8),
@@ -1846,8 +1907,8 @@ private final class ItemRow: NSView {
             heightAnchor.constraint(equalToConstant: Self.toolbarButtonSide),
             iconView.centerXAnchor.constraint(equalTo: centerXAnchor),
             iconView.centerYAnchor.constraint(equalTo: centerYAnchor),
-            iconView.widthAnchor.constraint(equalToConstant: Self.iconSize + 2),
-            iconView.heightAnchor.constraint(equalToConstant: Self.iconSize + 2),
+            iconView.widthAnchor.constraint(equalToConstant: iconSize + 2),
+            iconView.heightAnchor.constraint(equalToConstant: iconSize + 2),
         ])
     }
 
@@ -1860,7 +1921,7 @@ private final class ItemRow: NSView {
 
         titleField.translatesAutoresizingMaskIntoConstraints = false
         titleField.stringValue = label
-        titleField.font = .menuFont(ofSize: 0)
+        titleField.font = .menuFont(ofSize: fontSize)
         titleField.lineBreakMode = .byTruncatingTail
         titleField.maximumNumberOfLines = 1
         titleField.cell?.usesSingleLineMode = true
@@ -1871,8 +1932,8 @@ private final class ItemRow: NSView {
 
             iconView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
             iconView.centerYAnchor.constraint(equalTo: centerYAnchor),
-            iconView.widthAnchor.constraint(equalToConstant: Self.iconSize),
-            iconView.heightAnchor.constraint(equalToConstant: Self.iconSize),
+            iconView.widthAnchor.constraint(equalToConstant: iconSize),
+            iconView.heightAnchor.constraint(equalToConstant: iconSize),
 
             titleField.leadingAnchor.constraint(
                 equalTo: iconView.trailingAnchor, constant: 6),

@@ -382,7 +382,9 @@ public struct WandConfig: Sendable {
         let lrow = doc.tables["tome.row"] ?? [:]
         let launcherRow = LauncherRowSpec(
             shortcutBadge: lrow.bool("shortcut-badge", true),
-            iconChip: lrow.bool("icon-chip", true))
+            iconChip: lrow.bool("icon-chip", true),
+            fontSize: clampInt(lrow, key: "font-size",
+                                default: 13, lo: 11, hi: 32))
 
         // [tome.animation]
         let la = doc.tables["tome.animation"] ?? [:]

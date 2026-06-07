@@ -399,11 +399,20 @@ public struct LauncherRowSpec: Sendable, Equatable {
     /// on the same visual footprint as SF Symbol icons. No effect on
     /// SF Symbol / file-path icons. Default `true`.
     public let iconChip: Bool
+    /// Title font size (points). Drives the whole row's footprint:
+    /// row height and icon size scale proportionally so larger
+    /// fonts get a larger panel rather than truncated text. Clamped
+    /// 11..32. Default 13 matches macOS' menu font baseline (the
+    /// pre-knob hardcoded size), so the historical look survives
+    /// when the key is omitted.
+    public let fontSize: Int
 
     public init(shortcutBadge: Bool = true,
-                iconChip: Bool = true) {
+                iconChip: Bool = true,
+                fontSize: Int = 13) {
         self.shortcutBadge = shortcutBadge
         self.iconChip = iconChip
+        self.fontSize = fontSize
     }
 
     public static let `default` = LauncherRowSpec()

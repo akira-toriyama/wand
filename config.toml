@@ -643,6 +643,18 @@ theme = "default"
 # `[[tome.item]]`.
 [tome.row]
 
+# Title font size (points) for every `[[tome.item]]` row. Scales the
+# row's icon size and height proportionally so a larger font gets a
+# larger panel rather than truncated text. Default 13 matches macOS'
+# menu baseline (the pre-knob hardcoded size). Clamped 11..32.
+#
+#   11    — compact (system menu-bar size)
+#   13    — default
+#   16    — comfortable
+#   20    — large (pairs well with `line-pet` so the ghost / pellet
+#           silhouettes read at a glance)
+font-size = 13
+
 # Auto-display a right-aligned ⌘W-style glyph badge on `.list` rows
 # whose action is `action-type = "key"`. The badge is derived from
 # `action-keys` (`"cmd+shift+t"` → `"⌘⇧T"`) — purely documentation,
