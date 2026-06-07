@@ -722,9 +722,13 @@ close = "off"
 #   "pac-man-tail" — arcade maze-wall: thick outer neon-blue line +
 #                thin inner blue line (black gap between) + small
 #                yellow pellet dots along the gap. Reads as the
-#                Pac-Man corridor wrapping the panel. Suits saturated
-#                themes (`mono` / `pac-man` / `terminal`); on the
-#                frosted `default` theme the dots can read as noise.
+#                Pac-Man corridor wrapping the panel. The maze lives
+#                in a margin AROUND bg (~2.5× `border-width`, min
+#                20 pt) so the panel's interior — rows + icons — keeps
+#                its full footprint regardless of how thick the wall
+#                gets. Suits saturated themes (`mono` / `pac-man` /
+#                `terminal`); on the frosted `default` theme the dots
+#                can read as noise.
 #
 # Static kinds (except `pac-man-tail`) were lifted from each theme's
 # old `borderColor` slot (retired in PR #111 follow-up) so the same
