@@ -361,6 +361,16 @@ private final class TrailView: NSView {
     private var anchor: CGPoint?
     private var lastDir: Direction?
     fileprivate var valid = true            // current match state of the trail
+    /// Wall-time of the moment the trail's match state transitioned
+    /// from `true` to `false`. Used by the pac-man wall-flash effect:
+    /// for `noMatchFlashDurationMs` after this timestamp the corridor
+    /// walls render in red instead of the theme outline colour,
+    /// signalling "you've just fallen off every rule". `nil` outside
+    /// the flash window. Re-armed on every fresh true → false
+    /// transition, so a no-match → re-match → no-match sequence
+    /// flashes again on the second drop.
+    fileprivate var noMatchFlashStartedAt: TimeInterval?
+    fileprivate static let noMatchFlashDurationMs: Double = 200
     fileprivate var hint: GestureHint?      // shape + reachable rules
     /// Icon of the target app the gesture is acting on, drawn as a
     /// small badge at `origin`. Tells the user "you're operating
@@ -502,6 +512,12 @@ private final class TrailView: NSView {
         if self.hint == nil && hint != nil {
             badgeAppearedAt = CACurrentMediaTime()
         }
+        // Detect the true → false transition for the pac-man wall
+        // flash. Re-armed each time so a re-match → no-match
+        // sequence flashes again on the second drop.
+        if self.valid && !valid {
+            noMatchFlashStartedAt = CACurrentMediaTime()
+        }
         self.valid = valid
         self.hint = hint
         let cocoa = ScreenCoords.cocoaPoint(fromCG: cg)
@@ -561,6 +577,13 @@ private final class TrailView: NSView {
         layoutHUD()
         needsDisplay = true
         hudContent.needsDisplay = true
+        // Pac-man's wall-flash animation needs redraws between
+        // mouse samples — the flash starts the instant `valid`
+        // flips false (which can happen on a single sample that
+        // also doesn't move the cursor any further), so without
+        // the ticker the flash window would never get a second
+        // frame. No-op when nothing pac-man-flavoured is active.
+        kickExitAnimationTick()
     }
 
     func reset() {
@@ -655,6 +678,7 @@ private final class TrailView: NSView {
         badgeAppearedAt = nil
         cardLayouts.removeAll()
         badgeLayout = nil
+        noMatchFlashStartedAt = nil
         // Re-roll the stroke seed so the NEXT stroke's `splatoon`-
         // mode trail picks a different team colour. The seed is also
         // ignored by static / rainbow / neon modes (they read time
@@ -737,6 +761,23 @@ private final class TrailView: NSView {
         // on separate axes — `trailStyle` is "which dash pattern",
         // `pacMan` is "the whole render shape is locked".
         if pacMan != nil {
+            // Wall colour during the no-match flash window: swap
+            // the theme outline (arcade-blue) for hot red so the
+            // moment the gesture falls off every rule, the
+            // corridor walls briefly read as "danger" before
+            // settling back to the standard signal-blue. After
+            // `noMatchFlashDurationMs` the override expires and
+            // the original `outlineColor` (theme outline) flows
+            // through again.
+            var pacManOutline = outlineColor
+            if let flashStart = noMatchFlashStartedAt {
+                let elapsedMs = (CACurrentMediaTime() - flashStart) * 1000
+                if elapsedMs < Self.noMatchFlashDurationMs {
+                    pacManOutline = NSColor(
+                        srgbRed: 1.00, green: 0.10,
+                        blue: 0.10, alpha: 1.0)
+                }
+            }
             PacManRenderer.draw(
                 state: PacManRenderer.State(
                     origin: origin,
@@ -748,7 +789,7 @@ private final class TrailView: NSView {
                     strokeWidth: strokeWidth,
                     valid: valid,
                     isFinalHold: holdingFinal),
-                color: color, outline: outlineColor)
+                color: color, outline: pacManOutline)
             NSGraphicsContext.restoreGraphicsState()
             return
         }
@@ -1608,9 +1649,22 @@ private final class TrailView: NSView {
     /// Drive redraws while exit animations OR the post-fire hold are
     /// running. Idempotent — the `tickScheduled` flag absorbs repeat
     /// calls within a frame.
-    private func kickExitAnimationTick() {
-        guard (!exitingCards.isEmpty || holdingFinal), !tickScheduled
-        else { return }
+    fileprivate func kickExitAnimationTick() {
+        // Anything that needs continuous redraws between mouse
+        // samples (the trail+HUD only naturally redraw when a new
+        // sample arrives or focus changes, so animated effects
+        // without their own sample stream rely on this 60fps
+        // ticker).
+        let pacManWallFlashActive: Bool = {
+            guard pacMan != nil, let t = noMatchFlashStartedAt
+            else { return false }
+            return (CACurrentMediaTime() - t) * 1000
+                < Self.noMatchFlashDurationMs
+        }()
+        let needsTick = !exitingCards.isEmpty
+            || holdingFinal
+            || pacManWallFlashActive
+        guard needsTick, !tickScheduled else { return }
         tickScheduled = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0 / 60) {
             [weak self] in self?.tickExitAnimations()
@@ -1621,11 +1675,23 @@ private final class TrailView: NSView {
         tickScheduled = false
         let now = CACurrentMediaTime()
         exitingCards.removeAll { (now - $0.startedAt) >= $0.effect.duration }
+        // Wall flash auto-expires by elapsed-time check at draw
+        // time, but clearing the timestamp here is harmless and
+        // lets `kickExitAnimationTick` drop the tick when the
+        // flash window passes.
+        if let t = noMatchFlashStartedAt,
+           (now - t) * 1000 >= Self.noMatchFlashDurationMs {
+            noMatchFlashStartedAt = nil
+        }
         hudContent.needsDisplay = true
         // The trail's fade alpha is sampled in `draw`, so it needs a
         // redraw on each tick too — otherwise the fade is frozen at
         // its first frame when no exit-card animation is running.
-        if holdingFinal { needsDisplay = true }
+        // The pac-man wall flash is also drawn by the trail, so
+        // arm the same redraw while the flash window is active.
+        if holdingFinal || noMatchFlashStartedAt != nil {
+            needsDisplay = true
+        }
         kickExitAnimationTick()
     }
 
