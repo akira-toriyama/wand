@@ -730,11 +730,19 @@ border-width = 2
 # shadow.
 shadow = false
 
-# Pac-man chomp pellet that orbits the panel's outer edge, chomping
-# as it travels. Default `false`. Theme-agnostic — the yellow pellet
-# stands alongside any `[tome].theme`. Mirrors
-# `[cast.overlay.cards].chomp` on the gesture side.
-chomp = false
+# Pac-man "pets" that walk the panel's rounded outline. Default
+# `[]` (no pets). Theme-agnostic — each pet's silhouette is its own
+# colour signature, so they stand alongside any `[tome].theme`.
+# When more than one is listed they chase each other around the rim
+# in array order (first leads, the rest trail at a fixed gap).
+#
+#   "pac-man" — classic yellow chomping wedge
+#   "ghost"   — red Blinky-style ghost (dome + eyes + skirt)
+#
+# Retired in this PR: `chomp = true`. Equivalent to
+# `line-pet = ["pac-man"]` — the old key still parses but logs a
+# warning to /tmp/wand.log and is silently ignored.
+line-pet = []
 
 
 # -----------------------------------------------------------------
