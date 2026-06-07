@@ -730,6 +730,12 @@ border-width = 2
 # shadow.
 shadow = false
 
+# Pac-man chomp pellet that orbits the panel's outer edge, chomping
+# as it travels. Default `false`. Theme-agnostic — the yellow pellet
+# stands alongside any `[tome].theme`. Mirrors
+# `[cast.overlay.cards].chomp` on the gesture side.
+chomp = false
+
 
 # -----------------------------------------------------------------
 # Items (tome) and rules (cast) — shared field reference

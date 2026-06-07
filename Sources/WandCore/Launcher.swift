@@ -444,15 +444,24 @@ public struct LauncherDecorationSpec: Sendable, Equatable {
     /// read as a fringe on the border decoration. Set `true` to
     /// restore the system menu shadow look.
     public let shadow: Bool
+    /// Pac-man chomp pellet that orbits the panel's outer edge,
+    /// chomping as it travels. Default `false`. Theme-agnostic —
+    /// the yellow pellet is its own visual signature and stands
+    /// alongside any `[tome].theme`. Mirrors `[cast.overlay.cards]
+    /// .chomp` but applied to the whole panel rim rather than a
+    /// single firing card.
+    public let chomp: Bool
 
     public init(border: LauncherBorder = .off,
                 cycleMs: Int = 4000,
                 borderWidth: Int = 2,
-                shadow: Bool = false) {
+                shadow: Bool = false,
+                chomp: Bool = false) {
         self.border = border
         self.cycleMs = cycleMs
         self.borderWidth = borderWidth
         self.shadow = shadow
+        self.chomp = chomp
     }
 
     public static let `default` = LauncherDecorationSpec()

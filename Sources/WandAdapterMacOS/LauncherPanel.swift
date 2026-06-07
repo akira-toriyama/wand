@@ -132,6 +132,7 @@ public enum LauncherPanel {
                                 borderCycleMs: Int = 4000,
                                 borderWidth: Int = 2,
                                 shadow: Bool = false,
+                                chomp: Bool = false,
                                 palette: TomeThemePalette = TomeThemePalette(),
                                 onSelect: @escaping (LauncherItem, Target) -> Void) {
         current?.dismiss()
@@ -165,6 +166,7 @@ public enum LauncherPanel {
             borderCycleMs: borderCycleMs,
             borderWidth: borderWidth,
             shadow: shadow,
+            chomp: chomp,
             colors: colors,
             onDismissRoot: { current = nil })
         current = controller
@@ -930,6 +932,9 @@ private final class PanelController {
     /// fringe on the border decoration, so the project default is
     /// no shadow. Child panels inherit from the root.
     private let shadow: Bool
+    /// Pac-man chomp pellet orbiting the panel's outer edge.
+    /// Theme-agnostic; child panels inherit from the root.
+    private let chomp: Bool
     /// Re-entry guard: a fade-out can dispatch async, and a global
     /// click or follow-up `dismiss()` could land mid-fade. Once `true`
     /// the panel is committed to its current teardown path and any
@@ -967,6 +972,7 @@ private final class PanelController {
          borderCycleMs: Int = 4000,
          borderWidth: Int = 2,
          shadow: Bool = false,
+         chomp: Bool = false,
          colors: TomeColors = .none,
          onDismissRoot: (() -> Void)? = nil) {
         self.layout = layout
@@ -979,6 +985,7 @@ private final class PanelController {
         self.borderCycleMs = borderCycleMs
         self.borderWidth = borderWidth
         self.shadow = shadow
+        self.chomp = chomp
         self.colors = colors
         self.onDismissRoot = isRoot ? onDismissRoot : nil
 
@@ -1018,6 +1025,7 @@ private final class PanelController {
         // ramp without flicker. Auto-released when the panel orders
         // out (the layer's parent view goes away with the window).
         installBorderDecoration()
+        installChompDecoration()
         switch openAnim {
         case .off:
             panel.orderFront(nil)
@@ -1106,6 +1114,22 @@ private final class PanelController {
             // PR #111. Pair freely with any `[tome].theme`.
             layer.borderColor = border.staticColor.cgColor
         }
+    }
+
+    /// Install the pac-man chomp pellet view above `bg` when
+    /// `chomp == true`. The view runs its own 60 fps timer to drive
+    /// the orbit + chomp animation; the timer dies with the view
+    /// (which goes away with the panel content view at teardown), so
+    /// no explicit cleanup is needed.
+    private func installChompDecoration() {
+        guard chomp,
+              let content = panel.contentView,
+              let bg = content.subviews.first else { return }
+        panel.contentView?.layoutSubtreeIfNeeded()
+        let view = TomeChompView(frame: bg.frame,
+                                  cornerRadius: PanelLayout.cornerRadius)
+        view.autoresizingMask = [.width, .height]
+        content.addSubview(view)
     }
 
     /// Dismiss the entire tree from any level. Walks up to root, then
@@ -1243,6 +1267,7 @@ private final class PanelController {
             borderCycleMs: borderCycleMs,
             borderWidth: borderWidth,
             shadow: shadow,
+            chomp: chomp,
             colors: colors)
         c.parent = self
         child = c
@@ -1282,6 +1307,132 @@ private final class PanelController {
                 Task { @MainActor in self?.dismiss() }
             }
         }
+    }
+}
+
+// MARK: - Pac-man chomp pellet overlay
+
+/// Click-through view that paints a yellow pac-man pellet orbiting the
+/// panel's outer edge with a continuous chomp animation. Theme-
+/// agnostic — the pellet is its own visual signature, recognizable
+/// regardless of `[tome].theme`. Drives its own redraw via a 60 fps
+/// timer; the timer dies with the view, which goes away with the
+/// panel at teardown.
+@MainActor
+private final class TomeChompView: NSView {
+    private let startedAt: CFTimeInterval = CACurrentMediaTime()
+    private let cornerRadius: CGFloat
+    private var timer: Timer?
+
+    init(frame: NSRect, cornerRadius: CGFloat) {
+        self.cornerRadius = cornerRadius
+        super.init(frame: frame)
+        wantsLayer = true
+        // Two-axis autoresize so the view tracks the panel's content
+        // rect if it ever resizes (it doesn't today, but the panel
+        // could grow when expand-on-hover gets added — being correct
+        // costs nothing).
+        autoresizingMask = [.width, .height]
+        translatesAutoresizingMaskIntoConstraints = true
+        // 60 fps. The timer block captures `self` weakly so the view
+        // dropping out of the hierarchy doesn't keep the timer alive
+        // — Timer holds the block, the block doesn't hold the view.
+        // Hop to the main actor inside the block so the
+        // `needsDisplay` mutation is isolation-correct.
+        timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60,
+                                      repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.needsDisplay = true }
+        }
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
+
+    /// Stop the redraw timer when the view leaves its window — covers
+    /// panel dismissal cleanly. (Doing it in `deinit` would have
+    /// crossed the main-actor isolation boundary.)
+    override func viewWillMove(toWindow newWindow: NSWindow?) {
+        super.viewWillMove(toWindow: newWindow)
+        if newWindow == nil {
+            timer?.invalidate()
+            timer = nil
+        }
+    }
+
+    override var isFlipped: Bool { false }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let now = CACurrentMediaTime() - startedAt
+        drawChompPellet(in: bounds, cornerR: cornerRadius, now: now)
+    }
+
+    /// Pellet shape + position derived from `now`. Geometry mirrors
+    /// the cast-overlay chomp pellet (`drawChompPellet` in
+    /// `GestureOverlay`) — a yellow circular wedge whose mouth opens
+    /// and closes on a ~0.25 s cycle while travelling around the rect
+    /// perimeter at a fixed pt/s speed. The two implementations don't
+    /// share code yet because the gesture overlay's lives inside a
+    /// larger draw context — that extraction is a tracked follow-up.
+    private func drawChompPellet(in rect: CGRect,
+                                  cornerR: CGFloat,
+                                  now: CFTimeInterval) {
+        let pelletR: CGFloat = 7
+        // Travel just outside the panel edge so the pellet rides ON
+        // TOP of the border rather than inside it.
+        let path = rect.insetBy(dx: pelletR, dy: pelletR)
+        guard path.width > 0, path.height > 0 else { return }
+        let perim = 2 * (path.width + path.height)
+        let speed: CGFloat = 160  // pt/s — a touch faster than the
+                                  // cast pellet so a typical-sized
+                                  // panel completes a lap in 3-4 s
+        let t = CGFloat(now.truncatingRemainder(dividingBy:
+            Double(perim / speed))) * speed
+        let topLen = path.width
+        let rightLen = path.height
+        let bottomLen = path.width
+        var px: CGFloat = 0, py: CGFloat = 0
+        var rot: CGFloat = 0  // mouth opens along this direction
+        if t < topLen {
+            px = path.minX + t
+            py = path.maxY
+            rot = 0           // mouth → +x
+        } else if t < topLen + rightLen {
+            px = path.maxX
+            py = path.maxY - (t - topLen)
+            rot = -.pi / 2    // mouth → -y
+        } else if t < topLen + rightLen + bottomLen {
+            px = path.maxX - (t - topLen - rightLen)
+            py = path.minY
+            rot = .pi         // mouth → -x
+        } else {
+            px = path.minX
+            py = path.minY + (t - topLen - rightLen - bottomLen)
+            rot = .pi / 2     // mouth → +y
+        }
+        let chompPhase = 0.5 - 0.5 * cos(now * (2 * .pi / 0.25))
+        let openRad = chompPhase * (35.0 * .pi / 180.0)
+        let yellow = NSColor(calibratedRed: 1.0, green: 0.85,
+                             blue: 0.0, alpha: 1.0)
+        NSGraphicsContext.saveGraphicsState()
+        let tx = NSAffineTransform()
+        tx.translateX(by: px, yBy: py)
+        tx.rotate(byRadians: rot)
+        tx.concat()
+        let pellet = NSBezierPath()
+        pellet.move(to: .zero)
+        pellet.appendArc(withCenter: .zero, radius: pelletR,
+                          startAngle: CGFloat(openRad * 180 / .pi),
+                          endAngle: CGFloat(360
+                                            - openRad * 180 / .pi),
+                          clockwise: false)
+        pellet.close()
+        yellow.setFill()
+        pellet.fill()
+        NSColor.black.withAlphaComponent(0.35).setStroke()
+        pellet.lineWidth = 0.5
+        pellet.stroke()
+        NSGraphicsContext.restoreGraphicsState()
     }
 }
 
