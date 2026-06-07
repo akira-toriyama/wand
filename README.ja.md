@@ -241,11 +241,17 @@ wand は **config.toml 駆動**。設定 GUI は意図的に持たない。
 ```toml
 [[cast.rule]]
 name = "close tab"
+icon = "SF:xmark.square"              # 任意 — assist card で名前の左に表示
 pattern = "DR"                        # 下 → 右
 apps = ["*chrome*", "*safari*"]       # カーソル直下のウィンドウで判定
 action-type = "key"
 action-keys = "cmd+w"
 ```
+
+`icon` は `[[tome.item]].icon` と同じ syntax — SF Symbol
+(`"SF:globe"`)、絵文字 / テキスト glyph (`"🌐"`)、インストール
+済みアプリのアイコン (`"app:com.apple.Safari"`)、ファイルパスの
+いずれか。空 / 省略時はアイコンなし(矢印 + 名前のみ)。
 
 方向アルファベットは `L U R D`(左 / 上 / 右 / 下)— **同方向の連打は
 不可**。認識器が同じ方向の連続移動を1つにまとめるため(`LLLL…` は `L`、
@@ -301,14 +307,14 @@ trail 線のスタイル、起点バッジのサイズ、overlay 全体のブラ
 
 ```toml
 [cast.overlay.cards]
-unmatch = "drop"        # ジェスチャー途中で到達不能になったカード
-match   = "fireworks"   # ボタン離しで発動したカード
+cancel = "drop"         # ジェスチャー途中で到達不能になったカード
+fire   = "fireworks"    # ボタン離しで発動したカード
 ```
 
-種類: `none`(既定)、`drop`、`rise`、`slide-left`、`slide-right`、
+種類: `off`(既定)、`drop`、`rise`、`slide-left`、`slide-right`、
 `explode`、`vibrate`、`fade`、`fireworks`、`confetti`、
 `random`(カードが消えるたびに毎回別の効果を選ぶ)。
-パーティクル系(`fireworks` / `confetti`)は `match` に置くと
+パーティクル系(`fireworks` / `confetti`)は `fire` に置くと
 一番映える。
 
 overlay を off にしても効くカーソル位置のエフェクトは独立ウィンドウ:

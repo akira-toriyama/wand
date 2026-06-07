@@ -41,9 +41,9 @@ enum PacManRenderer {
         let rawTrail: [CGPoint]
         let lastDir: Direction?
         /// Forced `true` by the parser whenever this renderer runs
-        /// (the pac-man theme locks straighten-on-turn) — carried
-        /// through so the rendering math matches the v7 shape, but
-        /// in practice it's always `true` now.
+        /// (the pac-man theme locks straighten-on-turn) — kept on the
+        /// `State` for the rendering math, but in practice always
+        /// `true`.
         let straightenOnTurn: Bool
         /// Scale multiplier sourced from `[cast.pac-man].size`
         /// (`.s` = 2.0, `.m` = 3.0, `.l` = 4.5). Every pac-man
@@ -61,6 +61,21 @@ enum PacManRenderer {
         /// normal 4-frame chomp, reading as "Pac-Man caught the
         /// rule and is mid-bite".
         let isFinalHold: Bool
+        /// Face's arc-length from the origin on the previous frame.
+        /// `draw` compares this with the current frame's face arc-
+        /// length to detect cherries the face just passed — for
+        /// those, `onCherryEaten` fires once. Reset to 0 by the
+        /// caller (TrailView) at each stroke start.
+        let previousFaceArcLength: CGFloat
+        /// Invoked once per cherry the face crossed on this frame.
+        /// Receives the cherry's position in the renderer's local
+        /// coordinate space (= `TrailView`'s view-local coords).
+        /// The caller (TrailView) lights up `cherryFlashStartedAt`
+        /// off this — drives the brief rainbow wall flash — and
+        /// also forwards the position to the App layer so the
+        /// arcade-score "+N" popup floats up from where the cherry
+        /// was eaten.
+        let onCherryEaten: @MainActor (CGPoint) -> Void
     }
 
     // MARK: - Tuning constants
@@ -69,6 +84,20 @@ enum PacManRenderer {
     private static let pelletDiameter: CGFloat = 4
     /// Spacing between pellets along the path (pt at scale=1).
     private static let pelletInterval: CGFloat = 14
+    /// Cherry-emoji size relative to the dot diameter. The cherry
+    /// is the arcade bonus token — it pops in place of a regular
+    /// pellet, so it reads bigger than the surrounding dots on
+    /// purpose. 5× lands it at roughly the historical bonus-tile
+    /// scale relative to the corridor's pellets.
+    private static let cherryGlyphMultiplier: CGFloat = 5.0
+    /// Probability (0..1) that a yellow pellet gets swapped for the
+    /// arcade cherry bonus token, decided per-pellet from a stable
+    /// hash of its position. ~8% gives 1-3 cherries on a typical
+    /// 20-50 pellet stroke, with a high enough rate that even
+    /// shorter strokes (~10 pellets) usually carry at least one.
+    /// Only fires while the gesture is on-track (no cherries on the
+    /// no-match crumb trail).
+    private static let cherryProbability: Double = 0.08
     /// Face silhouette radius (pt at scale=1). Tuned so 13-ish
     /// cells across the diameter still leave room for the eyes /
     /// mouth detail without crowding.
@@ -95,10 +124,12 @@ enum PacManRenderer {
     /// frame count.
     private static let chompFrames: [CGFloat] = [0, 0.5, 1, 0.5]
     /// How far back along the path the face sits behind the live
-    /// cursor (pt at scale=1). 60pt ≈ 2 face widths of gap, which
-    /// reads as "actively chasing" without hiding the sprite off
-    /// the live cursor end.
-    private static let faceLag: CGFloat = 60
+    /// cursor (pt at scale=1). 90pt ≈ 3 face widths of gap, leaving
+    /// enough corridor between the face and the cursor that the
+    /// player can SEE the face approach an upcoming cherry before
+    /// catching it — short of that, cherries appear and get eaten
+    /// in the same frame and the "snack" beat is lost.
+    private static let faceLag: CGFloat = 90
     /// Toggle rate of the ghost-skirt 2-frame leg animation (Hz).
     /// 2.5 Hz gives ~200 ms per leg pose — slow enough to pulse in
     /// the background rather than draw attention.
@@ -121,10 +152,15 @@ enum PacManRenderer {
     /// — `width = 1` gives the default pellet / face size and
     /// spacing, higher values scale everything proportionally. The
     /// arcade aesthetic is always a single line of pellets, so
-    /// thickness rows would fight the visual.
+    /// thickness rows would fight the visual. Returns the face's
+    /// arc-length from the polyline origin on this frame so the
+    /// caller can feed it back as `previousFaceArcLength` next
+    /// frame — that's how cherry-crossing detection stays stable
+    /// without the renderer carrying mutable state.
+    @discardableResult
     static func draw(state: State,
                       color: NSColor,
-                      outline: NSColor?) {
+                      outline: NSColor?) -> CGFloat {
         let scale = max(1, state.strokeWidth)
         let dot = pelletDiameter * scale
         let interval = pelletInterval * scale
@@ -137,6 +173,13 @@ enum PacManRenderer {
         // the on-track case so the player still feels each pellet
         // as a reward as they draw past it.
         let pelletFill = color.withAlphaComponent(state.valid ? 0.9 : 0.3)
+
+        // Cherry bonus token — rendered as an emoji glyph in place
+        // of a regular pellet at ~5% probability. Only fires while
+        // the gesture is on-track; the no-match crumb trail stays
+        // pure dimmed dots.
+        let cherryGlyphSize = max(12, dot * cherryGlyphMultiplier)
+        let cherryFont = NSFont.systemFont(ofSize: cherryGlyphSize)
 
         // Single shared point sequence — corridor, pellets, and the
         // face-anchor walk all consume the same axis-snapped
@@ -230,26 +273,71 @@ enum PacManRenderer {
         // snapped polyline with the lag as `trimTail` — the final
         // step the walker emits is exactly the cutoff point. Skip
         // drawing in this pass; we only need the coordinate +
-        // tangent.
-        var faceAnchor: (point: CGPoint, tangent: CGPoint)?
+        // tangent + arc-length (the last fuels cherry-eaten
+        // detection in the pellet pass below).
+        var faceAnchor: (point: CGPoint, tangent: CGPoint, arc: CGFloat)?
         walkPolyline(points: snappedPts,
                      interval: interval,
-                     trimTail: lag) { p, tangent in
-            faceAnchor = (p, tangent)
+                     trimTail: lag) { p, tangent, arc in
+            faceAnchor = (p, tangent, arc)
         }
+        let currentFaceArc = faceAnchor?.arc ?? 0
 
-        // 3) Pellets across the full snapped polyline. The arcade
-        // dot is unhaloed — the walls drawn above carry the
-        // outline-for-legibility treatment; doubling that with a
-        // per-pellet halo would muddy the corridor read.
-        let plot: (CGPoint, CGPoint) -> Void = { p, _ in
-            pelletFill.setFill()
-            let rect = NSRect(x: p.x - dot / 2, y: p.y - dot / 2,
-                              width: dot, height: dot)
-            NSBezierPath(ovalIn: rect).fill()
+        // 3) Pellets across the full snapped polyline. Regular
+        // pellets are the historical filled circle; on-track pellets
+        // get swapped for a cherry emoji at ~8% probability per
+        // position. Cherry selection is hashed off the pellet's
+        // rounded position so a given pellet stays a cherry (or
+        // doesn't) across redraws of the same stroke.
+        //
+        // Cherries the face has already walked past are not drawn
+        // (= "eaten") — the arcade beat where Pac-Man's mouth lands
+        // on the fruit and the fruit vanishes. When a cherry crosses
+        // from "ahead" to "behind" the face on the current frame
+        // (i.e. its arc-length is in (previousFaceArc, currentFaceArc]),
+        // `state.onCherryEaten` fires once so TrailView can paint
+        // the celebratory wall flash.
+        //
+        // The very last walker emit is the head pellet at `pts.last`
+        // (≈ the live cursor) — its position moves every frame, so
+        // its position-hash flickers between cherry / dot. Excluding
+        // it from cherry selection keeps the head as a plain dot;
+        // cherries land only on the interval-aligned pellets behind
+        // it, which are stable.
+        let cherryAttrs: [NSAttributedString.Key: Any] = [
+            .font: cherryFont,
+        ]
+        var pelletInfo: [(point: CGPoint, arc: CGFloat)] = []
+        walkPolyline(points: snappedPts, interval: interval) { p, _, arc in
+            pelletInfo.append((p, arc))
         }
-        walkPolyline(points: snappedPts, interval: interval,
-                     step: plot)
+        let headIdx = pelletInfo.count - 1
+        for (i, info) in pelletInfo.enumerated() {
+            let isHead = i == headIdx
+            let isCherry = state.valid && !isHead
+                && positionHash01(info.point) < cherryProbability
+            if isCherry {
+                // Eaten — don't draw, and fire the celebratory
+                // callback if the face crossed it this frame.
+                if info.arc <= currentFaceArc {
+                    if info.arc > state.previousFaceArcLength {
+                        state.onCherryEaten(info.point)
+                    }
+                    continue
+                }
+                let s = NSAttributedString(string: "🍒",
+                                            attributes: cherryAttrs)
+                let size = s.size()
+                s.draw(at: NSPoint(x: info.point.x - size.width / 2,
+                                    y: info.point.y - size.height / 2))
+            } else {
+                pelletFill.setFill()
+                let rect = NSRect(x: info.point.x - dot / 2,
+                                  y: info.point.y - dot / 2,
+                                  width: dot, height: dot)
+                NSBezierPath(ovalIn: rect).fill()
+            }
+        }
 
         // 4) Draw the sprite only once the trail is long enough for
         // a real lag — it then emerges naturally `faceLag` pt
@@ -268,6 +356,8 @@ enum PacManRenderer {
                            radius: radius, color: color)
             }
         }
+
+        return currentFaceArc
     }
 
     // MARK: - Centerline helpers
@@ -381,16 +471,17 @@ enum PacManRenderer {
     }
 
     /// Walk a polyline at fixed intervals, invoking `step` once per
-    /// `interval`-pt advance with the point + tangent. `trimTail`
+    /// `interval`-pt advance with the point + tangent + the arc-
+    /// length from the polyline origin to that point. `trimTail`
     /// trims that much distance off the end of the path before
     /// emitting — used to leave a visible gap between the trailing
-    /// pellets and Pac-Man's face. Mirrors `TrailView.walkPath`
-    /// but takes the polyline explicitly so corridor / pellets /
-    /// face anchor all sample the exact same snapped sequence.
+    /// pellets and Pac-Man's face. The arc-length is what lets the
+    /// cherry-eaten detection compare each pellet's position against
+    /// the face's lag-adjusted arc-length.
     private static func walkPolyline(points pts: [CGPoint],
                                        interval: CGFloat,
                                        trimTail: CGFloat = 0,
-                                       step: (CGPoint, CGPoint) -> Void) {
+                                       step: (CGPoint, CGPoint, CGFloat) -> Void) {
         guard !pts.isEmpty, interval > 0 else { return }
         let cutoff: CGFloat?
         if trimTail > 0 {
@@ -416,7 +507,7 @@ enum PacManRenderer {
                 }
             }
         }
-        step(pts[0], lastTangent)
+        step(pts[0], lastTangent, 0)
         var carry: CGFloat = 0
         var traveled: CGFloat = 0
         for i in 1..<pts.count {
@@ -436,18 +527,20 @@ enum PacManRenderer {
                     let tEnd = t - last
                     step(CGPoint(x: a.x + ux * tEnd,
                                   y: a.y + uy * tEnd),
-                         lastTangent)
+                         lastTangent,
+                         traveled + tEnd)
                     return
                 }
                 step(CGPoint(x: a.x + ux * t, y: a.y + uy * t),
-                     lastTangent)
+                     lastTangent,
+                     traveled + t)
                 t += interval
             }
             traveled += segLen
             carry = segLen - (t - interval)
         }
         if cutoff == nil, let last = pts.last {
-            step(last, lastTangent)
+            step(last, lastTangent, traveled)
         }
     }
 
@@ -674,6 +767,24 @@ enum PacManRenderer {
         case .left, .right: return CGPoint(x: p.x, y: from.y)
         case .up, .down:    return CGPoint(x: from.x, y: p.y)
         }
+    }
+
+    /// Stable 0..1 hash of a screen position. Used to pick which
+    /// pellets become cherries — the same coordinate always hashes
+    /// the same way, so a cherry that appears on one frame stays a
+    /// cherry on every subsequent redraw of the same stroke (instead
+    /// of flickering between cherry / pellet on each repaint).
+    /// Pellet positions only change when the user moves past a new
+    /// sample, so the cherry set stays stable through the redraws
+    /// the cursor triggers per-frame.
+    private static func positionHash01(_ p: CGPoint) -> Double {
+        let xi = Int(p.x.rounded())
+        let yi = Int(p.y.rounded())
+        // 64-bit Cantor-pairing-ish hash with two large primes; the
+        // `&` arithmetic wraps cleanly so negative coords work too.
+        let h = (UInt64(bitPattern: Int64(xi)) &* 2654435761)
+            ^ (UInt64(bitPattern: Int64(yi)) &* 40503)
+        return Double(h % 10000) / 10000.0
     }
 
     /// Convert an `NSBezierPath` of move/line/curve segments into a

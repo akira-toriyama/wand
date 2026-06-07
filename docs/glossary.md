@@ -43,14 +43,15 @@ wand を構成する各パーツの **正規の呼び名** をまとめた規範
 にアクションを実行する第 1 のトリガーファミリー。`[cast]` の
 `button` / `modifiers` で起動条件を切り替える。
 - 設定: `[cast]`
-- 旧名（v6 まで）: `gesture`
-- **Don't call it:** gesture, ジェスチャー（v7 から retired）
+- **Don't call it:** gesture, ジェスチャー
 
 ### assist card
 カーソル周囲に配置される小さなカード。**今この瞬間ここから到達可能な方向**
 を 1 方向 = 1 カードで提示する。現在マッチしているルールに対応する
-カードは match color で強調される。退場アニメは `[cast.overlay.cards]`
-の `unmatch` / `match` で個別に指定する。
+カードは match color で強調される。1 行は `矢印 [icon] 名前` の
+3 カラムレイアウトで、`[[cast.rule]].icon` が空でないルールでは
+矢印と名前の間にアイコンが入る。退場 / 発動アニメは
+`[cast.overlay.cards]` の `cancel` / `fire` / `armed` で個別に指定する。
 - 設定: `[cast.overlay]` / `[cast.overlay.cards]`
 - コード: `WandAdapterMacOS` overlay
 - **Don't call it:** tooltip, popup, hint, chip, balloon, label, ツールチップ, ポップアップ, ヒント
@@ -78,8 +79,9 @@ wand を構成する各パーツの **正規の呼び名** をまとめた規範
 
 ### cast rule
 1 つの `[[cast.rule]]` エントリ。`pattern`（例: `DR`）と
-アクションのペアで、必要に応じて `apps` / `filter-title` / `filter-shell`
-で適用範囲を絞る。
+アクションのペアで、必要に応じて `apps` / `filter-title` /
+`filter-shell` で適用範囲を絞る。任意の `icon` は assist card 上で
+名前の左に表示される（`[[tome.item]].icon` と同じ syntax）。
 - 設定: `[[cast.rule]]`
 - **Don't call it:** gesture, binding, mapping, shortcut, バインド, ショートカット
 
@@ -127,8 +129,7 @@ non-activating NSPanel を cursor 下にアンカーして開き、各
 `[[tome.item]]` がメニュー 1 行に対応する。第 2 のトリガーファミリー。
 opt-in (`[tome].enabled = true`)。
 - 設定: `[tome]`
-- 旧名（v6 まで）: `launcher`
-- **Don't call it:** launcher, ランチャー（v7 から retired）
+- **Don't call it:** launcher, ランチャー
 
 ### non-activating panel
 tome のメインメニュー。トリガーボタンを押した瞬間に出現する

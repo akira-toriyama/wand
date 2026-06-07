@@ -58,7 +58,7 @@ public enum Modifier: String, Sendable, Hashable, CaseIterable {
     case cmd, opt, ctrl, shift, fn
 }
 
-/// One row in `[[rules]]`. `apps` matches the **cursor-anchored
+/// One row in `[[cast.rule]]`. `apps` matches the **cursor-anchored
 /// target** window's bundle id, not the focused app — the whole point
 /// of the project. Wildcards `*` / `?`; entries starting with `!`
 /// exclude (e.g. `!com.apple.dt.Xcode`).
@@ -66,6 +66,12 @@ public struct Rule: Sendable, Equatable {
     public let name: String
     public let pattern: String
     public let apps: [String]
+    /// Optional icon shown to the left of `name` in the assist card.
+    /// Same syntax as `LauncherItem.icon` — `SF:<name>`, an emoji /
+    /// text glyph, an absolute / tilde / config-relative file path, or
+    /// `app:<bundle-id>`. Empty = no icon (the card collapses its icon
+    /// column). Unresolvable specs log once and fall through to no icon.
+    public let icon: String
     /// Optional title-glob filter — evaluated on top of `apps` at
     /// match time. Empty = no filter. See `Matcher.passesFilter`.
     public let filterTitle: String
@@ -78,12 +84,14 @@ public struct Rule: Sendable, Equatable {
     public let action: Action
 
     public init(name: String, pattern: String, apps: [String],
+                icon: String = "",
                 filterTitle: String = "",
                 filterShell: String = "",
                 action: Action) {
         self.name = name
         self.pattern = pattern
         self.apps = apps
+        self.icon = icon
         self.filterTitle = filterTitle
         self.filterShell = filterShell
         self.action = action
@@ -114,11 +122,11 @@ public struct Sample: Sendable, Equatable {
 }
 
 /// Exit-animation kind for the assist cards in the gesture overlay.
-/// Raw values match the `[effect]` strings in `config.toml` so the
-/// parser is a one-liner. `.random` is a selector — the adapter
+/// Raw values match the `[cast.overlay.cards]` strings in `config.toml`
+/// so the parser is a one-liner. `.random` is a selector — the adapter
 /// resolves it to one of the renderable cases per card at queue time.
 public enum Effect: String, Sendable, Hashable, CaseIterable {
-    case none
+    case off
     case drop
     case rise
     case slideLeft = "slide-left"
@@ -130,13 +138,13 @@ public enum Effect: String, Sendable, Hashable, CaseIterable {
     case confetti
     case random
 
-    /// How long the animation runs before the card is pruned. `.none`
+    /// How long the animation runs before the card is pruned. `.off`
     /// and `.random` are nonsensical here (the adapter resolves the
     /// latter first); 0 is just a placeholder so the switch stays
     /// exhaustive.
     public var duration: TimeInterval {
         switch self {
-        case .none, .random:         return 0
+        case .off, .random:          return 0
         case .vibrate:               return 0.45
         case .fireworks, .confetti:  return 0.9
         default:                     return 0.35
@@ -144,23 +152,19 @@ public enum Effect: String, Sendable, Hashable, CaseIterable {
     }
 
     /// Pool that `.random` chooses from — every concrete renderable
-    /// effect, excluding `.none` and the selector itself.
+    /// effect, excluding `.off` and the selector itself.
     public static let randomPool: [Effect] =
-        Effect.allCases.filter { $0 != .none && $0 != .random }
+        Effect.allCases.filter { $0 != .off && $0 != .random }
 }
 
 /// Live "armed" decoration on the firing assist card while a stroke is
 /// in progress (the card whose pattern would dispatch if the user
 /// released the mouse right now). Distinct from `Effect`, which fires
 /// once at button-up — `ArmedEffect` is a continuous, looping cue. The
-/// rainbow border from PR #117 keeps carrying the baseline "fires on
-/// release" read; these kinds layer on top.
-///
-/// The pac-man chomp pellet is **not** in this enum — it lives on its
-/// own `chomp: Bool` flag so users can layer it on top of any `armed`
-/// kind (e.g. `armed = "pulse"` + `chomp = true`).
+/// rainbow border carries the baseline "fires on release" read; these
+/// kinds layer on top.
 public enum ArmedEffect: String, Sendable, Hashable, CaseIterable {
-    case none
+    case off
     /// Sine scale 1.0 ↔ 1.06 (~600 ms loop). Quiet — comfortable for
     /// long strokes.
     case pulse
@@ -227,15 +231,13 @@ public enum LinePet: String, Sendable, Hashable, CaseIterable {
     case ghost
 }
 
-/// Launcher panel border decoration. Default `.off` (no border).
+/// Tome panel border decoration. Default `.off` (no border).
 /// `.rainbow` strokes the panel's rounded rect with a continuously
-/// hue-rotating colour cycle. The remaining cases (`.terminal` etc)
-/// are **static signature-colour rims** lifted from the per-theme
-/// `borderColor` that lived on `TomeThemePalette` through PR #111
-/// before the rim was decoupled from the theme. Each pairs visually
-/// with the same-named `TomeTheme`, but the two are independent so
-/// users can mix-and-match (e.g. `[tome].theme = "rainbow"` +
-/// `[tome.decoration].border = "neon"`).
+/// hue-rotating colour cycle. The remaining cases are **static
+/// signature-colour rims** that each pair visually with the same-named
+/// `TomeTheme` but are independent of it, so users can mix-and-match
+/// (e.g. `[tome].theme = "rainbow"` + `[tome.decoration].border =
+/// "neon"`).
 public enum LauncherBorder: String, Sendable, Hashable, CaseIterable {
     case off
     case rainbow
@@ -244,18 +246,7 @@ public enum LauncherBorder: String, Sendable, Hashable, CaseIterable {
     case splatoon
     case mono
     case vapor
-    /// Yellow PAC-MAN rim. Renamed from `pacman` in v8 to match
-    /// `TomeTheme.pacMan`.
     case pacMan = "pac-man"
-
-    // Note: a `pacManTail` ("pac-man-tail") kind was explored and
-    // dropped before landing on main — the arcade maze-wall decoration
-    // (double blue line + pellets + bundled pet chase) didn't justify
-    // a dedicated multi-element kind, and `border = "neon"` +
-    // `[tome.decoration].line-pet = ["pac-man", "ghost"]` reproduces
-    // the same look via the two single-purpose axes. Stale
-    // `border = "pac-man-tail"` values fall through `parseEnum`'s
-    // standard "unrecognised value" warning and clamp to `.off`.
 }
 
 /// Launcher panel open-animation. Default `.off` (panel pops in
@@ -286,21 +277,30 @@ public enum DecalKind: String, Sendable, Hashable, CaseIterable {
     case inkSplatter = "ink-splatter"
 }
 
-/// Named preset for the gesture trail's dash pattern. **Line shape
-/// only — colour is always sourced from `[cast.overlay.trail].color`
-/// / `color-no-match`**, so the trail's match-vs-no-match signal
-/// isn't lost when the style changes. Width comes from
-/// `[cast.overlay.trail].width`; glow is fixed (was previously
-/// per-style on the retired `thin` / `thick` / `glow` presets).
+/// Banner shown at the cursor when the in-progress gesture falls off
+/// every reachable rule (the trail flips into the no-match colour).
+/// Drawn from `[cast.overlay.no-match].kind`; default `.off` (no
+/// banner). Decoupled from `[cast].theme` so users can pair the
+/// arcade GAME OVER cue with any theme — pac-man's red-wall flash is
+/// a separate, theme-specific effect that fires independently.
+public enum NoMatchBanner: String, Sendable, Hashable, CaseIterable {
+    case off
+    /// Arcade-style "GAME OVER" banner anchored at the cursor's
+    /// upper-right (where the firing card would have been). Brief
+    /// scale-in pop on first appearance + 2 Hz blink while the
+    /// stroke remains off every rule.
+    case gameOver = "game-over"
+}
+
+/// Named preset for the cast trail's dash pattern. **Line shape only
+/// — colour is always sourced from `[cast.overlay.trail].color` /
+/// `color-no-match`**, so the trail's match-vs-no-match signal isn't
+/// lost when the style changes. Width comes from
+/// `[cast.overlay.trail].width`.
 ///
-/// Colour-decoration variants (rainbow / vapor / pencil) belong to a
-/// separate axis applied to *other surfaces* (launcher panel border,
-/// gesture tooltip border, etc.) — they're not trail-style values.
-/// See `LauncherBorder` for the launcher-side counterpart.
-///
-/// Heavier line-shape styles — `brush` (variable width), `lightning`
-/// (jagged jitter), `laser` (heavy bloom) — are reserved for follow-
-/// up phases of #63 and not part of this enum until they ship.
+/// Colour-decoration variants belong to a separate axis applied to
+/// other surfaces (tome panel border, etc.) — they're not trail-style
+/// values. See `LauncherBorder` for the tome-side counterpart.
 ///
 /// Unknown values clamp to `.normal` (wand's typo-tolerant policy).
 public enum TrailStyle: String, Sendable, Hashable, CaseIterable {
@@ -328,22 +328,9 @@ public enum TrailStyle: String, Sendable, Hashable, CaseIterable {
     /// rule, the whole trail switches to the no-match colour so
     /// the failure signal survives.
     case rainbowRoad = "rainbow-road"
-    // Note: a `pacman` style lived here through v7 but was retired
-    // in v8 — Pac-Man is now a **special theme** (`[cast].theme =
-    // "pac-man"`) that locks the trail's style / width /
-    // straighten-on-turn for the user, and exposes a single
-    // `[cast.pac-man].size` knob (S/M/L) instead. Picking it
-    // as a `TrailStyle` value silently dropped back to `.normal`,
-    // which felt mis-configurable — the new shape makes "I want
-    // Pac-Man" a single decision, not a four-key combo.
     /// Continuous arrow chain along the entire path — repeated
     /// chevron glyphs (`>`) rotated to match the path tangent so the
     /// trail reads as `-->-->-->` flowing toward the cursor.
-    /// Replaces the cursor-only `arrowhead = true` indicator (its
-    /// retired knob); use `arrow` whenever the goal is "show
-    /// direction along the whole path", and any other style with
-    /// the arrowhead-on-cursor look in mind needs to switch to
-    /// `arrow` explicitly.
     case arrow
     /// Paw prints walking along the path — `pawprint.fill` SF
     /// Symbol drawn at fixed intervals, rotated to face the path

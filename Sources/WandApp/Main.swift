@@ -56,8 +56,8 @@ enum WandApp {
 
         STANDALONE COMMANDS — no daemon required (--record refuses if one runs)
           wand --validate            parse config.toml; exit 0 if valid.
-            [--items <PATH>]           Warnings (clamps, retired keys,
-                                       collisions, typos) print to stderr
+            [--items <PATH>]           Warnings (clamps, collisions,
+                                       typos) print to stderr
                                        in addition to /tmp/wand.log.
                                        --items also validates a standalone
                                        items file (for --show-menu).
@@ -309,6 +309,14 @@ enum WandApp {
                                     launcher: launcher,
                                     config: cfg)
 
+        // Fire-moment effect managers — owned by Main for the
+        // daemon's lifetime. Declared up here (instead of after the
+        // overlay block) so the overlay's `onCherryEaten` hook can
+        // close over `arcadeScoreManager` directly.
+        let decalManager = DecalManager()
+        let burstManager = BurstManager()
+        let arcadeScoreManager = ArcadeScoreManager()
+
         // Gesture-trail overlay (passive observer of the sample
         // stream). Held for the process lifetime via `app.run()`.
         // Declared `outside` the `if` so the live-reload hook below
@@ -317,6 +325,30 @@ enum WandApp {
         if cfg.overlay.enabled {
             overlay = GestureOverlay(cfg)
             overlay?.show()
+            // Pac-man cherry pickup — `+N` arcade-score popup floats
+            // up from the cherry's screen position when the face
+            // catches it. Always uses the `.arcadeScore` kind here
+            // (independent of `[cast.fire.burst].kind` which only
+            // governs the rule-fire moment); cherries are a pac-man-
+            // theme flourish and the popup is part of that vibe.
+            overlay?.onCherryEaten = { [weak controller] cocoaPt in
+                MainActor.assumeIsolated {
+                    guard let cfg = controller?.config else { return }
+                    // Trail colour resolved per-fire so the popup
+                    // matches the live theme even if the user has
+                    // overridden `[cast.overlay.trail].color`.
+                    let color = TrailColorMode.parse(
+                        cfg.overlay.trail.color, fallback: .systemYellow
+                    ).currentColor(
+                        at: CACurrentMediaTime(),
+                        strokeSeed: UInt64.random(in: 0..<UInt64.max),
+                        cyclePeriod: TimeInterval(
+                            cfg.overlay.colorCycleMs) / 1000.0)
+                    arcadeScoreManager.emit(
+                        at: cocoaPt, color: color,
+                        kind: .arcadeScore)
+                }
+            }
             // Cache the target app icon across drag samples — a single
             // NSRunningApplication lookup per stroke (the bundleID is
             // frozen at button-down) keeps the per-sample path cheap.
@@ -390,14 +422,12 @@ enum WandApp {
         // Post-fire fire-moment effects — decal (Splatoon-style
         // splatter/blob/scorch/star) AND trail-end burst (particle
         // explosion). Both live in their own click-through windows,
-        // INDEPENDENT of `[gesture.overlay].enabled`, so the user
-        // can disable the trail HUD and still get the cursor-anchored
-        // fire effects. Held for the process lifetime; both read the
-        // live config per-fire so knobs take effect on the next
-        // stroke.
-        let decalManager = DecalManager()
-        let burstManager = BurstManager()
-        let arcadeScoreManager = ArcadeScoreManager()
+        // INDEPENDENT of `[cast.overlay].enabled`, so the user can
+        // disable the trail HUD and still get the cursor-anchored
+        // fire effects. The managers themselves are declared
+        // earlier (so the overlay's cherry hook can close over the
+        // arcade-score manager); here we just wire the rule-fire
+        // dispatch into them.
         controller.onGestureFire = { [weak controller] cgPoint in
             MainActor.assumeIsolated {
                 guard let cfg = controller?.config else { return }
@@ -625,6 +655,7 @@ enum WandApp {
             GestureHint.Row(
                 suffix: arrows(String(r.pattern.dropFirst(pattern.count))),
                 name: r.name,
+                icon: r.icon,
                 fires: r.pattern == pattern)
         }
         return GestureHint(shape: arrows(pattern), rows: Array(rows))

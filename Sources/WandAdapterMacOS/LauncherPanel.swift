@@ -40,11 +40,9 @@ import WandCore
 // MARK: - Static border colour
 
 /// Per-kind stroke colour for non-animated `LauncherBorder` cases.
-/// Lives in the adapter (Core stays AppKit-free) and mirrors the
-/// signature hex each themed rim used to carry on `TomeThemePalette`
-/// (retired in the PR #111 follow-up that decoupled rim from theme).
-/// `.off` and `.rainbow` are handled by their own code paths and never
-/// query this — they trap with a clear message if the switch is ever
+/// Lives in the adapter (Core stays AppKit-free). `.off` and
+/// `.rainbow` are handled by their own code paths and never query
+/// this — they trap with a clear message if the switch is ever
 /// reached out-of-context.
 extension LauncherBorder {
     @MainActor
@@ -317,12 +315,10 @@ private enum PanelLayout {
         bg.layer?.cornerRadius = cornerRadius
         bg.layer?.masksToBounds = true
         bg.translatesAutoresizingMaskIntoConstraints = false
-        // Panel rim is solely a `[tome.decoration].border` concern now
-        // — a theme-supplied static frame at this layer overlapped
-        // (and visually swallowed) the animated rim drawn by
-        // `PanelController.installBorderDecoration`, so the
-        // `borderColor` palette key was retired in PR #111's follow-
-        // up.
+        // Panel rim is solely a `[tome.decoration].border` concern —
+        // a theme-supplied static frame here would overlap (and
+        // visually swallow) the animated rim drawn by
+        // `PanelController.installBorderDecoration`.
 
         let stack = NSStackView()
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -611,10 +607,9 @@ private enum PanelLayout {
             // buttons — these are always rendered as text, so they
             // benefit from the chip the same way an emoji icon would.
             let glyph = String(item.name.prefix(2))
-            return textIcon(glyph,
-                             pointSize: ItemRow.iconRenderPt(
-                                forFontSize: fontSize),
-                             chip: iconChip)
+            return IconResolver.resolve(glyph,
+                                         fontSize: fontSize,
+                                         iconChip: iconChip)
         }
     }
 
@@ -787,156 +782,16 @@ private enum PanelLayout {
         return wrap
     }
 
-    /// Item-icon resolution. See `LauncherItem.icon` for the
-    /// recognised forms. Returns nil (which collapses to no image on
-    /// the row) on miss; logs once so a typo is visible in
-    /// `/tmp/wand.log` without spamming every popup.
+    /// Item-icon resolution. Thin wrapper around `IconResolver.resolve`
+    /// — the shared resolver also serves the cast HUD assist cards.
     static func resolveItemIcon(_ spec: String,
                                  tint: String = "",
                                  tintColors: [String] = [],
                                  iconChip: Bool = false,
                                  fontSize: Int = 13) -> NSImage? {
-        let pt: CGFloat = ItemRow.iconRenderPt(forFontSize: fontSize)
-
-        // `app:<bundle-id>` — resolve to an installed app's icon via
-        // the same AppIconCache the panel header uses. Works for
-        // running and non-running apps (LaunchServices fallback). The
-        // cache resizes the icon to `iconSize`, so callers always get
-        // a row-sized NSImage. Unknown bundle ids return nil → row
-        // collapses its icon column (same as a typo'd file path).
-        if spec.hasPrefix("app:") {
-            let bid = String(spec.dropFirst(4))
-            let (_, img) = AppIconCache.shared.lookup(
-                bundleID: bid, iconSize: pt)
-            if img == nil {
-                Log.line("launcher-panel: no installed app for "
-                         + "\"\(bid)\" — falling back to no icon")
-            }
-            return img
-        }
-
-        // SF Symbol prefix.
-        if spec.hasPrefix("SF:") {
-            let name = String(spec.dropFirst(3))
-            // `.medium` weight + `.large` scale together: each symbol
-            // fills more of its bounding box optically, so glyphs with
-            // a lot of internal whitespace (gear, camera, folder) no
-            // longer read as smaller than tight ones (lock, magnifying
-            // glass). Without this, child panels filled with whitespace-
-            // heavy symbols look "shrunk" next to a parent of tight ones.
-            var cfg = NSImage.SymbolConfiguration(
-                pointSize: pt, weight: .medium, scale: .large)
-            // `tint-colors = [...]` (multi-colour palette) wins over
-            // single `tint` when both are set — the array form is the
-            // more expressive intent, so an explicit palette never
-            // gets silently downgraded. Unknown entries are dropped
-            // with a log line; an entirely-unrecognised palette falls
-            // through to single-tint / no-tint.
-            if !tintColors.isEmpty {
-                let resolved: [NSColor] = tintColors.compactMap { spec in
-                    if let c = NSColorParse.nsColor(spec) { return c }
-                    Log.line("launcher-panel: unknown tint-colors entry "
-                             + "\"\(spec)\" on SF Symbol — skipped")
-                    return nil
-                }
-                if !resolved.isEmpty {
-                    cfg = cfg.applying(
-                        NSImage.SymbolConfiguration(paletteColors: resolved))
-                }
-            } else if !tint.isEmpty {
-                // Per-item tint via `hierarchicalColor` — the recommended
-                // single-colour palette mode for SF Symbols. File / emoji
-                // / text icons can't receive this, so it's gated on the
-                // SF Symbol branch. Unknown tint strings log + fall
-                // through to the default label colour.
-                if let c = NSColorParse.nsColor(tint) {
-                    cfg = cfg.applying(
-                        NSImage.SymbolConfiguration(hierarchicalColor: c))
-                } else {
-                    Log.line("launcher-panel: unknown tint \"\(tint)\" "
-                             + "on SF Symbol — falling back to no tint")
-                }
-            }
-            guard let img = NSImage(systemSymbolName: name,
-                                     accessibilityDescription: nil)?
-                .withSymbolConfiguration(cfg) else {
-                Log.line("launcher-panel: unknown SF Symbol \"\(name)\" "
-                         + "in item icon — falling back to no icon")
-                return nil
-            }
-            return img
-        }
-
-        // File path — absolute, tilde, or relative to the config dir.
-        let looksLikePath = spec.hasPrefix("/")
-            || spec.hasPrefix("~")
-            || spec.contains("/")
-            || spec.hasSuffix(".png")
-            || spec.hasSuffix(".jpg")
-            || spec.hasSuffix(".jpeg")
-            || spec.hasSuffix(".gif")
-            || spec.hasSuffix(".tiff")
-            || spec.hasSuffix(".icns")
-        if looksLikePath {
-            let path = resolveIconPath(spec)
-            guard let img = NSImage(contentsOfFile: path) else {
-                Log.line("launcher-panel: could not load item icon "
-                         + "from \(path) — falling back to no icon")
-                return nil
-            }
-            img.size = NSSize(width: pt, height: pt)
-            return img
-        }
-
-        // Text / emoji — draw the glyph into an NSImage, optionally
-        // backed by a rounded chip so it sits on the same visual
-        // footprint as the SF Symbol / file-path branches.
-        return textIcon(spec, pointSize: pt, chip: iconChip)
-    }
-
-    private static func resolveIconPath(_ spec: String) -> String {
-        if spec.hasPrefix("/") { return spec }
-        if spec.hasPrefix("~") {
-            return (spec as NSString).expandingTildeInPath
-        }
-        // Relative — resolve against the config file's directory.
-        let configDir = (WandConfig.path as NSString)
-            .deletingLastPathComponent
-        return "\(configDir)/\(spec)"
-    }
-
-    private static func textIcon(_ text: String,
-                                  pointSize pt: CGFloat,
-                                  chip: Bool = false) -> NSImage? {
-        // Shrink the glyph slightly when sitting on a chip so the
-        // padding reads as deliberate rather than cramped. Without a
-        // chip, the bare glyph keeps the historical `pt * 0.85` size.
-        let fontSize: CGFloat = chip ? pt * 0.72 : pt * 0.85
-        let attrs: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: fontSize),
-        ]
-        let attributed = NSAttributedString(string: text, attributes: attrs)
-        let measured = attributed.size()
-        guard measured.width > 0 && measured.height > 0 else { return nil }
-        let size = NSSize(width: pt, height: pt)
-        let img = NSImage(size: size)
-        img.lockFocus()
-        if chip {
-            // `quaternaryLabelColor` is the muted-grey "filled chip"
-            // baseline macOS uses for things like badge backgrounds —
-            // visible against the panel's vibrant blur but soft enough
-            // not to compete with the row's title.
-            let chipRect = NSRect(origin: .zero, size: size).insetBy(dx: 0, dy: 0)
-            NSColor.quaternaryLabelColor.setFill()
-            NSBezierPath(roundedRect: chipRect,
-                          xRadius: pt * 0.28, yRadius: pt * 0.28).fill()
-        }
-        let origin = NSPoint(
-            x: (size.width - measured.width) / 2,
-            y: (size.height - measured.height) / 2)
-        attributed.draw(at: origin)
-        img.unlockFocus()
-        return img
+        IconResolver.resolve(spec, fontSize: fontSize,
+                             tint: tint, tintColors: tintColors,
+                             iconChip: iconChip)
     }
 }
 
@@ -1702,17 +1557,14 @@ private final class ItemRow: NSView {
     /// SF Symbol is sized to `iconRenderPt` and scaled `.large`, so it
     /// fills the box optically.
     private var iconSize: CGFloat { round(17 * fontScale) }
-    /// `pointSize` passed to `NSImage.SymbolConfiguration` — see the
-    /// comment in `PanelLayout.resolveItemIcon` for why this is paired
-    /// with `.medium` weight + `.large` scale.
-    static let iconRenderPt: CGFloat = 17
-    /// Per-row scaled equivalent of the static `iconRenderPt`. Used
-    /// by `PanelLayout.resolveItemIcon` callers that have a live
-    /// row's `fontSize` in hand (the bare `iconRenderPt` constant
-    /// remains the unscaled baseline for non-row icon callers like
-    /// the header).
+    /// Baseline icon render size in points (font-size 13). Non-row
+    /// icon callers like the panel header use this directly.
+    static let iconRenderPt: CGFloat = IconResolver.baselinePt
+    /// Per-row scaled equivalent. Callers with a live row's
+    /// `fontSize` in hand pass it here so the icon column scales
+    /// with the rest of the row.
     static func iconRenderPt(forFontSize pt: Int) -> CGFloat {
-        round(17 * CGFloat(pt) / 13.0)
+        IconResolver.pt(forFontSize: pt)
     }
     private var listRowHeight: CGFloat { round(26 * fontScale) }
     /// Taller row variant for items that supply a non-empty subtitle.
