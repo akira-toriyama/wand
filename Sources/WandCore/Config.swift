@@ -22,6 +22,13 @@ public struct WandConfig: Sendable {
     /// cards. Individual colour keys still win when explicitly set
     /// in the TOML (non-empty string).
     public var theme: CastTheme
+    /// `[cast.pac-man]` — only populated when `theme ==
+    /// .pacMan` (the pac-man "special theme"). `nil` under every
+    /// other theme. The adapter reads this single field to decide
+    /// whether to route the trail through `PacManRenderer` and
+    /// what scale to use; the rest of the codebase doesn't need to
+    /// know `CastTheme` has a special case.
+    public var pacMan: PacManSpec?
     /// `[cast.recognition]` — sample → direction tuning.
     public var recognition: GestureRecognitionSpec
     /// `[exclude].apps` — global bundle-id exclusion list. Applies
@@ -47,6 +54,7 @@ public struct WandConfig: Sendable {
         trigger: Trigger(button: .right, modifiers: []),
         intensity: .normal,
         theme: .default,
+        pacMan: nil,
         recognition: .default,
         excludeApps: [],
         rules: [],
@@ -177,9 +185,9 @@ public struct WandConfig: Sendable {
             return c.isEmpty ? palette.trailColor : c }()
         let trailColorNoMatch = { let c = tr.string("color-no-match")
             return c.isEmpty ? palette.trailColorNoMatch : c }()
-        let trailWidth = clampInt(tr, key: "width",
-                                  default: 3, lo: 1, hi: 40)
-        let trailStyle: TrailStyle = parseEnum(
+        let parsedTrailWidth = clampInt(tr, key: "width",
+                                         default: 3, lo: 1, hi: 40)
+        let parsedTrailStyle: TrailStyle = parseEnum(
             tr, key: "style", section: "cast.overlay.trail",
             default: .normal)
         // `arrowhead` knob was retired in #115 (replaced by
@@ -188,14 +196,90 @@ public struct WandConfig: Sendable {
         // silently drops, per wand's clamp-to-default policy.
         let trailFinalHoldMs = clampInt(tr, key: "final-hold-ms",
                                         default: 400, lo: 0, hi: 2000)
-        let trailStraightenOnTurn = tr.bool("straighten-on-turn", false)
+        let parsedTrailStraightenOnTurn = tr.bool("straighten-on-turn", false)
         let trailColorOutline = { let c = tr.string("color-outline")
             return c.isEmpty ? palette.trailColorOutline : c }()
+
+        // ── [cast.pac-man] ──────────────────────────────
+        // Special-theme override block. Only active when
+        // `[cast].theme = "pac-man"`; under every other theme it's
+        // nil so the rest of the codebase can branch on a single
+        // optional. The "size" knob replaces the trail's free-form
+        // `width`, and the parser also forces `straighten-on-turn =
+        // true` for the pac-man render (the arcade-maze metaphor
+        // only reads cleanly with axis-snapped corridors). Standard
+        // trail knobs (`style` / `width` / `straighten-on-turn`)
+        // are silently overridden when present — the warning loop
+        // below tells the user exactly which lines are dead.
+        let pacManTable = doc.tables["cast.pac-man"] ?? [:]
+        let pacMan: PacManSpec?
+        if theme == .pacMan {
+            let size: PacManSize = parseEnum(
+                pacManTable, key: "size",
+                section: "cast.pac-man", default: .m)
+            pacMan = PacManSpec(size: size)
+            var overridden: [String] = []
+            if tr["style"] != nil { overridden.append("style") }
+            if tr["width"] != nil { overridden.append("width") }
+            if tr["straighten-on-turn"] != nil {
+                overridden.append("straighten-on-turn")
+            }
+            if !overridden.isEmpty {
+                Log.line("config: [cast.overlay.trail]."
+                    + "\(overridden.joined(separator: " / "))"
+                    + " is ignored under [cast].theme = \"pac-man\""
+                    + " — pac-man is a special theme that locks the"
+                    + " trail's style, width, and straighten-on-turn."
+                    + " Use [cast.pac-man].size = \"s\" |"
+                    + " \"m\" | \"l\" to adjust scale.")
+            }
+        } else {
+            pacMan = nil
+            // Only complain when the dead block carries a NON-
+            // default value — the bundled config.toml ships the
+            // block with `size = "m"` for documentation, and that
+            // shouldn't read as a misconfiguration just because the
+            // user hasn't picked the pac-man theme yet. Mirrors the
+            // launcher's `nonDefault` check below: dead config
+            // worth warning about is dead config that's NOT just
+            // the default.
+            let sizeForCheck: PacManSize = parseEnum(
+                pacManTable, key: "size",
+                section: "cast.pac-man", default: .m)
+            if sizeForCheck != PacManSpec.default.size {
+                Log.line("config: [cast.pac-man].size = "
+                    + "\"\(sizeForCheck.rawValue)\" is set but"
+                    + " [cast].theme = \"\(theme.rawValue)\" — this"
+                    + " knob only applies when [cast].theme ="
+                    + " \"pac-man\". Either switch themes or remove"
+                    + " the line to silence this warning.")
+            }
+        }
+
+        // When pac-man is active, force the trail render shape to
+        // the arcade pellet line:
+        //   - `straightenOnTurn = true` (arcade corridors are
+        //     orthogonal — the metaphor only reads cleanly with
+        //     axis-snapped segments).
+        //   - `style = .normal` (the pac-man dispatch in the
+        //     adapter is gated on `cfg.pacMan != nil`, not on a
+        //     TrailStyle case — `.normal` here is just an inert
+        //     placeholder since the renderer never reads it under
+        //     pac-man).
+        // `width` is left at whatever the user wrote (or default 3)
+        // — under pac-man the adapter ignores `trail.width` and
+        // uses `cfg.pacMan!.size.scale` directly, so the precise
+        // sub-integer values for `.s` / `.m` / `.l` survive without
+        // losing the `.l` step to an `Int` cast.
+        let trailStyle: TrailStyle =
+            pacMan != nil ? .normal : parsedTrailStyle
+        let trailStraightenOnTurn =
+            pacMan != nil ? true : parsedTrailStraightenOnTurn
         let trail = GestureOverlayTrailSpec(
             color: trailColor,
             colorNoMatch: trailColorNoMatch,
             colorOutline: trailColorOutline,
-            width: trailWidth,
+            width: parsedTrailWidth,
             style: trailStyle,
             finalHoldMs: trailFinalHoldMs,
             straightenOnTurn: trailStraightenOnTurn)
@@ -424,6 +508,7 @@ public struct WandConfig: Sendable {
             trigger: gestureTrigger,
             intensity: intensity,
             theme: theme,
+            pacMan: pacMan,
             recognition: recognition,
             excludeApps: excludes,
             rules: rules,
@@ -489,6 +574,42 @@ public struct WandConfig: Sendable {
             Log.line("config: [[\(r.old)]] array was renamed in v7 — "
                      + "rename each block to \(r.new). Until renamed, "
                      + "the rows in this array are ignored.")
+        }
+
+        // v8: `pacman` → `pac-man` across CastTheme / TomeTheme /
+        // TrailStyle (the canonical spelling, and the rename that
+        // promotes pac-man from "yet another TrailStyle" to a
+        // special CastTheme that locks the trail render shape).
+        // The string values silently clamp to defaults today; these
+        // warnings turn the silent drop into a loud pointer at the
+        // exact line to update.
+        let castVal = (doc.tables["cast"] ?? [:]).string("theme")
+            .lowercased()
+        if castVal == "pacman" {
+            Log.line("config: [cast].theme = \"pacman\" was renamed "
+                + "in v8 to \"pac-man\" — until renamed the value "
+                + "clamps to \"default\". Picking \"pac-man\" now "
+                + "also unlocks [cast.pac-man].size = "
+                + "\"s\" | \"m\" | \"l\" (replaces width / style / "
+                + "straighten-on-turn under this theme).")
+        }
+        let tomeVal = (doc.tables["tome"] ?? [:]).string("theme")
+            .lowercased()
+        if tomeVal == "pacman" {
+            Log.line("config: [tome].theme = \"pacman\" was renamed "
+                + "in v8 to \"pac-man\" — until renamed the value "
+                + "clamps to \"default\".")
+        }
+        let trailVal = (doc.tables["cast.overlay.trail"] ?? [:])
+            .string("style").lowercased()
+        if trailVal == "pacman" {
+            Log.line("config: [cast.overlay.trail].style = \"pacman\" "
+                + "was retired in v8 — pac-man is now a special "
+                + "theme. Set [cast].theme = \"pac-man\" instead, "
+                + "and use [cast.pac-man].size for scale "
+                + "(width / style / straighten-on-turn are ignored "
+                + "under that theme). Until updated the style "
+                + "clamps to \"normal\".")
         }
     }
 

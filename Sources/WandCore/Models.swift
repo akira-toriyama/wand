@@ -259,12 +259,14 @@ public enum TrailStyle: String, Sendable, Hashable, CaseIterable {
     /// rule, the whole trail switches to the no-match colour so
     /// the failure signal survives.
     case rainbowRoad = "rainbow-road"
-    /// Pac-Man-themed: ASCII-style pellets (`·` dots) line the
-    /// path, and a forward-facing Pac-Man wedge follows the cursor
-    /// with its mouth open along the current direction. Colour
-    /// flows from the trail colour just like the other styles —
-    /// match-vs-no-match signal preserved.
-    case pacman
+    // Note: a `pacman` style lived here through v7 but was retired
+    // in v8 — Pac-Man is now a **special theme** (`[cast].theme =
+    // "pac-man"`) that locks the trail's style / width /
+    // straighten-on-turn for the user, and exposes a single
+    // `[cast.pac-man].size` knob (S/M/L) instead. Picking it
+    // as a `TrailStyle` value silently dropped back to `.normal`,
+    // which felt mis-configurable — the new shape makes "I want
+    // Pac-Man" a single decision, not a four-key combo.
     /// Continuous arrow chain along the entire path — repeated
     /// chevron glyphs (`>`) rotated to match the path tangent so the
     /// trail reads as `-->-->-->` flowing toward the cursor.

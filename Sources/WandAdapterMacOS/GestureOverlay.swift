@@ -113,9 +113,20 @@ public final class GestureOverlay {
             : TrailColorMode.parse(ov.trail.colorOutline,
                                     fallback: .black)
         view.colorCyclePeriod = TimeInterval(ov.colorCycleMs) / 1000.0
-        view.strokeWidth = CGFloat(ov.trail.width)
+        // Pac-Man special theme: scale + straighten come from
+        // `[cast.pac-man]`, not from `[cast.overlay.trail]`.
+        // `cfg.pacMan` is `nil` under every other theme — the
+        // historical width / style / straighten path then applies
+        // unchanged.
+        view.pacMan = cfg.pacMan
+        if let pm = cfg.pacMan {
+            view.strokeWidth = pm.size.scale
+            view.straightenOnTurn = true
+        } else {
+            view.strokeWidth = CGFloat(ov.trail.width)
+            view.straightenOnTurn = ov.trail.straightenOnTurn
+        }
         view.trailStyle = ov.trail.style
-        view.straightenOnTurn = ov.trail.straightenOnTurn
         view.badgeEnabled = ov.badge.enabled
         view.badgeSize = CGFloat(ov.badge.size)
         view.animEnabled = ov.badge.animEnabled
@@ -211,6 +222,12 @@ private final class TrailView: NSView {
     /// (`brush` / `splatoon` / …) are reserved for follow-up PRs of #63
     /// and not represented in this enum yet.
     var trailStyle: TrailStyle = .normal
+    /// `[cast.pac-man]` payload. Non-nil flips the whole
+    /// trail render path to `PacManRenderer` (bypassing the
+    /// `trailStyle` switch entirely) and locks straighten-on-turn.
+    /// `nil` under every theme other than `.pacMan`, so the
+    /// historical `trailStyle` switch is the default path.
+    var pacMan: PacManSpec? = nil
     // `arrowheadEnabled` was retired in #115 — the cursor-only tip
     // is gone; `style = .arrow` provides direction along the whole
     // path instead.
@@ -700,6 +717,28 @@ private final class TrailView: NSView {
             NSGraphicsContext.current?.cgContext.setAlpha(alpha)
         }
 
+        // Pac-Man special theme: skip the `trailStyle` switch
+        // entirely and hand off to the dedicated renderer.
+        // Branching here (rather than carrying a `.pacman` case in
+        // `TrailStyle`) keeps style-decoration and theme-identity
+        // on separate axes — `trailStyle` is "which dash pattern",
+        // `pacMan` is "the whole render shape is locked".
+        if pacMan != nil {
+            PacManRenderer.draw(
+                state: PacManRenderer.State(
+                    origin: origin,
+                    cursor: cursor,
+                    corners: corners,
+                    rawTrail: rawTrail,
+                    lastDir: lastDir,
+                    straightenOnTurn: straightenOnTurn,
+                    strokeWidth: strokeWidth,
+                    valid: valid),
+                color: color, outline: outlineColor)
+            NSGraphicsContext.restoreGraphicsState()
+            return
+        }
+
         // Every remaining style shares the hybrid corner + freehand
         // polyline and only swaps the dash pattern. Colour always
         // comes from the resolved `color` so the match-vs-no-match
@@ -720,22 +759,6 @@ private final class TrailView: NSView {
         case .rainbowRoad:
             drawRainbowRoadPath(origin: origin, cursor: cursor,
                                  color: color, outline: outlineColor)
-        case .pacman:
-            // Pacman rendering lives in PacmanRenderer.swift —
-            // ~450 lines of style-specific code that doesn't need
-            // to share state with the rest of TrailView. Package
-            // the state and hand off.
-            PacmanRenderer.draw(
-                state: PacmanRenderer.State(
-                    origin: origin,
-                    cursor: cursor,
-                    corners: corners,
-                    rawTrail: rawTrail,
-                    lastDir: lastDir,
-                    straightenOnTurn: straightenOnTurn,
-                    strokeWidth: strokeWidth,
-                    valid: valid),
-                color: color, outline: outlineColor)
         case .arrow:
             drawArrowChainPath(origin: origin, cursor: cursor,
                                 color: color, outline: outlineColor)
@@ -863,8 +886,7 @@ private final class TrailView: NSView {
         case .dotted:
             return TrailStyleParams(width: base, glowRadius: 7,
                                      lineDash: [base * 0.6, base * 2])
-        case .pixel, .ascii, .rainbowRoad, .pacman, .arrow,
-             .paws:
+        case .pixel, .ascii, .rainbowRoad, .arrow, .paws:
             // Unused — these styles route through their own
             // renderers and never call `drawSinglePath`. Returning a
             // safe baseline keeps the switch exhaustive without
@@ -1198,10 +1220,10 @@ private final class TrailView: NSView {
         walkPath(origin: origin, interval: cell * 0.5, step: plot)
     }
 
-    // Pac-Man trail rendering — every pacman/ghost-specific
-    // constant + helper now lives in `PacmanRenderer.swift`. The
+    // Pac-Man trail rendering — every pac-man/ghost-specific
+    // constant + helper now lives in `PacManRenderer.swift`. The
     // `draw(_:)` dispatch hands the relevant TrailView state over
-    // via `PacmanRenderer.State`.
+    // via `PacManRenderer.State`.
 
 
     /// Snap `p` onto the axis defined by `dir` and the point `from` —
@@ -1297,7 +1319,7 @@ private final class TrailView: NSView {
     /// dynamic colour modes (`rainbow` / `neon` / `splatoon`) animate
     /// naturally. `outline` (when set) is drawn as a slightly-larger
     /// halo of the same symbol behind the main one — same legibility
-    /// treatment as the pacman pellet outline. `strokeWidth` is
+    /// treatment as the pac-man pellet outline. `strokeWidth` is
     /// re-purposed as a scale multiplier on every dimension.
     private func drawPawsPath(origin: CGPoint, cursor: CGPoint,
                                color: NSColor, outline: NSColor?) {
@@ -1456,7 +1478,7 @@ private final class TrailView: NSView {
                 }
                 // Firing card body: theme/config can override the
                 // historical "trail accent as fill" with its own
-                // palette (e.g. pacman's rainbow flash) via
+                // palette (e.g. pac-man's rainbow flash) via
                 // `cardFiresMode`. Fall back to the trail accent
                 // when unset.
                 let firesBase = cardFiresMode?.currentColor(
@@ -1817,12 +1839,12 @@ private final class HUDContentView: NSView {
                           in o: TrailView,
                           alpha: CGFloat,
                           dx: CGFloat, dy: CGFloat, scale: CGFloat) {
-        // Firing card under `style = "pacman"` gets the PAC-MAN-logo
-        // treatment: angular corners, thicker black border, and a
-        // hard red drop-shadow rectangle behind it so the card reads
-        // as the arcade marquee's 3D-extruded letters.
+        // Firing card under `[cast].theme = "pac-man"` gets the
+        // PAC-MAN-logo treatment: angular corners, thicker black
+        // border, and a hard red drop-shadow rectangle behind it so
+        // the card reads as the arcade marquee's 3D-extruded letters.
         let arcadeMarquee = c.kind == .fires
-            && o.trailStyle == .pacman
+            && o.pacMan != nil
         let cornerR: CGFloat = arcadeMarquee ? 2 : 10
         let borderW: CGFloat = arcadeMarquee ? 2.5 : 1
 

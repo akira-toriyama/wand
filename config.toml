@@ -15,7 +15,7 @@
 
 
 # -----------------------------------------------------------------
-# Schema layout (v7.0)
+# Schema layout (v8.0)
 # -----------------------------------------------------------------
 # Each block has a single concern. Nested sub-blocks scope fields
 # by what they actually animate / configure, so the section path
@@ -35,6 +35,9 @@
 #   [cast.overlay.trail]            — trail line itself
 #   [cast.overlay.badge]            — origin badge
 #   [cast.overlay.cards]            — assist-card exit animations
+#   [cast.pac-man]                  — pac-man special-theme knobs
+#                                     (only read under
+#                                      [cast].theme = "pac-man")
 #   [cast.fire.burst]               — fire-moment particle burst
 #   [cast.fire.decal]               — post-fire ink decal
 #   [[cast.rule]]                   — one cast pattern → action
@@ -47,11 +50,23 @@
 #   [tome.decoration]               — static panel decoration
 #   [[tome.item]]                   — one menu row
 #
-# v6 retired (warned in /tmp/wand.log):
+# v7 retired (warned in /tmp/wand.log):
 #   [gesture]            → [cast]               (and every sub-block)
 #   [[gesture.rule]]     → [[cast.rule]]
 #   [launcher]           → [tome]               (and every sub-block)
 #   [[launcher.item]]    → [[tome.item]]
+#
+# v8 retired (warned in /tmp/wand.log):
+#   [cast].theme = "pacman"                → "pac-man"
+#   [tome].theme = "pacman"                → "pac-man"
+#   [cast.overlay.trail].style = "pacman"  → set [cast].theme =
+#                                            "pac-man" instead
+#                                            (the style key is no
+#                                            longer the pac-man
+#                                            switch — it's a theme
+#                                            now, with its own
+#                                            [cast.pac-man]
+#                                            block for sizing)
 
 
 # -----------------------------------------------------------------
@@ -158,15 +173,20 @@ intensity = "normal"
 #                is monochrome.
 #   "vapor"    — synthwave: pink trail, lime no-match, slate
 #                outline, Dracula-style dark card.
-#   "pacman"   — Pac-Man arcade palette: yellow trail on black,
-#                red-ghost no-match. Pairs with
-#                `style = "pacman"` for the canonical arcade
-#                yellow wedge. Cards use a two-state design —
-#                directional cards are the arcade backdrop
-#                (black body + yellow text); the firing card
-#                INVERTS to a yellow pellet (yellow body +
-#                black text), so "fires on release" reads as
-#                the trail's pellet latching onto its rule.
+#   "pac-man"  — ★ SPECIAL THEME. Picks the full arcade Pac-Man
+#                look — yellow Pac-Man wedge chasing along a
+#                black corridor flanked by neon-blue maze walls,
+#                with red-ghost no-match. Locks the trail render
+#                shape: `style`, `width`, and `straighten-on-turn`
+#                under [cast.overlay.trail] are IGNORED (a warning
+#                is logged for each one set). Replaces `width`
+#                with `[cast.pac-man].size = "s" | "m" | "l"`
+#                (see that block below for tuning). Cards use a
+#                two-state design — directional cards are the
+#                arcade backdrop (black body + yellow text); the
+#                firing card INVERTS to a yellow pellet (yellow
+#                body + black text), so "fires on release" reads
+#                as the trail's pellet latching onto its rule.
 #
 # Unknown names clamp to "default". Validate with `wand --validate`.
 theme = "default"
@@ -286,7 +306,10 @@ color-no-match = "#ef4444"
 #   ascii                — solid backing rect under each glyph
 #                          (terminal / cmatrix feel: green letters
 #                          on black blocks)
-#   pacman               — concentric outer ring on pellets + face
+# Under `[cast].theme = "pac-man"` the outline drives the corridor's
+# flanking wall colour rather than a per-pellet halo — the theme
+# palette already supplies the neon-arcade blue, so set this only
+# to override.
 color-outline = ""
 
 # Trail width. Clamped 1..40. Meaning depends on `style`:
@@ -297,18 +320,20 @@ color-outline = ""
 #   ascii                    — thickness in fixed-size glyphs
 #                              (14pt font; `width = 3` lays down a
 #                              3-glyph-wide band)
-#   pacman                   — scale multiplier on pellet / face
-#                              size + spacing + lag. Single line of
-#                              pellets always; `width = 2` doubles
-#                              the whole arcade aesthetic.
 #   paws                     — scale multiplier on paw print size +
 #                              spacing. Always one alternating L/R
 #                              line of prints; `width` doesn't
 #                              stack rows.
 # So in pixel / ascii, raising `width` adds more small marks across
-# the path rather than scaling each mark up. pacman / paws are
-# different — always a single silhouette line, so `width` scales
-# sizes instead of stacking rows.
+# the path rather than scaling each mark up. paws is different —
+# always a single silhouette line, so `width` scales sizes instead
+# of stacking rows.
+#
+# IGNORED under `[cast].theme = "pac-man"` — use
+# `[cast.pac-man].size = "s" | "m" | "l"` instead. The arcade
+# aesthetic is always a single line of pellets, so a free-form
+# integer fights the visual; three named tiers cover the range
+# without misconfiguration.
 width = 3
 
 # Trail dash pattern preset. **Shape only — the trail's colour is
@@ -330,18 +355,10 @@ width = 3
 #               track. Style-specific exception: `color` is
 #               overridden by the palette; `color-no-match` still
 #               wins so the failure signal survives.
-#   "pacman"  — small pellets along the path + a Pac-Man wedge that
-#               chases behind the cursor, mouth chomping along the
-#               current direction. Always a single line of pellets
-#               (the arcade look); `width` scales pellet / face size
-#               + spacing. When `color-outline` is set, the corridor
-#               renders as a black road bounded by two neon walls in
-#               the outline colour (matches the arcade maze layout).
-#               **Recommended pairing: `straighten-on-turn = true`**
-#               below — the arcade metaphor is fundamentally
-#               orthogonal corridors, so axis-snapped segments give
-#               clean 90° walls. With `false` the walls trace raw
-#               freehand samples and wobble with hand jitter.
+# NOTE: "pacman" was retired in v8 — Pac-Man is now a special
+# theme. Set `[cast].theme = "pac-man"` and tune
+# `[cast.pac-man].size` for the arcade trail; the `style`
+# key below is for line-shape decoration of the other themes only.
 #   "arrow"   — continuous chevron chain along the whole path
 #               (`-->-->-->`), each `>` rotated to match the local
 #               tangent so the direction reads at every point — not
@@ -369,9 +386,11 @@ final-hold-ms = 400
 #   false  — keep every sample as raw freehand; the trail follows
 #            the literal hand path, jitter included.
 # Recognition is unaffected either way — this is a render-only knob.
-# **Required for `style = "pacman"`** — the arcade maze metaphor
-# only reads cleanly with axis-snapped corridors; freehand pacman
-# walls trace hand jitter and lose the corridor read.
+#
+# IGNORED under `[cast].theme = "pac-man"` — that theme forces
+# straighten-on-turn = true (the arcade maze metaphor only reads
+# cleanly with axis-snapped corridors; freehand pac-man walls trace
+# hand jitter and lose the corridor read).
 straighten-on-turn = true
 
 
@@ -429,6 +448,30 @@ font-size = 13
 # `fires-text-color`) were retired so card colours always read
 # as a coordinated set with the trail. Stale lines are silently
 # dropped per wand's clamp-to-default policy.
+
+
+# -----------------------------------------------------------------
+# Cast theme — pac-man special-theme knobs
+# -----------------------------------------------------------------
+# Only read when `[cast].theme = "pac-man"`. Under every other theme
+# this block is ignored (a warning lists the dead keys). Picking
+# pac-man as a theme also forces the trail's `style` /
+# `straighten-on-turn` and ignores `[cast.overlay.trail].width`
+# entirely — the arcade aesthetic is "the whole line, locked in",
+# so it gets its own scale knob below instead of mixing into the
+# per-style trail width.
+[cast.pac-man]
+
+# Overall scale of the pac-man trail. Replaces `width` under this
+# theme. Tuned so each step is visibly different at a glance
+# without the large tier crowding the corridor walls.
+#
+#   "s" — compact arcade-pixel-art feel (scale ≈ 2.0)
+#   "m" — calibrated baseline (scale ≈ 3.0; matches the v7 default)
+#   "l" — chunky / over-the-top (scale ≈ 4.5)
+#
+# Unknown values clamp to "m". Validate with `wand --validate`.
+size = "m"
 
 
 # -----------------------------------------------------------------

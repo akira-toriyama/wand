@@ -13,6 +13,7 @@
 // means (in v5 it could only have been the badge; v6 makes that
 // explicit via `[gesture.overlay.badge].anim-enabled`).
 
+import CoreGraphics
 import Foundation
 
 // MARK: - Theme
@@ -80,6 +81,17 @@ public struct CastThemePalette: Sendable, Equatable {
 /// individual keys still override the theme value when explicitly
 /// set in the TOML (non-empty string). Unknown names clamp to
 /// `.default`, which preserves the historical hard-coded values.
+///
+/// **Standard vs special themes.** Most cases are "standard" — they
+/// only supply a colour palette, and the trail's `style` / `width` /
+/// `straighten-on-turn` knobs under `[cast.overlay.trail]` stay
+/// independent. `pacMan` (and any future arcade-flavour theme) is a
+/// **special theme**: picking it locks the trail's render shape to
+/// the arcade-Pac-Man wedge + corridor, forces `straighten-on-turn
+/// = true`, and ignores `width` in favour of its own
+/// `[cast.pac-man].size = S | M | L` knob. The override path
+/// is centralised in `WandConfig.parse` so the rest of the codebase
+/// doesn't have to know about the distinction.
 public enum CastTheme: String, Sendable, CaseIterable {
     case `default`
     case terminal
@@ -88,7 +100,12 @@ public enum CastTheme: String, Sendable, CaseIterable {
     case rainbow
     case mono
     case vapor
-    case pacman
+    /// **Special theme** — see the comment above. Locks the trail's
+    /// shape + straighten-on-turn and exposes `[cast.pac-man]
+    /// .size` instead of `[cast.overlay.trail].width`. Renamed from
+    /// `pacman` in v8 to align with the canonical "Pac-Man" spelling
+    /// (the v8 schema bump that also retired `TrailStyle.pacman`).
+    case pacMan = "pac-man"
 
     // Note: a `paper` (light-background) theme lived here through
     // #115 but was retired — wand's HUD overlays a dark blur on
@@ -166,10 +183,10 @@ public enum CastTheme: String, Sendable, CaseIterable {
                 cardsBodyColor: "#282a36",
                 cardsTextColor: "#f8f8f2",
                 badgeBackgroundColor: "#282a36")
-        case .pacman:
+        case .pacMan:
             // Pac-Man arcade palette: yellow Pac-Man on a black
-            // backdrop, red-ghost no-match. The yellow accent pairs
-            // particularly well with `style = "pacman"`, where the
+            // backdrop, red-ghost no-match. The yellow accent is
+            // paired with the locked-in pac-man trail render so the
             // wedge face inherits the trail colour and ends up the
             // canonical arcade yellow.
             //
@@ -181,10 +198,9 @@ public enum CastTheme: String, Sendable, CaseIterable {
             //                       release" moment reads as the
             //                       trail's yellow pellet finally
             //                       latching onto its rule.
-            // Outline = arcade-maze neon blue (#2121ff). Under
-            // `style = "pacman"` this becomes the corridor's flanking
-            // wall colour rather than a per-pellet halo; for the
-            // other styles it still rides as the usual trail outline.
+            // Outline = arcade-maze neon blue (#2121ff). Under the
+            // pac-man theme this becomes the corridor's flanking
+            // wall colour rather than a per-pellet halo.
             return CastThemePalette(
                 trailColor: "#ffea00",
                 trailColorNoMatch: "#ff0000",
@@ -255,8 +271,9 @@ public struct GestureOverlayTrailSpec: Sendable, Equatable {
     /// (`rainbow` / `neon` / `splatoon`). The exact rendering is
     /// style-specific — bezier styles get a wider underlay stroke,
     /// pixel / rainbow-road get a 1pt frame inset into each cell,
-    /// ascii gets a glyph stroke, pacman pellets / face get a
-    /// concentric outer ring.
+    /// ascii gets a glyph stroke. Under `[cast].theme = "pac-man"`
+    /// the outline becomes the corridor's flanking wall colour
+    /// (the theme palette already supplies neon-arcade blue).
     public let colorOutline: String
     /// Stroke width in points. Clamped 1..40. Style presets may
     /// adjust this — `thin` halves, `thick` doubles, etc.
@@ -465,4 +482,55 @@ public struct GestureFireSpec: Sendable, Equatable {
     }
 
     public static let `default` = GestureFireSpec()
+}
+
+// MARK: - Pac-Man special theme
+
+/// Scale tier for the `pac-man` special theme. Replaces
+/// `[cast.overlay.trail].width` when `[cast].theme = "pac-man"` is
+/// picked — the arcade aesthetic is always a single line of pellets,
+/// so a free-form integer width fights the visual; three named tiers
+/// give the user real choices without misconfiguration.
+///
+/// `.m` is the calibrated baseline (matches the historical
+/// `width = 3` look). `.s` reads as compact arcade-pixel-art; `.l`
+/// goes chunky / over-the-top. Carried into `PacManRenderer` as a
+/// scale multiplier on pellet diameter, spacing, face radius,
+/// wall offset, and trail lag — every pac-man dimension scales
+/// proportionally so the three sizes stay self-consistent.
+public enum PacManSize: String, Sendable, Hashable, CaseIterable {
+    case s
+    case m
+    case l
+
+    /// Scale multiplier applied to every pac-man dimension. Tuned
+    /// so each step is visibly different at a glance without the
+    /// large tier crowding the corridor walls. `.m = 3.0` keeps
+    /// the v7 default look intact for users migrating from
+    /// `style = "pacman"` + `width = 3`.
+    public var scale: CGFloat {
+        switch self {
+        case .s: return 2.0
+        case .m: return 3.0
+        case .l: return 4.5
+        }
+    }
+}
+
+/// `[cast.pac-man]` — pac-man-special-theme knobs. Only read
+/// when `[cast].theme = "pac-man"`; the parser warns and ignores
+/// when the user sets this block under a different theme. The block
+/// stays a separate struct (not folded into `GestureOverlayTrailSpec`)
+/// so the "this only applies under one specific theme" scope is
+/// visible from the type alone — and so future special themes
+/// (`[cast.theme.invader]`, …) can follow the same shape without
+/// bleeding into the standard trail spec.
+public struct PacManSpec: Sendable, Equatable {
+    public let size: PacManSize
+
+    public init(size: PacManSize = .m) {
+        self.size = size
+    }
+
+    public static let `default` = PacManSpec()
 }

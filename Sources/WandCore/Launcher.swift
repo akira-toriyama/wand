@@ -256,7 +256,7 @@ public struct TomeThemePalette: Sendable, Equatable {
     /// `NSVisualEffectView .menu` frosted blur (vibrancy). Non-empty
     /// **replaces** the blur with a solid colour — required for
     /// themes that need a saturated backdrop the blur can't deliver
-    /// (e.g. pacman's pure black, terminal's editor-black). Use a
+    /// (e.g. pac-man's pure black, terminal's editor-black). Use a
     /// fully-opaque hex; alpha-channel suffixes work but read as
     /// "tinted blur" rather than "themed surface".
     public let backgroundColor: String
@@ -286,7 +286,9 @@ public enum TomeTheme: String, Sendable, CaseIterable {
     case splatoon
     case mono
     case vapor
-    case pacman
+    /// Pairs with `[cast].theme = "pac-man"` for a coordinated arcade
+    /// look across both surfaces. Renamed from `pacman` in v8.
+    case pacMan = "pac-man"
 
     // Note: `rainbow` / dynamic colour cycling isn't a tome theme
     // case — the launcher panel isn't redrawn frame-by-frame, so a
@@ -340,10 +342,10 @@ public enum TomeTheme: String, Sendable, CaseIterable {
                 textColor: "#f8f8f2",
                 borderColor: "#ff79c6",
                 backgroundColor: "#282a36")
-        case .pacman:
+        case .pacMan:
             // Yellow PAC-MAN accent with black hover text on the
             // canonical arcade black backdrop — pairs with
-            // `[cast].theme = "pacman"` for a coordinated look
+            // `[cast].theme = "pac-man"` for a coordinated look
             // across both surfaces.
             return TomeThemePalette(
                 accentColor: "#ffea00",

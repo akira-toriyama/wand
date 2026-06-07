@@ -1,8 +1,8 @@
 // Pac-Man trail renderer. Stateless — `TrailView` packages every
 // piece of state the renderer needs into `State` and calls into
 // the static `draw(state:color:outline:)` entry point. Pulling
-// the pacman/ghost code into its own file keeps GestureOverlay.swift
-// focused on the shared trail / HUD plumbing instead of one style's
+// the pac-man/ghost code into its own file keeps GestureOverlay.swift
+// focused on the shared trail / HUD plumbing instead of one theme's
 // ~450-line implementation.
 //
 // File structure mirrors the rendering pipeline used by `draw`:
@@ -23,11 +23,12 @@
 import AppKit
 import WandCore
 
-/// Stateless renderer for `style = "pacman"`. Every pacman/ghost-
-/// specific constant + helper lives in this namespace so the
-/// generic `TrailView` doesn't have to carry them.
+/// Stateless renderer for the pac-man special theme
+/// (`[cast].theme = "pac-man"`). Every pac-man/ghost-specific
+/// constant + helper lives in this namespace so the generic
+/// `TrailView` doesn't have to carry them.
 @MainActor
-enum PacmanRenderer {
+enum PacManRenderer {
 
     /// Input bundle the renderer needs from `TrailView`. Constructed
     /// at the dispatch site (where TrailView's `fileprivate` state
@@ -39,11 +40,16 @@ enum PacmanRenderer {
         let corners: [CGPoint]
         let rawTrail: [CGPoint]
         let lastDir: Direction?
+        /// Forced `true` by the parser whenever this renderer runs
+        /// (the pac-man theme locks straighten-on-turn) — carried
+        /// through so the rendering math matches the v7 shape, but
+        /// in practice it's always `true` now.
         let straightenOnTurn: Bool
-        /// Scale multiplier (= `TrailView.strokeWidth`). Every
-        /// pacman dimension below scales off this.
+        /// Scale multiplier sourced from `[cast.pac-man].size`
+        /// (`.s` = 2.0, `.m` = 3.0, `.l` = 4.5). Every pac-man
+        /// dimension below scales off this.
         let strokeWidth: CGFloat
-        /// Match state. `false` swaps the pacman face for the
+        /// Match state. `false` swaps the pac-man face for the
         /// chased red ghost sprite.
         let valid: Bool
     }
@@ -127,7 +133,7 @@ enum PacmanRenderer {
         let snappedPts = snappedPoints(state: state)
 
         // 1) Black corridor + neon walls — one geometry pass on a
-        // pacman-specific centerline. `buildCenterline` bezier-
+        // pac-man-specific centerline. `buildCenterline` bezier-
         // smooths every interior corner so single-corner gestures
         // (e.g. "DR") still soften, and the offsets from
         // `copy(strokingWithWidth:)` then paint road (fill) +
@@ -203,7 +209,7 @@ enum PacmanRenderer {
 
     // MARK: - Centerline helpers
 
-    /// Shared point sequence for every pacman-style geometry pass:
+    /// Shared point sequence for every pac-man-style geometry pass:
     /// corridor centerline, wall offsets, pellet steps, and the
     /// face-anchor walk all use this exact list so the visuals stay
     /// locked together. With `straightenOnTurn = true` it's
@@ -230,7 +236,7 @@ enum PacmanRenderer {
         return pts
     }
 
-    /// Pacman-specific smoothed centerline. Bezier-smooths every
+    /// Pac-man-specific smoothed centerline. Bezier-smooths every
     /// interior corner of the supplied `pts` sequence with a
     /// `cornerRadius`-sized arc — so single-corner gestures (e.g.
     /// "DR") get a rounded turn that the wall offsets can follow
@@ -343,7 +349,7 @@ enum PacmanRenderer {
 
     // MARK: - Sprite rendering
 
-    /// Draw the pacman face as a chunky pixel-grid sprite — a
+    /// Draw the pac-man face as a chunky pixel-grid sprite — a
     /// circle minus a mouth wedge rasterised onto a square grid.
     /// Cells live in face-local coordinates (mouth opens along
     /// local +x); the graphics context is rotated so the whole
@@ -397,7 +403,7 @@ enum PacmanRenderer {
     }
 
     /// Draw the no-match ghost sprite — arcade-style "Blinky" shape
-    /// rasterised onto the same pixel grid as the pacman face: a
+    /// rasterised onto the same pixel grid as the pac-man face: a
     /// dome on top, square body below, and a wavy skirt of 4 humps
     /// along the bottom edge that **alternates between two leg
     /// poses** at `ghostSkirtHz` (humps on the outside vs humps on

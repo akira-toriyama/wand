@@ -53,7 +53,7 @@ struct TomeColors {
     /// Solid panel backdrop. When non-nil the system frosted blur is
     /// **replaced** with a solid colour view — required for themes
     /// that need a saturated backdrop the blur can't deliver
-    /// (pacman / terminal black, mono OLED, etc).
+    /// (pac-man / terminal black, mono OLED, etc).
     let background: NSColor?
 
     static func resolve(_ palette: TomeThemePalette) -> TomeColors {
@@ -237,7 +237,7 @@ private enum PanelLayout {
         // Backdrop: themed solid colour replaces the system frosted
         // blur when `colors.background` is set. The blur can't be
         // tinted (NSVisualEffectView's `.menu` material has no colour
-        // knob), so saturated themes like pacman / terminal need a
+        // knob), so saturated themes like pac-man / terminal need a
         // full surface swap — at the cost of losing vibrancy. The
         // default (`background == nil`) keeps the historical
         // frosted-glass `.menu` look.
@@ -262,7 +262,7 @@ private enum PanelLayout {
         // [tome.decoration].border — that's a moving rim drawn by
         // PanelController.installBorderDecoration. This static one
         // just paints a single hairline frame around the panel
-        // surface so themes like terminal/pacman get their signature
+        // surface so themes like terminal/pac-man get their signature
         // edge.
         if let borderColor = colors.border {
             bg.layer?.borderColor = borderColor.cgColor
