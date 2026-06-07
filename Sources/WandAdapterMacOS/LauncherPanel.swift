@@ -92,6 +92,7 @@ public enum LauncherPanel {
                                 closeAnim: LauncherCloseAnim = .off,
                                 border: LauncherBorder = .off,
                                 borderCycleMs: Int = 4000,
+                                borderWidth: Int = 2,
                                 palette: TomeThemePalette = TomeThemePalette(),
                                 onSelect: @escaping (LauncherItem, Target) -> Void) {
         current?.dismiss()
@@ -123,6 +124,7 @@ public enum LauncherPanel {
             closeAnim: closeAnim,
             border: border,
             borderCycleMs: borderCycleMs,
+            borderWidth: borderWidth,
             colors: colors,
             onDismissRoot: { current = nil })
         current = controller
@@ -883,6 +885,10 @@ private final class PanelController {
     /// Static border kinds ignore this value. Child panels inherit
     /// from the root for visual consistency.
     private let borderCycleMs: Int
+    /// Border stroke width (points). Feeds `CAShapeLayer.lineWidth`
+    /// in `installBorderDecoration`. Ignored when `border = .off`.
+    /// Child panels inherit from the root.
+    private let borderWidth: Int
     /// Re-entry guard: a fade-out can dispatch async, and a global
     /// click or follow-up `dismiss()` could land mid-fade. Once `true`
     /// the panel is committed to its current teardown path and any
@@ -918,6 +924,7 @@ private final class PanelController {
          closeAnim: LauncherCloseAnim = .off,
          border: LauncherBorder = .off,
          borderCycleMs: Int = 4000,
+         borderWidth: Int = 2,
          colors: TomeColors = .none,
          onDismissRoot: (() -> Void)? = nil) {
         self.layout = layout
@@ -928,6 +935,7 @@ private final class PanelController {
         self.closeAnim = closeAnim
         self.border = border
         self.borderCycleMs = borderCycleMs
+        self.borderWidth = borderWidth
         self.colors = colors
         self.onDismissRoot = isRoot ? onDismissRoot : nil
 
@@ -1029,7 +1037,7 @@ private final class PanelController {
                               cornerHeight: corner - inset,
                               transform: nil)
         stroke.fillColor = nil
-        stroke.lineWidth = 2
+        stroke.lineWidth = CGFloat(borderWidth)
         stroke.strokeColor = NSColor.systemBlue.cgColor   // starting hue
         // Hue rotation: 8 keyframes around the wheel over 4s, looped.
         // CAKeyframeAnimation interpolates across CGColors smoothly
@@ -1180,6 +1188,7 @@ private final class PanelController {
             closeAnim: closeAnim,
             border: border,
             borderCycleMs: borderCycleMs,
+            borderWidth: borderWidth,
             colors: colors)
         c.parent = self
         child = c

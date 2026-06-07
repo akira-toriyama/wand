@@ -705,6 +705,15 @@ border = "off"
 #   8000  — slow drift, almost-solid feel
 cycle-ms = 4000
 
+# Border stroke width in points. Clamped 1..10. Ignored when
+# `border = "off"`.
+#
+#   1     — hairline (thin rim, very subtle)
+#   2     — default; reads as a clean panel edge
+#   4     — bold ribbon
+#   8+    — chunky / arcade-pixel feel; pairs well with pac-man / mono
+border-width = 2
+
 
 # -----------------------------------------------------------------
 # Items (tome) and rules (cast) — shared field reference

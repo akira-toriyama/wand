@@ -444,11 +444,17 @@ public struct LauncherDecorationSpec: Sendable, Equatable {
     /// `border = "rainbow"` outline. Clamped 500..10000. Static border
     /// kinds (`off`) ignore it.
     public let cycleMs: Int
+    /// Stroke width (points) for the panel border. Clamped 1..10.
+    /// Ignored when `border = "off"`. Default 2 matches the pre-knob
+    /// hardcoded value, so existing configs stay visually identical.
+    public let borderWidth: Int
 
     public init(border: LauncherBorder = .off,
-                cycleMs: Int = 4000) {
+                cycleMs: Int = 4000,
+                borderWidth: Int = 2) {
         self.border = border
         self.cycleMs = cycleMs
+        self.borderWidth = borderWidth
     }
 
     public static let `default` = LauncherDecorationSpec()
