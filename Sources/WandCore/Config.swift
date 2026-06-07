@@ -303,7 +303,25 @@ public struct WandConfig: Sendable {
             cd, key: "unmatch", section: "cast.overlay.cards", default: .none)
         let cardsArmed: ArmedEffect = parseEnum(
             cd, key: "armed", section: "cast.overlay.cards", default: .none)
-        let cardsChomp = cd.bool("chomp", false)
+        // `chomp = true` retired in favour of the more general
+        // `line-pet = [...]` array (mirrors `[tome.decoration]`).
+        // Honour the old key for one release with a loud warning.
+        if cd.bool("chomp", false) {
+            Log.line("config: [cast.overlay.cards].chomp = true was"
+                     + " retired — use line-pet = [\"pac-man\"]"
+                     + " instead (value silently ignored)")
+        }
+        let cardsLinePets: [LinePet] =
+            cd.strings("line-pet").compactMap { raw in
+                let v = raw.lowercased()
+                if let pet = LinePet(rawValue: v) { return pet }
+                let valid = LinePet.allCases.map(\.rawValue)
+                    .sorted().joined(separator: ", ")
+                Log.line("config: [cast.overlay.cards].line-pet contains"
+                         + " unrecognised entry \"\(raw)\" — dropped"
+                         + " (valid: \(valid))")
+                return nil
+            }
         let cardsFontSize = clampInt(
             cd, key: "font-size", default: 13, lo: 8, hi: 32)
         // Card colours retired from `[cast.overlay.cards]` (#116) —
@@ -315,7 +333,7 @@ public struct WandConfig: Sendable {
         let cards = GestureOverlayCardsSpec(
             match: cardsMatch, unmatch: cardsUnmatch,
             armed: cardsArmed,
-            chomp: cardsChomp,
+            linePets: cardsLinePets,
             fontSize: cardsFontSize)
 
         let overlay = GestureOverlaySpec(
@@ -382,7 +400,9 @@ public struct WandConfig: Sendable {
         let lrow = doc.tables["tome.row"] ?? [:]
         let launcherRow = LauncherRowSpec(
             shortcutBadge: lrow.bool("shortcut-badge", true),
-            iconChip: lrow.bool("icon-chip", true))
+            iconChip: lrow.bool("icon-chip", true),
+            fontSize: clampInt(lrow, key: "font-size",
+                                default: 13, lo: 11, hi: 32))
 
         // [tome.animation]
         let la = doc.tables["tome.animation"] ?? [:]
@@ -402,11 +422,32 @@ public struct WandConfig: Sendable {
         let launcherDecorBorderWidth = clampInt(
             ld, key: "border-width", default: 2, lo: 1, hi: 10)
         let launcherDecorShadow = ld.bool("shadow", false)
+        // `chomp = true` was retired in favour of the more general
+        // `line-pet = ["pac-man", "ghost", …]` array. Honour the old
+        // key for one release with a loud warning so a user who
+        // copy-pasted it from an earlier README sees what to change.
+        if ld.bool("chomp", false) {
+            Log.line("config: [tome.decoration].chomp = true was retired"
+                     + " — use line-pet = [\"pac-man\"] instead "
+                     + "(the value has been silently ignored)")
+        }
+        let launcherDecorLinePets: [LinePet] =
+            ld.strings("line-pet").compactMap { raw in
+                let v = raw.lowercased()
+                if let pet = LinePet(rawValue: v) { return pet }
+                let valid = LinePet.allCases.map(\.rawValue)
+                    .sorted().joined(separator: ", ")
+                Log.line("config: [tome.decoration].line-pet contains"
+                         + " unrecognised entry \"\(raw)\" — dropped"
+                         + " (valid: \(valid))")
+                return nil
+            }
         let launcherDecoration = LauncherDecorationSpec(
             border: launcherDecorBorder,
             cycleMs: launcherDecorCycleMs,
             borderWidth: launcherDecorBorderWidth,
-            shadow: launcherDecorShadow)
+            shadow: launcherDecorShadow,
+            linePets: launcherDecorLinePets)
 
         // Warn when the user opted out of the launcher but still
         // configured non-default panel cosmetics — those only fire

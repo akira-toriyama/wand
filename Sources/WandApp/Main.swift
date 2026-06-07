@@ -337,26 +337,22 @@ enum WandApp {
                                           by: live.excludeApps) {
                     hint = GestureHint(shape: arrows(s.pattern), rows: [])
                 } else {
-                    // Match color when the *current* shape fires a
-                    // rule; assist rows show every rule reachable
-                    // from here.
-                    // Overlay's "current shape fires?" check uses
-                    // apps + filter-title (both cheap; title was
-                    // captured at button-down on the TrailSample).
-                    // filter-shell is skipped here — per-sample
-                    // shell evaluation is too costly. So a rule
-                    // gated by filter-shell may flash green in the
-                    // overlay yet not fire at button-up.
-                    let overlayTarget = Target(
-                        pid: 0, bundleID: s.bundleID,
-                        title: s.title, frame: .zero, windowID: 0)
-                    valid = Matcher.match(pattern: s.pattern,
-                                          target: overlayTarget,
-                                          rules: live.rules) != nil
+                    // `valid` = the current shape is still a prefix
+                    // of at least one reachable rule — i.e. NOT off
+                    // every rule yet. We deliberately don't gate on
+                    // exact-match-fires-now: drawing just `D` when
+                    // rules `DL` / `DLU` exist is still on-track and
+                    // should keep the trail in the match colour
+                    // (and skip the pac-man ghost + GAME OVER cues
+                    // until a non-prefix direction lands). The exact-
+                    // match-fires signal is still available — any
+                    // `hint.rows.fires = true` carries it.
+                    let cands = Matcher.candidates(
+                        prefix: s.pattern, bundleID: s.bundleID,
+                        rules: live.rules)
+                    valid = !cands.isEmpty
                     hint = assistHint(pattern: s.pattern,
-                                      candidates: Matcher.candidates(
-                                        prefix: s.pattern, bundleID: s.bundleID,
-                                        rules: live.rules))
+                                      candidates: cands)
                 }
                 let iconToSet: NSImage??
                 if !s.bundleID.isEmpty && s.bundleID != lastIconBundle {

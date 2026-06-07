@@ -399,11 +399,20 @@ public struct LauncherRowSpec: Sendable, Equatable {
     /// on the same visual footprint as SF Symbol icons. No effect on
     /// SF Symbol / file-path icons. Default `true`.
     public let iconChip: Bool
+    /// Title font size (points). Drives the whole row's footprint:
+    /// row height and icon size scale proportionally so larger
+    /// fonts get a larger panel rather than truncated text. Clamped
+    /// 11..32. Default 13 matches macOS' menu font baseline (the
+    /// pre-knob hardcoded size), so the historical look survives
+    /// when the key is omitted.
+    public let fontSize: Int
 
     public init(shortcutBadge: Bool = true,
-                iconChip: Bool = true) {
+                iconChip: Bool = true,
+                fontSize: Int = 13) {
         self.shortcutBadge = shortcutBadge
         self.iconChip = iconChip
+        self.fontSize = fontSize
     }
 
     public static let `default` = LauncherRowSpec()
@@ -444,15 +453,26 @@ public struct LauncherDecorationSpec: Sendable, Equatable {
     /// read as a fringe on the border decoration. Set `true` to
     /// restore the system menu shadow look.
     public let shadow: Bool
+    /// Pac-man "pets" that walk the panel's rounded outline. Default
+    /// `[]` (no pets). Theme-agnostic — each pet's silhouette is
+    /// baked in, so they stand alongside any `[tome].theme`. When
+    /// more than one is configured they chase each other in array
+    /// order around the rim. Replaces the `chomp = true` boolean
+    /// retired in this PR — config-side, `chomp = true` now logs a
+    /// warning and is silently ignored (use `line-pet = ["pac-man"]`
+    /// instead).
+    public let linePets: [LinePet]
 
     public init(border: LauncherBorder = .off,
                 cycleMs: Int = 4000,
                 borderWidth: Int = 2,
-                shadow: Bool = false) {
+                shadow: Bool = false,
+                linePets: [LinePet] = []) {
         self.border = border
         self.cycleMs = cycleMs
         self.borderWidth = borderWidth
         self.shadow = shadow
+        self.linePets = linePets
     }
 
     public static let `default` = LauncherDecorationSpec()

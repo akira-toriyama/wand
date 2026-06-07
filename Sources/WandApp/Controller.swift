@@ -209,12 +209,14 @@ public final class Controller: @unchecked Sendable {
             layout: cfg.launcher.layout,
             shortcutBadge: cfg.launcher.row.shortcutBadge,
             iconChip: cfg.launcher.row.iconChip,
+            fontSize: cfg.launcher.row.fontSize,
             openAnim: cfg.launcher.animation.open,
             closeAnim: cfg.launcher.animation.close,
             border: cfg.launcher.decoration.border,
             borderCycleMs: cfg.launcher.decoration.cycleMs,
             borderWidth: cfg.launcher.decoration.borderWidth,
             shadow: cfg.launcher.decoration.shadow,
+            linePets: cfg.launcher.decoration.linePets,
             palette: cfg.launcher.theme.palette
         ) { [weak self] item, target in
             self?.counterLauncherDispatched += 1
@@ -291,12 +293,14 @@ public final class Controller: @unchecked Sendable {
             layout: parsed.layout,
             shortcutBadge: cfg.launcher.row.shortcutBadge,
             iconChip: cfg.launcher.row.iconChip,
+            fontSize: cfg.launcher.row.fontSize,
             openAnim: cfg.launcher.animation.open,
             closeAnim: cfg.launcher.animation.close,
             border: cfg.launcher.decoration.border,
             borderCycleMs: cfg.launcher.decoration.cycleMs,
             borderWidth: cfg.launcher.decoration.borderWidth,
             shadow: cfg.launcher.decoration.shadow,
+            linePets: cfg.launcher.decoration.linePets,
             palette: cfg.launcher.theme.palette
         ) { [weak self] item, target in
             self?.counterShowMenuDispatched += 1

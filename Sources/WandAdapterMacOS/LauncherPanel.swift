@@ -126,12 +126,14 @@ public enum LauncherPanel {
                                 layout: LauncherLayout = .list,
                                 shortcutBadge: Bool = true,
                                 iconChip: Bool = true,
+                                fontSize: Int = 13,
                                 openAnim: LauncherOpenAnim = .off,
                                 closeAnim: LauncherCloseAnim = .off,
                                 border: LauncherBorder = .off,
                                 borderCycleMs: Int = 4000,
                                 borderWidth: Int = 2,
                                 shadow: Bool = false,
+                                linePets: [LinePet] = [],
                                 palette: TomeThemePalette = TomeThemePalette(),
                                 onSelect: @escaping (LauncherItem, Target) -> Void) {
         current?.dismiss()
@@ -148,10 +150,19 @@ public enum LauncherPanel {
         let header = layout == .list
             ? PanelLayout.makeHeaderSpec(for: target)
             : nil
+        // Pets ride the rim and need a margin around bg so the panel
+        // window doesn't clip their outer half. The base margin
+        // accommodates the largest pet silhouette (ghost; pac-man is
+        // smaller) at the baseline font; it scales with `fontSize`
+        // so a larger panel doesn't shrink the pet's relative size.
+        let petScale = max(1.0, CGFloat(fontSize) / 13.0)
+        let outerMargin: CGFloat = linePets.isEmpty
+            ? 0 : round(14 * petScale)
         let (content, rows) = PanelLayout.buildContent(
             nodes: nodes, header: header, layout: layout,
             shortcutBadge: shortcutBadge, iconChip: iconChip,
-            colors: colors)
+            fontSize: fontSize,
+            colors: colors, outerMargin: outerMargin)
         let frame = PanelLayout.placeRoot(
             atCursor: cocoaPoint, contentSize: content.fittingSize)
         let controller = PanelController(
@@ -165,6 +176,8 @@ public enum LauncherPanel {
             borderCycleMs: borderCycleMs,
             borderWidth: borderWidth,
             shadow: shadow,
+            linePets: linePets,
+            fontSize: fontSize,
             colors: colors,
             onDismissRoot: { current = nil })
         current = controller
@@ -276,7 +289,9 @@ private enum PanelLayout {
                               layout: LauncherLayout,
                               shortcutBadge: Bool = true,
                               iconChip: Bool = true,
-                              colors: TomeColors = .none)
+                              fontSize: Int = 13,
+                              colors: TomeColors = .none,
+                              outerMargin: CGFloat = 0)
         -> (view: NSView, rows: [ItemRow]) {
         // Backdrop: themed solid colour replaces the system frosted
         // blur when `colors.background` is set. The blur can't be
@@ -336,7 +351,8 @@ private enum PanelLayout {
 
         if let h = header, layout == .list {
             let hr = ItemRow(kind: .header, label: h.name, icon: h.icon,
-                              layout: layout)
+                              layout: layout,
+                              fontSize: fontSize)
             rows.append(hr)
             views.append(hr)
             views.append(makeSeparator(layout: layout))
@@ -362,6 +378,7 @@ private enum PanelLayout {
                     && item.header != currentSection {
                     views.append(makeSectionHeaderRow(name: item.header,
                                                        layout: layout,
+                                                       fontSize: fontSize,
                                                        sink: &rows))
                     currentSection = item.header
                 }
@@ -375,13 +392,18 @@ private enum PanelLayout {
                 views.append(makeItemRow(item, layout: layout,
                                           shortcutBadge: shortcutBadge,
                                           iconChip: iconChip,
+                                          fontSize: fontSize,
                                           sink: &rows))
             case .folder(let name, let children):
                 views.append(makeFolderRow(name: name, children: children,
-                                            layout: layout, sink: &rows))
+                                            layout: layout,
+                                            fontSize: fontSize,
+                                            sink: &rows))
             case .placeholder(let label):
                 views.append(makePlaceholderRow(label: label,
-                                                 layout: layout, sink: &rows))
+                                                 layout: layout,
+                                                 fontSize: fontSize,
+                                                 sink: &rows))
             }
         }
 
@@ -410,13 +432,28 @@ private enum PanelLayout {
 
         let content = NSView()
         content.addSubview(bg)
+        // `outerMargin > 0` insets bg from content on all four sides
+        // so a decoration view layered above bg (chomp pellet, …) has
+        // room to draw OUTSIDE bg's rounded edge without being
+        // clipped by the panel window. The panel's frame is then
+        // sized to `stack.fittingSize + 2 * outerMargin` so the
+        // rendered bg footprint matches the no-margin case visually.
         NSLayoutConstraint.activate([
-            bg.topAnchor.constraint(equalTo: content.topAnchor),
-            bg.leadingAnchor.constraint(equalTo: content.leadingAnchor),
-            bg.trailingAnchor.constraint(equalTo: content.trailingAnchor),
-            bg.bottomAnchor.constraint(equalTo: content.bottomAnchor),
+            bg.topAnchor.constraint(equalTo: content.topAnchor,
+                                     constant: outerMargin),
+            bg.leadingAnchor.constraint(equalTo: content.leadingAnchor,
+                                         constant: outerMargin),
+            bg.trailingAnchor.constraint(equalTo: content.trailingAnchor,
+                                          constant: -outerMargin),
+            bg.bottomAnchor.constraint(equalTo: content.bottomAnchor,
+                                        constant: -outerMargin),
         ])
-        content.frame = NSRect(origin: .zero, size: stack.fittingSize)
+        content.frame = NSRect(origin: .zero,
+                                size: CGSize(
+                                    width: stack.fittingSize.width
+                                        + 2 * outerMargin,
+                                    height: stack.fittingSize.height
+                                        + 2 * outerMargin))
         // Apply the resolved theme to every row built above. Cheap —
         // each call re-runs `applyIdleStyle`, no view rebuild — and
         // keeping it post-build means the factory functions stay
@@ -508,21 +545,25 @@ private enum PanelLayout {
                                      layout: LauncherLayout,
                                      shortcutBadge: Bool,
                                      iconChip: Bool,
+                                     fontSize: Int,
                                      sink rows: inout [ItemRow]) -> NSView {
         if !item.dynamic.isEmpty {
             // Dynamic item — render as a folder-style row that
             // hover-expands into a child panel populated by running
             // `item.dynamic` (see `PanelController.openDynamicChild`).
             let icon = resolveItemIconWithFallback(item: item, layout: layout,
-                                                    iconChip: iconChip)
+                                                    iconChip: iconChip,
+                                                    fontSize: fontSize)
             let r = ItemRow(kind: .dynamic(item),
-                            label: item.name, icon: icon, layout: layout)
+                            label: item.name, icon: icon, layout: layout,
+                            fontSize: fontSize)
             rows.append(r)
             return r
         }
         let label = renderItemLabel(item, layout: layout)
         let icon = resolveItemIconWithFallback(item: item, layout: layout,
-                                                iconChip: iconChip)
+                                                iconChip: iconChip,
+                                                fontSize: fontSize)
         // Auto-derive a shortcut glyph for `.key(...)` actions so list
         // rows can show the underlying ⌘W next to the label — pure
         // documentation, never intercepts the actual key. Other action
@@ -537,7 +578,8 @@ private enum PanelLayout {
         let subtitle = layout == .list ? item.subtitle : ""
         let r = ItemRow(kind: .leaf(item), label: label, icon: icon,
                          layout: layout, shortcut: shortcut,
-                         subtitle: subtitle, iconAnim: item.iconAnim)
+                         subtitle: subtitle, iconAnim: item.iconAnim,
+                         fontSize: fontSize)
         rows.append(r)
         return r
     }
@@ -551,13 +593,15 @@ private enum PanelLayout {
     /// the item's `name` as a text glyph. Same trick the existing
     /// `resolveItemIcon` uses for emoji / short-text icon specs.
     private static func resolveItemIconWithFallback(
-        item: LauncherItem, layout: LauncherLayout, iconChip: Bool
+        item: LauncherItem, layout: LauncherLayout, iconChip: Bool,
+        fontSize: Int
     ) -> NSImage? {
         if !item.icon.isEmpty {
             return resolveItemIcon(item.icon,
                                     tint: item.tint,
                                     tintColors: item.tintColors,
-                                    iconChip: iconChip)
+                                    iconChip: iconChip,
+                                    fontSize: fontSize)
         }
         switch layout {
         case .list:
@@ -567,7 +611,9 @@ private enum PanelLayout {
             // buttons — these are always rendered as text, so they
             // benefit from the chip the same way an emoji icon would.
             let glyph = String(item.name.prefix(2))
-            return textIcon(glyph, pointSize: ItemRow.iconRenderPt,
+            return textIcon(glyph,
+                             pointSize: ItemRow.iconRenderPt(
+                                forFontSize: fontSize),
                              chip: iconChip)
         }
     }
@@ -575,18 +621,21 @@ private enum PanelLayout {
     private static func makeFolderRow(name: String,
                                        children: [PanelNode],
                                        layout: LauncherLayout,
+                                       fontSize: Int,
                                        sink rows: inout [ItemRow]) -> NSView {
         let r = ItemRow(kind: .folder(name: name, children: children),
-                        label: name, icon: nil, layout: layout)
+                        label: name, icon: nil, layout: layout,
+                        fontSize: fontSize)
         rows.append(r)
         return r
     }
 
     private static func makePlaceholderRow(label: String,
                                             layout: LauncherLayout,
+                                            fontSize: Int,
                                             sink rows: inout [ItemRow]) -> NSView {
         let r = ItemRow(kind: .placeholder, label: label, icon: nil,
-                         layout: layout)
+                         layout: layout, fontSize: fontSize)
         rows.append(r)
         return r
     }
@@ -597,9 +646,17 @@ private enum PanelLayout {
     /// the same panel. Only emitted in `.list` layout.
     private static func makeSectionHeaderRow(name: String,
                                               layout: LauncherLayout,
+                                              fontSize: Int,
                                               sink rows: inout [ItemRow]) -> NSView {
+        // Section headers keep their compact small-caps style at the
+        // same fixed point size regardless of `fontSize` — the band
+        // is a visual rest between item runs, not a title that
+        // should scale with body content. Passing fontSize through
+        // anyway so future tweaks have it available without another
+        // signature change.
         let r = ItemRow(kind: .sectionHeader(name), label: name,
-                         icon: nil, layout: layout)
+                         icon: nil, layout: layout,
+                         fontSize: fontSize)
         rows.append(r)
         return r
     }
@@ -737,8 +794,9 @@ private enum PanelLayout {
     static func resolveItemIcon(_ spec: String,
                                  tint: String = "",
                                  tintColors: [String] = [],
-                                 iconChip: Bool = false) -> NSImage? {
-        let pt: CGFloat = ItemRow.iconRenderPt
+                                 iconChip: Bool = false,
+                                 fontSize: Int = 13) -> NSImage? {
+        let pt: CGFloat = ItemRow.iconRenderPt(forFontSize: fontSize)
 
         // `app:<bundle-id>` — resolve to an installed app's icon via
         // the same AppIconCache the panel header uses. Works for
@@ -930,6 +988,14 @@ private final class PanelController {
     /// fringe on the border decoration, so the project default is
     /// no shadow. Child panels inherit from the root.
     private let shadow: Bool
+    /// Pac-man "pets" walking the panel's outer edge. Empty array
+    /// = no decoration. Theme-agnostic; child panels inherit from
+    /// the root.
+    private let linePets: [LinePet]
+    /// Title font size (points) — forwarded to every row built for
+    /// child panels (`openChild`) so submenus stay at the same text
+    /// scale as the root.
+    private let fontSize: Int
     /// Re-entry guard: a fade-out can dispatch async, and a global
     /// click or follow-up `dismiss()` could land mid-fade. Once `true`
     /// the panel is committed to its current teardown path and any
@@ -967,6 +1033,8 @@ private final class PanelController {
          borderCycleMs: Int = 4000,
          borderWidth: Int = 2,
          shadow: Bool = false,
+         linePets: [LinePet] = [],
+         fontSize: Int = 13,
          colors: TomeColors = .none,
          onDismissRoot: (() -> Void)? = nil) {
         self.layout = layout
@@ -979,6 +1047,8 @@ private final class PanelController {
         self.borderCycleMs = borderCycleMs
         self.borderWidth = borderWidth
         self.shadow = shadow
+        self.linePets = linePets
+        self.fontSize = fontSize
         self.colors = colors
         self.onDismissRoot = isRoot ? onDismissRoot : nil
 
@@ -1018,6 +1088,7 @@ private final class PanelController {
         // ramp without flicker. Auto-released when the panel orders
         // out (the layer's parent view goes away with the window).
         installBorderDecoration()
+        installChompDecoration()
         switch openAnim {
         case .off:
             panel.orderFront(nil)
@@ -1106,6 +1177,28 @@ private final class PanelController {
             // PR #111. Pair freely with any `[tome].theme`.
             layer.borderColor = border.staticColor.cgColor
         }
+    }
+
+    /// Install the line-pet overlay above `bg` when at least one pet
+    /// is configured. The view spans `content` (which is bg + the
+    /// outer margin set in `buildContent`) so the pets have room to
+    /// ride along bg's rounded edge without being clipped. Its own
+    /// 60 fps timer drives the orbit + per-pet animations; the timer
+    /// dies with the view (cleaned up in `viewWillMove(toWindow:)`),
+    /// so no explicit cleanup is needed here.
+    private func installChompDecoration() {
+        guard !linePets.isEmpty,
+              let content = panel.contentView,
+              let bg = content.subviews.first else { return }
+        panel.contentView?.layoutSubtreeIfNeeded()
+        let view = TomePetsView(
+            frame: content.bounds,
+            bgFrameInView: bg.frame,    // bg.frame is in content coords
+            cornerRadius: PanelLayout.cornerRadius,
+            pets: linePets,
+            petScale: max(1.0, CGFloat(fontSize) / 13.0))
+        view.autoresizingMask = [.width, .height]
+        content.addSubview(view)
     }
 
     /// Dismiss the entire tree from any level. Walks up to root, then
@@ -1224,9 +1317,12 @@ private final class PanelController {
         // parent's layout — a horizontal grandchild from a toolbar's
         // submenu would feel chaotic, and submenus typically benefit
         // from rows-with-labels anyway.
+        let petScale = max(1.0, CGFloat(fontSize) / 13.0)
         let (content, rows) = PanelLayout.buildContent(
             nodes: children, header: nil, layout: .list,
-            colors: colors)
+            fontSize: fontSize,
+            colors: colors,
+            outerMargin: linePets.isEmpty ? 0 : round(14 * petScale))
         let frame = PanelLayout.placeChild(
             rowFrameOnScreen: rowOnScreen,
             parentPanelFrame: panel.frame,
@@ -1243,6 +1339,8 @@ private final class PanelController {
             borderCycleMs: borderCycleMs,
             borderWidth: borderWidth,
             shadow: shadow,
+            linePets: linePets,
+            fontSize: fontSize,
             colors: colors)
         c.parent = self
         child = c
@@ -1281,6 +1379,230 @@ private final class PanelController {
             if ev.keyCode == 53 {
                 Task { @MainActor in self?.dismiss() }
             }
+        }
+    }
+}
+
+// MARK: - Pac-man line-pet overlay
+
+/// Click-through view that paints one or more pac-man "pets"
+/// (`pac-man`, `ghost`) walking the panel's rounded outline. Pets
+/// share a single 60 fps timer so the rim doesn't accumulate
+/// independent animation loops. Each pet's centre traces `bgFrame`
+/// directly; the configured outer margin gives them room to spill
+/// past the border. The leader is at the live time `t`; subsequent
+/// pets trail by a fixed gap (28 pt) so they read as a chase rather
+/// than evenly spaced.
+@MainActor
+private final class TomePetsView: NSView {
+    private let startedAt: CFTimeInterval = CACurrentMediaTime()
+    private let bgFrameInView: CGRect
+    private let cornerRadius: CGFloat
+    private let pets: [LinePet]
+    /// Scale factor multiplied into every pet's geometry (pellet
+    /// radius / ghost dimensions) and the chase gap. Derived from
+    /// `[tome.row].font-size` so a larger panel gets proportionally
+    /// larger pets — without this, the ghost shrinks visually as the
+    /// panel grows.
+    private let petScale: CGFloat
+    private var timer: Timer?
+
+    /// Travel speed of the chase along the rim. A typical panel
+    /// (~250 × 200 pt → perimeter ~900 pt) completes a lap in 5-6 s
+    /// at 160 pt/s. Speed stays constant across `petScale` — a
+    /// larger pet at the same pt/s reads as "the same pet, just
+    /// bigger", not as a slower one.
+    private static let petSpeedPtPerSec: CGFloat = 160
+
+    init(frame: NSRect, bgFrameInView: CGRect,
+         cornerRadius: CGFloat, pets: [LinePet],
+         petScale: CGFloat) {
+        self.bgFrameInView = bgFrameInView
+        self.cornerRadius = cornerRadius
+        self.pets = pets
+        self.petScale = petScale
+        super.init(frame: frame)
+        wantsLayer = true
+        autoresizingMask = [.width, .height]
+        translatesAutoresizingMaskIntoConstraints = true
+        // 60 fps. Timer holds the block, block captures self weakly
+        // — no retain cycle.
+        timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60,
+                                      repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.needsDisplay = true }
+        }
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
+
+    /// Stop the redraw timer when the view leaves its window — covers
+    /// panel dismissal cleanly. (`deinit` would have crossed the
+    /// main-actor isolation boundary.)
+    override func viewWillMove(toWindow newWindow: NSWindow?) {
+        super.viewWillMove(toWindow: newWindow)
+        if newWindow == nil {
+            timer?.invalidate()
+            timer = nil
+        }
+    }
+
+    override var isFlipped: Bool { false }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let now = CACurrentMediaTime() - startedAt
+        let path = bgFrameInView
+        guard path.width > 0, path.height > 0, !pets.isEmpty
+        else { return }
+        let perim = 2 * (path.width + path.height)
+        // Leader's traversed distance, wrapped to the perimeter.
+        let leader = CGFloat(now).truncatingRemainder(
+            dividingBy: perim / Self.petSpeedPtPerSec
+        ) * Self.petSpeedPtPerSec
+        // Chase gap also scales with `petScale` so the trailing pet
+        // doesn't get tangled into the leader at large sizes.
+        let chaseGap: CGFloat = 28 * petScale
+        for (i, pet) in pets.enumerated() {
+            // Lag each follower by the chase gap (mod the perimeter
+            // so a wrapped value lands cleanly on the path).
+            var pos = leader - CGFloat(i) * chaseGap
+            pos = pos.truncatingRemainder(dividingBy: perim)
+            if pos < 0 { pos += perim }
+            let (px, py, rot) = positionOnPerimeter(rect: path,
+                                                     distance: pos)
+            NSGraphicsContext.saveGraphicsState()
+            let tx = NSAffineTransform()
+            tx.translateX(by: px, yBy: py)
+            tx.rotate(byRadians: rot)
+            tx.concat()
+            switch pet {
+            case .pacMan: drawPacMan(now: now)
+            case .ghost:  drawGhost(now: now)
+            }
+            NSGraphicsContext.restoreGraphicsState()
+        }
+    }
+
+    /// Walk `rect`'s perimeter linearly (top → right → bottom → left)
+    /// and return the centre + facing rotation at the given distance.
+    /// Rotation is the local +x axis direction (= direction of
+    /// travel), so per-pet draw code can stay in a canonical
+    /// "facing-right" frame and the transform supplies the lap-aware
+    /// orientation.
+    private func positionOnPerimeter(rect r: CGRect,
+                                      distance t: CGFloat)
+        -> (x: CGFloat, y: CGFloat, rot: CGFloat) {
+        let topLen = r.width
+        let rightLen = r.height
+        let bottomLen = r.width
+        if t < topLen {
+            return (r.minX + t, r.maxY, 0)
+        } else if t < topLen + rightLen {
+            return (r.maxX, r.maxY - (t - topLen), -.pi / 2)
+        } else if t < topLen + rightLen + bottomLen {
+            return (r.maxX - (t - topLen - rightLen), r.minY, .pi)
+        } else {
+            return (r.minX,
+                    r.minY + (t - topLen - rightLen - bottomLen),
+                    .pi / 2)
+        }
+    }
+
+    /// Yellow pac-man wedge with the mouth opening / closing on a
+    /// ~0.25 s cycle, drawn centred on the current transform origin.
+    /// Geometry mirrors the cast-overlay variant.
+    private func drawPacMan(now: CFTimeInterval) {
+        let r: CGFloat = 7 * petScale
+        let chompPhase = 0.5 - 0.5 * cos(now * (2 * .pi / 0.25))
+        let openRad = chompPhase * (35.0 * .pi / 180.0)
+        let yellow = NSColor(calibratedRed: 1.0, green: 0.85,
+                             blue: 0.0, alpha: 1.0)
+        let p = NSBezierPath()
+        p.move(to: .zero)
+        p.appendArc(withCenter: .zero, radius: r,
+                     startAngle: CGFloat(openRad * 180 / .pi),
+                     endAngle: CGFloat(360 - openRad * 180 / .pi),
+                     clockwise: false)
+        p.close()
+        yellow.setFill(); p.fill()
+        NSColor.black.withAlphaComponent(0.35).setStroke()
+        p.lineWidth = 0.5; p.stroke()
+    }
+
+    /// Red Blinky-style ghost: rounded dome over a rectangular body
+    /// with a 3-wave scalloped skirt, two white eyes with blue
+    /// pupils pointing along the travel direction (= local +x).
+    /// Baseline silhouette is 14 × 16 pt at `petScale = 1`; multiplied
+    /// by `petScale` so a larger panel gets a larger ghost.
+    private func drawGhost(now: CFTimeInterval) {
+        let w: CGFloat = 14 * petScale
+        let h: CGFloat = 16 * petScale
+        // Skirt waves bob on a ~0.4 s cycle so the ghost reads as
+        // moving rather than stamped on the rim. Phase is the same
+        // for every ghost on the panel (one timer / one `now`).
+        // Amplitude scales with `petScale` so the bob stays
+        // proportional to the larger silhouette.
+        let bob = CGFloat(sin(now * (2 * .pi / 0.4))) * 0.6 * petScale
+
+        let halfW = w / 2
+        let halfH = h / 2
+        // Use the standing-still arcade ghost as the canonical
+        // orientation (dome on top, eyes facing local +x).
+        let red = NSColor(calibratedRed: 1.0, green: 0.0,
+                          blue: 0.10, alpha: 1.0)
+
+        // Outline path: dome (top half) → right side → 3-wave skirt
+        // → left side, closed.
+        let body = NSBezierPath()
+        body.move(to: CGPoint(x: -halfW, y: 0))
+        body.appendArc(withCenter: CGPoint(x: 0, y: 0),
+                        radius: halfW,
+                        startAngle: 180, endAngle: 0,
+                        clockwise: false)
+        body.line(to: CGPoint(x: halfW, y: -halfH + bob))
+        // 3 waves across the skirt.
+        let segments = 3
+        let segW = w / CGFloat(segments)
+        let waveDepth: CGFloat = 1.5 * petScale
+        for i in (0..<segments).reversed() {
+            let startX = -halfW + CGFloat(i + 1) * segW
+            let endX = -halfW + CGFloat(i) * segW
+            let midX = (startX + endX) / 2
+            body.curve(to: CGPoint(x: endX, y: -halfH + bob),
+                        controlPoint1: CGPoint(x: midX,
+                                               y: -halfH - waveDepth - bob),
+                        controlPoint2: CGPoint(x: midX,
+                                               y: -halfH - waveDepth - bob))
+        }
+        body.line(to: CGPoint(x: -halfW, y: 0))
+        body.close()
+        red.setFill(); body.fill()
+        NSColor.black.withAlphaComponent(0.35).setStroke()
+        body.lineWidth = 0.5 * petScale; body.stroke()
+
+        // Two eyes — white sclera + blue pupil, both nudged toward
+        // local +x to telegraph the chase direction. All sizes /
+        // offsets scale with `petScale` so the proportions stay
+        // identical to the baseline.
+        let eyeR: CGFloat = 2.0 * petScale
+        let pupilR: CGFloat = 1.0 * petScale
+        let eyeY: CGFloat = halfH * 0.35
+        let eyeDx: CGFloat = 2.6 * petScale
+        let pupilOffset: CGFloat = 0.7 * petScale
+        let eyeShift: CGFloat = 1.0 * petScale
+        for sign in [-1.0, 1.0] {
+            let cx = CGFloat(sign) * eyeDx + eyeShift  // both nudged +x
+            let sclera = NSBezierPath(ovalIn: CGRect(
+                x: cx - eyeR, y: eyeY - eyeR,
+                width: 2 * eyeR, height: 2 * eyeR))
+            NSColor.white.setFill(); sclera.fill()
+            let pupil = NSBezierPath(ovalIn: CGRect(
+                x: cx - pupilR + pupilOffset, y: eyeY - pupilR,
+                width: 2 * pupilR, height: 2 * pupilR))
+            NSColor(calibratedRed: 0.10, green: 0.18,
+                    blue: 0.95, alpha: 1.0).setFill()
+            pupil.fill()
         }
     }
 }
@@ -1364,20 +1686,39 @@ private final class ItemRow: NSView {
     /// `mouseEntered`. macOS 14+ only; older OS silently ignores.
     /// Empty (default) means static icon.
     private let iconAnim: String
+    /// Title font size (points). Scales the row's icon size and
+    /// height proportionally — the row reads at the user's preferred
+    /// text scale rather than truncating. Default 13 matches macOS'
+    /// menu baseline; `[tome.row].font-size` overrides it.
+    private let fontSize: CGFloat
+    /// Per-instance scale factor against the baseline (13 pt). Used
+    /// to derive icon box, row height, and `iconRenderPt` so the
+    /// whole row grows or shrinks coherently.
+    private var fontScale: CGFloat { fontSize / 13.0 }
     /// Bounding box in points for the icon view. The actual rendered
     /// SF Symbol is sized to `iconRenderPt` and scaled `.large`, so it
     /// fills the box optically.
-    private static let iconSize: CGFloat = 17
+    private var iconSize: CGFloat { round(17 * fontScale) }
     /// `pointSize` passed to `NSImage.SymbolConfiguration` — see the
     /// comment in `PanelLayout.resolveItemIcon` for why this is paired
     /// with `.medium` weight + `.large` scale.
     static let iconRenderPt: CGFloat = 17
-    private static let listRowHeight: CGFloat = 26
+    /// Per-row scaled equivalent of the static `iconRenderPt`. Used
+    /// by `PanelLayout.resolveItemIcon` callers that have a live
+    /// row's `fontSize` in hand (the bare `iconRenderPt` constant
+    /// remains the unscaled baseline for non-row icon callers like
+    /// the header).
+    static func iconRenderPt(forFontSize pt: Int) -> CGFloat {
+        round(17 * CGFloat(pt) / 13.0)
+    }
+    private var listRowHeight: CGFloat { round(26 * fontScale) }
     /// Taller row variant for items that supply a non-empty subtitle.
-    /// Just enough to fit the 11pt secondary caption under the title
-    /// without making single-line rows in the same panel feel
-    /// inconsistent — the icon stays centred, captions hang below.
-    private static let listRowHeightWithSubtitle: CGFloat = 38
+    /// Scales with `fontSize` like the single-line variant so a tall
+    /// `font-size` panel keeps captioned rows proportional to plain
+    /// rows.
+    private var listRowHeightWithSubtitle: CGFloat {
+        round(38 * fontScale)
+    }
     /// Section-header band height. Just enough to breathe a small-caps
     /// 10pt label without the band dominating the panel.
     private static let sectionHeaderHeight: CGFloat = 22
@@ -1397,13 +1738,15 @@ private final class ItemRow: NSView {
 
     init(kind: RowKind, label: String, icon: NSImage?,
          layout: LauncherLayout, shortcut: String = "",
-         subtitle: String = "", iconAnim: String = "") {
+         subtitle: String = "", iconAnim: String = "",
+         fontSize: Int = 13) {
         self.kind = kind
         self.layout = layout
         self.rawLabel = label
         self.shortcutText = shortcut
         self.subtitleText = subtitle
         self.iconAnim = iconAnim
+        self.fontSize = CGFloat(fontSize)
         super.init(frame: .zero)
 
         translatesAutoresizingMaskIntoConstraints = false
@@ -1462,7 +1805,7 @@ private final class ItemRow: NSView {
     private func installListLayout(label: String) {
         titleField.translatesAutoresizingMaskIntoConstraints = false
         titleField.stringValue = label
-        titleField.font = .menuFont(ofSize: 0)
+        titleField.font = .menuFont(ofSize: fontSize)
         titleField.lineBreakMode = .byTruncatingTail
         titleField.maximumNumberOfLines = 1
         titleField.cell?.usesSingleLineMode = true
@@ -1530,7 +1873,7 @@ private final class ItemRow: NSView {
         // stays centred so the visual baseline doesn't drift.
         let hasSubtitle = !subtitleText.isEmpty
         let rowHeight: CGFloat = hasSubtitle
-            ? Self.listRowHeightWithSubtitle : Self.listRowHeight
+            ? listRowHeightWithSubtitle : listRowHeight
 
         var verticalConstraints: [NSLayoutConstraint] = []
         if hasSubtitle {
@@ -1562,8 +1905,8 @@ private final class ItemRow: NSView {
 
             iconView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
             iconView.centerYAnchor.constraint(equalTo: centerYAnchor),
-            iconView.widthAnchor.constraint(equalToConstant: Self.iconSize),
-            iconView.heightAnchor.constraint(equalToConstant: Self.iconSize),
+            iconView.widthAnchor.constraint(equalToConstant: iconSize),
+            iconView.heightAnchor.constraint(equalToConstant: iconSize),
 
             titleField.leadingAnchor.constraint(equalTo: iconView.trailingAnchor,
                                                 constant: 8),
@@ -1582,8 +1925,8 @@ private final class ItemRow: NSView {
             heightAnchor.constraint(equalToConstant: Self.toolbarButtonSide),
             iconView.centerXAnchor.constraint(equalTo: centerXAnchor),
             iconView.centerYAnchor.constraint(equalTo: centerYAnchor),
-            iconView.widthAnchor.constraint(equalToConstant: Self.iconSize + 2),
-            iconView.heightAnchor.constraint(equalToConstant: Self.iconSize + 2),
+            iconView.widthAnchor.constraint(equalToConstant: iconSize + 2),
+            iconView.heightAnchor.constraint(equalToConstant: iconSize + 2),
         ])
     }
 
@@ -1596,7 +1939,7 @@ private final class ItemRow: NSView {
 
         titleField.translatesAutoresizingMaskIntoConstraints = false
         titleField.stringValue = label
-        titleField.font = .menuFont(ofSize: 0)
+        titleField.font = .menuFont(ofSize: fontSize)
         titleField.lineBreakMode = .byTruncatingTail
         titleField.maximumNumberOfLines = 1
         titleField.cell?.usesSingleLineMode = true
@@ -1607,8 +1950,8 @@ private final class ItemRow: NSView {
 
             iconView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
             iconView.centerYAnchor.constraint(equalTo: centerYAnchor),
-            iconView.widthAnchor.constraint(equalToConstant: Self.iconSize),
-            iconView.heightAnchor.constraint(equalToConstant: Self.iconSize),
+            iconView.widthAnchor.constraint(equalToConstant: iconSize),
+            iconView.heightAnchor.constraint(equalToConstant: iconSize),
 
             titleField.leadingAnchor.constraint(
                 equalTo: iconView.trailingAnchor, constant: 6),

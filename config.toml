@@ -443,17 +443,27 @@ anim-enabled = true
 #   sparkle   — twinkles around the card's perimeter
 #   marching  — dashed border that scrolls ("marching ants")
 #
-# `chomp` is an orthogonal bool — when true, an animated yellow pac-
-# man pellet orbits the firing card's perimeter, chomping as it goes.
-# Independent of `armed`, so the two stack (`armed = "pulse"` +
-# `chomp = true` breathes the card while a pellet circles it). Only
-# renders under `[cast].theme = "pac-man"`; under other themes the
-# flag is silently a no-op.
+# `line-pet` lists pac-man "pets" walking the firing card's outline,
+# chasing each other in array order (first leads, the rest trail at
+# a fixed gap). Mirrors `[tome.decoration].line-pet` on the menu
+# side so both surfaces share a vocabulary. Theme-agnostic — each
+# pet's silhouette is its own colour signature.
+#
+#   "pac-man" — yellow chomping wedge
+#   "ghost"   — red Blinky-style ghost (dome + eyes + skirt)
+#
+# Pet sizes scale with `font-size` below so a larger card gets
+# proportionally larger pets — the ghost reads cleanly even on a
+# 20-pt card.
+#
+# Retired in this PR: `chomp = true`. Equivalent to
+# `line-pet = ["pac-man"]` — the old key still parses but logs a
+# warning to /tmp/wand.log and is silently ignored.
 [cast.overlay.cards]
 match = "none"        # the firing card, on button-up
 unmatch = "none"      # cards that became unreachable mid-gesture
 armed = "none"        # live cue on the firing card mid-stroke
-chomp = false         # pac-man pellet orbiting the firing card
+line-pet = []         # pac-man pets orbiting the firing card
 
 # Card-text base font size in points. The arrow column rides at
 # `font-size + 1` so directional glyphs stay a hair taller than
@@ -643,6 +653,18 @@ theme = "default"
 # `[[tome.item]]`.
 [tome.row]
 
+# Title font size (points) for every `[[tome.item]]` row. Scales the
+# row's icon size and height proportionally so a larger font gets a
+# larger panel rather than truncated text. Default 13 matches macOS'
+# menu baseline (the pre-knob hardcoded size). Clamped 11..32.
+#
+#   11    — compact (system menu-bar size)
+#   13    — default
+#   16    — comfortable
+#   20    — large (pairs well with `line-pet` so the ghost / pellet
+#           silhouettes read at a glance)
+font-size = 13
+
 # Auto-display a right-aligned ⌘W-style glyph badge on `.list` rows
 # whose action is `action-type = "key"`. The badge is derived from
 # `action-keys` (`"cmd+shift+t"` → `"⌘⇧T"`) — purely documentation,
@@ -729,6 +751,24 @@ border-width = 2
 # CALayer-native border fix). Set `true` to restore the system menu
 # shadow.
 shadow = false
+
+# Pac-man "pets" that walk the panel's rounded outline. Default
+# `[]` (no pets). Theme-agnostic — each pet's silhouette is its own
+# colour signature, so they stand alongside any `[tome].theme`.
+# When more than one is listed they chase each other around the rim
+# in array order (first leads, the rest trail at a fixed gap).
+#
+#   "pac-man" — classic yellow chomping wedge
+#   "ghost"   — red Blinky-style ghost (dome + eyes + skirt)
+#
+# Pet sizes scale with `[tome.row].font-size` so a larger panel gets
+# proportionally larger pets — the ghost stays readable at any
+# font-size. `outer-margin` is auto-managed to match.
+#
+# Retired in this PR: `chomp = true`. Equivalent to
+# `line-pet = ["pac-man"]` — the old key still parses but logs a
+# warning to /tmp/wand.log and is silently ignored.
+line-pet = []
 
 
 # -----------------------------------------------------------------

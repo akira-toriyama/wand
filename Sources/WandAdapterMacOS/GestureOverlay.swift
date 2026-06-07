@@ -134,7 +134,7 @@ public final class GestureOverlay {
         view.effectUnmatch = ov.cards.unmatch
         view.effectMatch = ov.cards.match
         view.effectArmed = ov.cards.armed
-        view.chompEnabled = ov.cards.chomp
+        view.cardLinePets = ov.cards.linePets
         view.cardFontSize = CGFloat(ov.cards.fontSize)
         // Card colours come exclusively from the theme palette
         // (per-card-colour knobs retired in #116). Empty palette
@@ -268,10 +268,12 @@ private final class TrailView: NSView {
     /// the tick loop in `kickExitAnimationTick` so the animation
     /// keeps running even when the cursor holds still mid-gesture.
     var effectArmed: ArmedEffect = .none
-    /// pac-man chomp pellet on the firing card — independent of
-    /// `effectArmed` so it stacks on top of any chosen kind. No-op
-    /// outside the pac-man theme (`drawCard` skips the pellet draw).
-    var chompEnabled: Bool = false
+    /// Pac-man "pets" walking the firing card's outline. Each entry
+    /// is rendered every frame at a position lagging the previous
+    /// one in the array, so listing `["pac-man", "ghost"]` reads as
+    /// the ghost chasing pac-man. Empty array = no decoration.
+    /// Theme-agnostic — silhouettes carry their own colour.
+    var cardLinePets: [LinePet] = []
     /// Base font size for assist-card text (set live from
     /// `[cast.overlay.cards].font-size`). The arrow column rides at
     /// `cardFontSize + 1` so directional glyphs stay a hair taller
@@ -383,6 +385,15 @@ private final class TrailView: NSView {
     /// flashes again on the second drop.
     fileprivate var noMatchFlashStartedAt: TimeInterval?
     fileprivate static let noMatchFlashDurationMs: Double = 200
+    /// Wall-time of the most recent `true` → `false` transition that
+    /// HASN'T been cleared yet. Drives the pac-man "GAME OVER" arcade
+    /// overlay rendered above the stroke's origin point. Distinct
+    /// from `noMatchFlashStartedAt` (a brief 200 ms wall flash):
+    /// `gameOverStartedAt` lingers for the rest of the stroke (or
+    /// until the gesture re-matches a rule) so the "you're off-track
+    /// → no rule will fire on release" message stays visible. `nil`
+    /// when no GAME OVER is currently shown.
+    fileprivate var gameOverStartedAt: TimeInterval?
     fileprivate var hint: GestureHint?      // shape + reachable rules
     /// Icon of the target app the gesture is acting on, drawn as a
     /// small badge at `origin`. Tells the user "you're operating
@@ -526,9 +537,17 @@ private final class TrailView: NSView {
         }
         // Detect the true → false transition for the pac-man wall
         // flash. Re-armed each time so a re-match → no-match
-        // sequence flashes again on the second drop.
+        // sequence flashes again on the second drop. GAME OVER
+        // arcade overlay piggybacks on the same transition but
+        // lingers (cleared on re-match below or on stroke end) so
+        // the user keeps seeing "you're off-track" until they
+        // recover or release.
         if self.valid && !valid {
             noMatchFlashStartedAt = CACurrentMediaTime()
+            gameOverStartedAt = CACurrentMediaTime()
+        } else if !self.valid && valid {
+            // Recovered onto a matching shape — pull the overlay.
+            gameOverStartedAt = nil
         }
         self.valid = valid
         self.hint = hint
@@ -691,6 +710,7 @@ private final class TrailView: NSView {
         cardLayouts.removeAll()
         badgeLayout = nil
         noMatchFlashStartedAt = nil
+        gameOverStartedAt = nil
         // Re-roll the stroke seed so the NEXT stroke's `splatoon`-
         // mode trail picks a different team colour. The seed is also
         // ignored by static / rainbow / neon modes (they read time
@@ -802,6 +822,17 @@ private final class TrailView: NSView {
                     valid: valid,
                     isFinalHold: holdingFinal),
                 color: color, outline: pacManOutline)
+            // Arcade "GAME OVER" overlay — shown only when the stroke
+            // is currently off every rule (`gameOverStartedAt != nil`
+            // ⇒ valid went true→false at some point and hasn't
+            // recovered). Anchored at the assist-card position
+            // (`cursor + gap` upper-right) so it lands where the
+            // firing card would have sat had a rule been reachable.
+            // A brief scale-in pop on first appearance + 2 Hz blink
+            // sells the arcade respawn moment.
+            if let gameOverAt = gameOverStartedAt {
+                drawGameOverOverlay(cursor: cursor, startedAt: gameOverAt)
+            }
             NSGraphicsContext.restoreGraphicsState()
             return
         }
@@ -897,6 +928,103 @@ private final class TrailView: NSView {
             path.line(to: fp)
         }
         return path
+    }
+
+    /// Arcade "GAME OVER" banner anchored at the assist-card position
+    /// (upper-right diagonal off `cursor` by `gap`) so the message
+    /// lands where the firing card would have appeared had a rule
+    /// been reachable. Pac-man theme only — called from the pac-man
+    /// branch of `draw`, gated on `gameOverStartedAt != nil`.
+    ///
+    /// First ~140 ms after appearance: scale-in pop (0.7 → 1.0
+    /// ease-out cubic) so the message lands with arcade impact. After
+    /// the pop, a 2 Hz alpha blink (1.0 ↔ 0.55) sells the classic
+    /// arcade "respawn screen" feel. Colour is hot arcade-red on a
+    /// black backdrop with a yellow outline, matching pac-man's
+    /// danger palette.
+    private func drawGameOverOverlay(cursor: CGPoint,
+                                      startedAt: TimeInterval) {
+        let now = CACurrentMediaTime()
+        let elapsed = now - startedAt
+        // Scale-in pop over the first 140 ms.
+        let popDuration: Double = 0.14
+        let scale: CGFloat
+        if elapsed < popDuration {
+            let p = elapsed / popDuration
+            let eased = 1 - pow(1 - p, 3)  // ease-out cubic
+            scale = 0.7 + 0.3 * CGFloat(eased)
+        } else {
+            scale = 1.0
+        }
+        // 2 Hz blink after the pop settles.
+        let blinkAlpha: CGFloat = elapsed >= popDuration
+            ? (sin(elapsed * 2 * .pi * 2) > 0 ? 1.0 : 0.55)
+            : 1.0
+
+        let text = "GAME OVER" as NSString
+        let font = NSFont.monospacedSystemFont(ofSize: 22, weight: .bold)
+        let red = NSColor(srgbRed: 1.00, green: 0.10,
+                          blue: 0.10, alpha: 1.0)
+        let yellow = NSColor(srgbRed: 1.00, green: 0.92,
+                             blue: 0.0, alpha: 1.0)
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .foregroundColor: red,
+            .strokeColor: yellow,
+            // Negative stroke width fills + strokes; positive would
+            // hollow the glyph. Yellow halo around the red letters
+            // pops them off the dark backdrop.
+            .strokeWidth: -3.0,
+        ]
+        let textSize = text.size(withAttributes: attrs)
+
+        // Background card: rounded black rect inset around the text.
+        let padX: CGFloat = 14
+        let padY: CGFloat = 8
+        let cardSize = CGSize(width: textSize.width + 2 * padX,
+                               height: textSize.height + 2 * padY)
+        // Anchor at the assist-card position — `cursor + (gap, gap)`,
+        // matching the natural upper-right diagonal where the firing
+        // card sits in `layoutHUD`. Card-edge coords clamped to the
+        // overlay bounds so the banner never spills off-screen.
+        let gap: CGFloat = 24
+        var cardRect = CGRect(x: cursor.x + gap,
+                               y: cursor.y + gap,
+                               width: cardSize.width,
+                               height: cardSize.height)
+        cardRect.origin.x = min(max(cardRect.origin.x, 8),
+                                 bounds.maxX - cardSize.width - 8)
+        cardRect.origin.y = min(max(cardRect.origin.y, 8),
+                                 bounds.maxY - cardSize.height - 8)
+        let cx = cardRect.midX
+        let cy = cardRect.midY
+
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current?.cgContext.setAlpha(blinkAlpha)
+        let tx = NSAffineTransform()
+        tx.translateX(by: cx, yBy: cy)
+        tx.scaleX(by: scale, yBy: scale)
+        tx.concat()
+
+        // Local rect centered on the transform's origin — separate
+        // from `cardRect` above (in overlay-bounds coords) so the
+        // post-transform draw is centred regardless of clamping.
+        let drawRect = CGRect(x: -cardSize.width / 2,
+                               y: -cardSize.height / 2,
+                               width: cardSize.width,
+                               height: cardSize.height)
+        let card = NSBezierPath(roundedRect: drawRect,
+                                 xRadius: 6, yRadius: 6)
+        NSColor.black.withAlphaComponent(0.92).setFill()
+        card.fill()
+        yellow.setStroke()
+        card.lineWidth = 2
+        card.stroke()
+
+        let textOrigin = CGPoint(x: -textSize.width / 2,
+                                  y: -textSize.height / 2)
+        text.draw(at: textOrigin, withAttributes: attrs)
+        NSGraphicsContext.restoreGraphicsState()
     }
 
     /// Render a single-color trail. `normal` / `thin` / `thick` / `glow`
@@ -1701,10 +1829,10 @@ private final class TrailView: NSView {
         // Live armed cue on the firing card needs a steady tick too —
         // the per-frame transform / decoration is sampled at draw
         // time from `CACurrentMediaTime()`, so without a tick the
-        // animation freezes whenever the cursor holds still. `chomp`
-        // counts here too: an enabled pellet is a continuous motion
-        // even when no `armed` kind is set.
-        let armedActive = (effectArmed != .none || chompEnabled)
+        // animation freezes whenever the cursor holds still. Line-
+        // pets on the firing card count here too: any configured pet
+        // is a continuous motion even when no `armed` kind is set.
+        let armedActive = (effectArmed != .none || !cardLinePets.isEmpty)
             && origin != nil
             && !holdingFinal
             && cardLayouts.contains(where: { $0.kind == .fires })
@@ -1910,15 +2038,15 @@ private final class HUDContentView: NSView {
         guard let o = owner else { return }
 
         for c in o.cardLayouts {
-            // Armed cue + chomp pellet run only on the firing card
+            // Armed cue + line-pets run only on the firing card
             // mid-stroke; other cards always render at rest.
             // `holdingFinal` means the gesture already fired — past
             // the moment either cue makes sense.
             let live = c.kind == .fires && !o.holdingFinal
             let armed: ArmedEffect = live ? o.effectArmed : .none
-            let chomp = live && o.chompEnabled
+            let pets: [LinePet] = live ? o.cardLinePets : []
             drawCard(c, in: o, alpha: 1, dx: 0, dy: 0, scale: 1,
-                     armed: armed, chomp: chomp)
+                     armed: armed, linePets: pets)
         }
 
         // Exiting cards drawn on top so their final fade frame can't be
@@ -1932,7 +2060,7 @@ private final class HUDContentView: NSView {
                                    intensity: o.effectIntensity)
             drawCard(ex.layout, in: o,
                      alpha: s.alpha, dx: s.dx, dy: s.dy, scale: s.scale,
-                     armed: .none, chomp: false)
+                     armed: .none, linePets: [])
         }
 
         if let b = o.badgeLayout {
@@ -1983,12 +2111,12 @@ private final class HUDContentView: NSView {
     /// layers a live "would-fire-on-release" cue on top; `chomp`
     /// adds a pac-man pellet orbiting the rect, independent of
     /// `armed` so the two stack. Only the firing card mid-stroke
-    /// passes a non-`.none` armed or `true` chomp.
+    /// passes a non-`.none` armed or a non-empty `linePets`.
     private func drawCard(_ c: TrailView.CardLayout,
                           in o: TrailView,
                           alpha: CGFloat,
                           dx: CGFloat, dy: CGFloat, scale: CGFloat,
-                          armed: ArmedEffect, chomp: Bool) {
+                          armed: ArmedEffect, linePets: [LinePet]) {
         // Pac-man theme thickens every card border (the default
         // 1pt reads too thin against the neon-blue / rainbow
         // palette this theme uses); standard themes keep the 1pt
@@ -2074,13 +2202,20 @@ private final class HUDContentView: NSView {
         // they always read as the card's own accent.
         drawArmedDecoration(armed, on: c.rect, cornerR: cornerR,
                             accent: border, now: nowArmed, in: o)
-        // Chomp pellet sits on a separate flag so users can stack it
-        // on top of any `armed` kind. Pac-man theme only — under
-        // other themes the orbiting yellow pellet would clash with
-        // the palette, so the flag becomes a no-op there.
-        if chomp, o.pacMan != nil {
-            drawChompPellet(on: c.rect, cornerR: cornerR,
-                            accent: border, now: nowArmed)
+        // Line-pets walk the card's outline, independent of `armed`.
+        // Theme-agnostic: each pet's silhouette is its own colour
+        // signature (yellow pac-man / red ghost), so the array
+        // renders the same under any `[cast].theme`. Pets chase each
+        // other in array order — first leads, the rest trail by a
+        // fixed `petChaseGapPt` so the listing reads as a chase
+        // rather than evenly spaced dots. Pet sizes scale with
+        // `cardFontSize` so a larger card font gets proportionally
+        // larger pets — without this, the ghost shrinks visually as
+        // the card grows.
+        if !linePets.isEmpty {
+            let petScale = max(1.0, o.cardFontSize / 13.0)
+            drawCardLinePets(linePets, on: c.rect, now: nowArmed,
+                              petScale: petScale)
         }
         NSGraphicsContext.restoreGraphicsState()
     }
@@ -2177,74 +2312,148 @@ private final class HUDContentView: NSView {
         _ = o   // currently no kind needs the owner ref; held for future
     }
 
-    /// Yellow pellet travelling the perimeter of the firing card with
-    /// an animated chomp. Pac-man theme only; non-pac-man callers get
-    /// a softer halo via `drawArmedDecoration`'s fallback branch.
-    private func drawChompPellet(on rect: CGRect,
-                                  cornerR: CGFloat,
-                                  accent: NSColor,
-                                  now: CFTimeInterval) {
-        let pelletR: CGFloat = 7
-        // Inset the travel path slightly so the pellet rides on top
-        // of the card border without spilling far past it.
+    /// Pac-man "pets" walking the firing card's outline. Mirrors the
+    /// tome-side `TomePetsView.draw` shape — first entry leads, each
+    /// follower trails by a fixed pt-along-the-perimeter gap. The
+    /// pellet's centre traces the rect's outer edge directly, so its
+    /// visible half rides on top of the card border.
+    private func drawCardLinePets(_ pets: [LinePet],
+                                   on rect: CGRect,
+                                   now: CFTimeInterval,
+                                   petScale: CGFloat) {
+        // Travel just outside the card edge so the pet sits ON TOP
+        // of the border, not under it.
         let path = rect.insetBy(dx: -1, dy: -1)
+        guard path.width > 0, path.height > 0 else { return }
         let perim = 2 * (path.width + path.height)
-        let speed: CGFloat = 110  // pt/s
-        let t = CGFloat(now.truncatingRemainder(dividingBy:
-            Double(perim / speed)))
-            * speed
-        // Walk the rect perimeter counter-clockwise: top → right →
-        // bottom → left. Center the pellet at distance `t` along it.
-        let topLen = path.width
-        let rightLen = path.height
-        let bottomLen = path.width
-        var px: CGFloat = 0, py: CGFloat = 0
-        var rot: CGFloat = 0  // mouth-direction angle (radians)
-        if t < topLen {
-            px = path.minX + t
-            py = path.maxY
-            rot = 0   // mouth opens to +x
-        } else if t < topLen + rightLen {
-            px = path.maxX
-            py = path.maxY - (t - topLen)
-            rot = -.pi / 2  // mouth opens to -y
-        } else if t < topLen + rightLen + bottomLen {
-            px = path.maxX - (t - topLen - rightLen)
-            py = path.minY
-            rot = .pi   // mouth opens to -x
-        } else {
-            px = path.minX
-            py = path.minY + (t - topLen - rightLen - bottomLen)
-            rot = .pi / 2   // mouth opens to +y
+        let speed: CGFloat = 110  // pt/s — calmer than the tome
+                                   // rim so a small card doesn't
+                                   // look like the pet is sprinting
+        let leader = CGFloat(now).truncatingRemainder(
+            dividingBy: perim / speed
+        ) * speed
+        let chaseGap: CGFloat = 24 * petScale  // ~2× ghost width
+        for (i, pet) in pets.enumerated() {
+            var pos = leader - CGFloat(i) * chaseGap
+            pos = pos.truncatingRemainder(dividingBy: perim)
+            if pos < 0 { pos += perim }
+            let (px, py, rot) = positionOnRect(rect: path,
+                                                 distance: pos)
+            NSGraphicsContext.saveGraphicsState()
+            let tx = NSAffineTransform()
+            tx.translateX(by: px, yBy: py)
+            tx.rotate(byRadians: rot)
+            tx.concat()
+            switch pet {
+            case .pacMan: drawCardPacMan(now: now, petScale: petScale)
+            case .ghost:  drawCardGhost(now: now, petScale: petScale)
+            }
+            NSGraphicsContext.restoreGraphicsState()
         }
-        // Chomp: open angle 0 → 35° → 0 on a ~0.25s cycle.
+    }
+
+    /// Walk `rect`'s perimeter linearly (top → right → bottom → left)
+    /// and return the centre + travel-direction rotation. Each pet's
+    /// draw code can stay in a "facing-right" canonical frame; the
+    /// transform handles lap orientation.
+    private func positionOnRect(rect r: CGRect, distance t: CGFloat)
+        -> (x: CGFloat, y: CGFloat, rot: CGFloat) {
+        let topLen = r.width
+        let rightLen = r.height
+        let bottomLen = r.width
+        if t < topLen {
+            return (r.minX + t, r.maxY, 0)
+        } else if t < topLen + rightLen {
+            return (r.maxX, r.maxY - (t - topLen), -.pi / 2)
+        } else if t < topLen + rightLen + bottomLen {
+            return (r.maxX - (t - topLen - rightLen), r.minY, .pi)
+        } else {
+            return (r.minX,
+                    r.minY + (t - topLen - rightLen - bottomLen),
+                    .pi / 2)
+        }
+    }
+
+    /// Yellow pac-man wedge with the mouth chomp on a ~0.25 s cycle,
+    /// drawn centred on the current transform origin. Matches the
+    /// tome-side variant verbatim so both surfaces' pellets read as
+    /// the same character. `petScale` keeps it proportional to the
+    /// card's font size.
+    private func drawCardPacMan(now: CFTimeInterval,
+                                 petScale: CGFloat) {
+        let r: CGFloat = 7 * petScale
         let chompPhase = 0.5 - 0.5 * cos(now * (2 * .pi / 0.25))
         let openRad = chompPhase * (35.0 * .pi / 180.0)
         let yellow = NSColor(calibratedRed: 1.0, green: 0.85,
                              blue: 0.0, alpha: 1.0)
-        NSGraphicsContext.saveGraphicsState()
-        let tx = NSAffineTransform()
-        tx.translateX(by: px, yBy: py)
-        tx.rotate(byRadians: rot)
-        tx.concat()
-        // Filled wedge from (0,0) with mouth opening along +x.
-        let pellet = NSBezierPath()
-        pellet.move(to: .zero)
-        pellet.appendArc(withCenter: .zero, radius: pelletR,
-                          startAngle: CGFloat(openRad * 180 / .pi),
-                          endAngle: CGFloat(360
-                                            - openRad * 180 / .pi),
-                          clockwise: false)
-        pellet.close()
-        yellow.setFill()
-        pellet.fill()
-        // Thin outline so the pellet still reads against pac-man's
-        // already-yellow firing border.
+        let p = NSBezierPath()
+        p.move(to: .zero)
+        p.appendArc(withCenter: .zero, radius: r,
+                     startAngle: CGFloat(openRad * 180 / .pi),
+                     endAngle: CGFloat(360 - openRad * 180 / .pi),
+                     clockwise: false)
+        p.close()
+        yellow.setFill(); p.fill()
         NSColor.black.withAlphaComponent(0.35).setStroke()
-        pellet.lineWidth = 0.5
-        pellet.stroke()
-        NSGraphicsContext.restoreGraphicsState()
-        _ = accent  // accent unused under pac-man; pellet is theme-fixed
+        p.lineWidth = 0.5; p.stroke()
+    }
+
+    /// Red Blinky-style ghost: dome + 3-wave skirt + eyes pointing
+    /// along travel direction. Same geometry as `TomePetsView`'s
+    /// ghost so both surfaces ship identical silhouettes.
+    private func drawCardGhost(now: CFTimeInterval,
+                                petScale: CGFloat) {
+        let w: CGFloat = 14 * petScale
+        let h: CGFloat = 16 * petScale
+        let bob = CGFloat(sin(now * (2 * .pi / 0.4))) * 0.6 * petScale
+        let halfW = w / 2
+        let halfH = h / 2
+        let red = NSColor(calibratedRed: 1.0, green: 0.0,
+                          blue: 0.10, alpha: 1.0)
+        let body = NSBezierPath()
+        body.move(to: CGPoint(x: -halfW, y: 0))
+        body.appendArc(withCenter: CGPoint(x: 0, y: 0),
+                        radius: halfW,
+                        startAngle: 180, endAngle: 0,
+                        clockwise: false)
+        body.line(to: CGPoint(x: halfW, y: -halfH + bob))
+        let segments = 3
+        let segW = w / CGFloat(segments)
+        let waveDepth: CGFloat = 1.5 * petScale
+        for i in (0..<segments).reversed() {
+            let startX = -halfW + CGFloat(i + 1) * segW
+            let endX = -halfW + CGFloat(i) * segW
+            let midX = (startX + endX) / 2
+            body.curve(to: CGPoint(x: endX, y: -halfH + bob),
+                        controlPoint1: CGPoint(x: midX,
+                                               y: -halfH - waveDepth - bob),
+                        controlPoint2: CGPoint(x: midX,
+                                               y: -halfH - waveDepth - bob))
+        }
+        body.line(to: CGPoint(x: -halfW, y: 0))
+        body.close()
+        red.setFill(); body.fill()
+        NSColor.black.withAlphaComponent(0.35).setStroke()
+        body.lineWidth = 0.5 * petScale; body.stroke()
+        let eyeR: CGFloat = 2.0 * petScale
+        let pupilR: CGFloat = 1.0 * petScale
+        let eyeY: CGFloat = halfH * 0.35
+        let eyeDx: CGFloat = 2.6 * petScale
+        let pupilOffset: CGFloat = 0.7 * petScale
+        let eyeShift: CGFloat = 1.0 * petScale
+        for sign in [-1.0, 1.0] {
+            let cx = CGFloat(sign) * eyeDx + eyeShift
+            let sclera = NSBezierPath(ovalIn: CGRect(
+                x: cx - eyeR, y: eyeY - eyeR,
+                width: 2 * eyeR, height: 2 * eyeR))
+            NSColor.white.setFill(); sclera.fill()
+            let pupil = NSBezierPath(ovalIn: CGRect(
+                x: cx - pupilR + pupilOffset, y: eyeY - pupilR,
+                width: 2 * pupilR, height: 2 * pupilR))
+            NSColor(calibratedRed: 0.10, green: 0.18,
+                    blue: 0.95, alpha: 1.0).setFill()
+            pupil.fill()
+        }
     }
 
     /// Per-effect transform + alpha for an exiting card at `progress`
