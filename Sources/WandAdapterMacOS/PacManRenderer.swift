@@ -130,7 +130,13 @@ enum PacManRenderer {
         let interval = pelletInterval * scale
         let lag = faceLag * scale
         let radius = faceRadius * scale
-        let pelletFill = color.withAlphaComponent(0.9)
+        // Pellet fill dims to ~30% alpha when the in-progress
+        // gesture has fallen off every rule (`valid == false`),
+        // reading as "no more bonus to eat" / a stale crumb trail
+        // beside the chased ghost. The bright 90% alpha stays for
+        // the on-track case so the player still feels each pellet
+        // as a reward as they draw past it.
+        let pelletFill = color.withAlphaComponent(state.valid ? 0.9 : 0.3)
 
         // Single shared point sequence — corridor, pellets, and the
         // face-anchor walk all consume the same axis-snapped
