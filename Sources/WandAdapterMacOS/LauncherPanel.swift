@@ -67,10 +67,10 @@ extension LauncherBorder {
                                          green: 0xea / 255.0,
                                          blue:  0x00 / 255.0, alpha: 1)
         case .off, .rainbow:
-            // Animated / no-border kinds carry their colour another
-            // way; reaching here means the caller used the wrong
-            // accessor. Fall back loudly rather than render a silent
-            // mystery colour.
+            // Animated kinds (`.rainbow`) + the off case carry their
+            // colour another way. Reaching here means the caller
+            // used the wrong accessor — fall back loudly rather than
+            // render a silent mystery colour.
             assertionFailure(
                 "LauncherBorder.staticColor accessed for \(self)")
             return .controlAccentColor
@@ -150,11 +150,11 @@ public enum LauncherPanel {
         let header = layout == .list
             ? PanelLayout.makeHeaderSpec(for: target)
             : nil
-        // Pets ride the rim and need a margin around bg so the panel
-        // window doesn't clip their outer half. The base margin
-        // accommodates the largest pet silhouette (ghost; pac-man is
-        // smaller) at the baseline font; it scales with `fontSize`
-        // so a larger panel doesn't shrink the pet's relative size.
+        // Outer margin around bg — needed by any decoration that sits
+        // OUTSIDE the panel content rather than inside it. Two sources
+        // contribute. `line-pets` ride the rim and need ~14 pt
+        // (scaled by `fontSize`) so the panel window doesn't clip
+        // their outer half.
         let petScale = max(1.0, CGFloat(fontSize) / 13.0)
         let outerMargin: CGFloat = linePets.isEmpty
             ? 0 : round(14 * petScale)
@@ -1318,11 +1318,13 @@ private final class PanelController {
         // submenu would feel chaotic, and submenus typically benefit
         // from rows-with-labels anyway.
         let petScale = max(1.0, CGFloat(fontSize) / 13.0)
+        let outerMargin: CGFloat = linePets.isEmpty
+            ? 0 : round(14 * petScale)
         let (content, rows) = PanelLayout.buildContent(
             nodes: children, header: nil, layout: .list,
             fontSize: fontSize,
             colors: colors,
-            outerMargin: linePets.isEmpty ? 0 : round(14 * petScale))
+            outerMargin: outerMargin)
         let frame = PanelLayout.placeChild(
             rowFrameOnScreen: rowOnScreen,
             parentPanelFrame: panel.frame,
@@ -1382,6 +1384,7 @@ private final class PanelController {
         }
     }
 }
+
 
 // MARK: - Pac-man line-pet overlay
 

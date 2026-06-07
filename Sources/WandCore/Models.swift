@@ -247,6 +247,15 @@ public enum LauncherBorder: String, Sendable, Hashable, CaseIterable {
     /// Yellow PAC-MAN rim. Renamed from `pacman` in v8 to match
     /// `TomeTheme.pacMan`.
     case pacMan = "pac-man"
+
+    // Note: a `pacManTail` ("pac-man-tail") kind was explored and
+    // dropped before landing on main — the arcade maze-wall decoration
+    // (double blue line + pellets + bundled pet chase) didn't justify
+    // a dedicated multi-element kind, and `border = "neon"` +
+    // `[tome.decoration].line-pet = ["pac-man", "ghost"]` reproduces
+    // the same look via the two single-purpose axes. Stale
+    // `border = "pac-man-tail"` values fall through `parseEnum`'s
+    // standard "unrecognised value" warning and clamp to `.off`.
 }
 
 /// Launcher panel open-animation. Default `.off` (panel pops in

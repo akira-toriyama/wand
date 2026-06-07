@@ -723,6 +723,13 @@ close = "off"
 # Static kinds were lifted from each theme's old `borderColor` slot
 # (retired in PR #111 follow-up) so the same look survives but is
 # now decoupled from the colour theme — pick one rim, pick one theme.
+#
+# Retired: `border = "pac-man-tail"` (the multi-element maze-wall
+# decoration) was dropped because `border = "neon"` plus
+# `[tome.decoration].line-pet = ["pac-man", "ghost"]` reproduces the
+# same arcade look via two independent single-purpose axes. Stale
+# `"pac-man-tail"` values now log the standard "unrecognised" warning
+# and clamp to `.off`.
 border = "off"
 
 # Cycle period (ms) for any animated `border` kind — currently only
