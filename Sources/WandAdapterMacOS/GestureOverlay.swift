@@ -371,6 +371,31 @@ private final class TrailView: NSView {
     /// flashes again on the second drop.
     fileprivate var noMatchFlashStartedAt: TimeInterval?
     fileprivate static let noMatchFlashDurationMs: Double = 200
+
+    /// Arcade-style bonus-score popup: at the moment a pac-man cast
+    /// fires, one of `scoreBonusValues` rises from the firing
+    /// card's top edge over `scorePopupDurationMs`, fading from
+    /// full alpha to zero — the "+200" the arcade frame flashes
+    /// when Pac-Man eats a bonus tile. Held in a list so the popup
+    /// survives the `_actualReset()` that clears the cards; cleared
+    /// alongside cards when a NEW stroke starts.
+    fileprivate struct ScorePopup {
+        let position: CGPoint     // start point (firing card top)
+        let text: String          // e.g. "+200"
+        let startedAt: TimeInterval
+    }
+    fileprivate var scorePopups: [ScorePopup] = []
+    fileprivate static let scorePopupDurationMs: Double = 800
+    fileprivate static let scorePopupRiseDistance: CGFloat = 40
+    /// Bonus values used by the score popup. Mirrors the original
+    /// arcade Pac-Man bonus-tile scores (cherry / strawberry /
+    /// orange / apple / melon / Galaxian / bell / key), picked at
+    /// random per fire so successive gestures don't all show the
+    /// same number.
+    fileprivate static let scoreBonusValues = [
+        "+100", "+200", "+300", "+500",
+        "+700", "+1000", "+2000", "+5000",
+    ]
     fileprivate var hint: GestureHint?      // shape + reachable rules
     /// Icon of the target app the gesture is acting on, drawn as a
     /// small badge at `origin`. Tells the user "you're operating
@@ -627,6 +652,22 @@ private final class TrailView: NSView {
             hint = nil
             originIcon = nil
             badgeAppearedAt = nil
+            // Spawn arcade bonus-score popup BEFORE `cardLayouts` is
+            // cleared — we need the firing card's rect to position
+            // the floating "+N" against. Pac-man theme only;
+            // standard themes don't have a hook for arcade-style
+            // score readouts (yet).
+            if pacMan != nil,
+               let fires = cardLayouts.first(where: { $0.kind == .fires })
+            {
+                let value = Self.scoreBonusValues.randomElement()
+                    ?? "+200"
+                scorePopups.append(ScorePopup(
+                    position: CGPoint(x: fires.rect.midX,
+                                      y: fires.rect.maxY),
+                    text: value,
+                    startedAt: CACurrentMediaTime()))
+            }
             cardLayouts.removeAll()
             badgeLayout = nil
             holdingFinal = true
@@ -679,6 +720,7 @@ private final class TrailView: NSView {
         cardLayouts.removeAll()
         badgeLayout = nil
         noMatchFlashStartedAt = nil
+        scorePopups.removeAll(keepingCapacity: true)
         // Re-roll the stroke seed so the NEXT stroke's `splatoon`-
         // mode trail picks a different team colour. The seed is also
         // ignored by static / rainbow / neon modes (they read time
@@ -1663,6 +1705,7 @@ private final class TrailView: NSView {
         }()
         let needsTick = !exitingCards.isEmpty
             || holdingFinal
+            || !scorePopups.isEmpty
             || pacManWallFlashActive
         guard needsTick, !tickScheduled else { return }
         tickScheduled = true
@@ -1675,6 +1718,9 @@ private final class TrailView: NSView {
         tickScheduled = false
         let now = CACurrentMediaTime()
         exitingCards.removeAll { (now - $0.startedAt) >= $0.effect.duration }
+        scorePopups.removeAll {
+            (now - $0.startedAt) * 1000 >= Self.scorePopupDurationMs
+        }
         // Wall flash auto-expires by elapsed-time check at draw
         // time, but clearing the timestamp here is harmless and
         // lets `kickExitAnimationTick` drop the tick when the
@@ -1909,6 +1955,37 @@ private final class HUDContentView: NSView {
                         fraction: 1.0,
                         respectFlipped: true, hints: nil)
             NSGraphicsContext.restoreGraphicsState()
+        }
+
+        // Arcade bonus-score popups — rise + fade above the
+        // firing card on every pac-man fire. Standard themes
+        // don't spawn any, so the loop is a no-op outside pac-man.
+        // Drawn after the badge so they sit on top of every other
+        // HUD layer.
+        let popupNow = CACurrentMediaTime()
+        for popup in o.scorePopups {
+            let elapsed = popupNow - popup.startedAt
+            let totalSec = TrailView.scorePopupDurationMs / 1000
+            guard elapsed < totalSec else { continue }
+            let progress = CGFloat(elapsed / totalSec)
+            let alpha = 1.0 - progress
+            let offsetY = TrailView.scorePopupRiseDistance * progress
+            let attrs: [NSAttributedString.Key: Any] = [
+                .font: NSFont.monospacedSystemFont(
+                    ofSize: 18, weight: .bold),
+                .foregroundColor: NSColor(
+                    srgbRed: 1.00, green: 0.92, blue: 0.00,
+                    alpha: alpha),
+            ]
+            let attrStr = NSAttributedString(
+                string: popup.text, attributes: attrs)
+            let textSize = attrStr.size()
+            let textRect = CGRect(
+                x: popup.position.x - textSize.width / 2,
+                y: popup.position.y + offsetY,
+                width: textSize.width,
+                height: textSize.height)
+            attrStr.draw(in: textRect)
         }
     }
 
