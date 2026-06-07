@@ -1675,9 +1675,21 @@ private final class TrailView: NSView {
             return (CACurrentMediaTime() - t) * 1000
                 < Self.noMatchFlashDurationMs
         }()
+        // Pac-man stroke-active animation tick: the face's chomp
+        // cycle, the ghost's skirt + panic-jitter, the rainbow
+        // border on the firing card — all of those advance via
+        // `CACurrentMediaTime()` lookups in `draw`, so they
+        // freeze the moment the mouse stops emitting samples.
+        // Driving a tick while a pac-man stroke is in progress
+        // keeps them moving even when the user holds the button
+        // still mid-gesture.
+        let pacManStrokeActive = pacMan != nil
+            && origin != nil
+            && !holdingFinal
         let needsTick = !exitingCards.isEmpty
             || holdingFinal
             || pacManWallFlashActive
+            || pacManStrokeActive
         guard needsTick, !tickScheduled else { return }
         tickScheduled = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0 / 60) {
@@ -1698,12 +1710,19 @@ private final class TrailView: NSView {
             noMatchFlashStartedAt = nil
         }
         hudContent.needsDisplay = true
-        // The trail's fade alpha is sampled in `draw`, so it needs a
-        // redraw on each tick too — otherwise the fade is frozen at
-        // its first frame when no exit-card animation is running.
-        // The pac-man wall flash is also drawn by the trail, so
-        // arm the same redraw while the flash window is active.
-        if holdingFinal || noMatchFlashStartedAt != nil {
+        // The trail's fade alpha + face chomp + ghost jitter + wall
+        // flash are all sampled per-draw, so the trail needs a
+        // redraw on each tick too. Triggers cover: hold window,
+        // wall-flash window, AND any in-progress pac-man stroke
+        // (so the face / ghost / rainbow border keep animating
+        // even when the user holds the button still mid-gesture).
+        let pacManStrokeActive = pacMan != nil
+            && origin != nil
+            && !holdingFinal
+        if holdingFinal
+            || noMatchFlashStartedAt != nil
+            || pacManStrokeActive
+        {
             needsDisplay = true
         }
         kickExitAnimationTick()
