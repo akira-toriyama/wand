@@ -1053,45 +1053,54 @@ private final class PanelController {
         if isRoot { installDismissMonitors() }
     }
 
-    /// Lay a `CAShapeLayer` on the rounded panel background that
+    /// Lay a `CAShapeLayer` on a dedicated unmasked overlay view that
     /// strokes the configured `border` decoration. No-op for `.off`.
     ///
-    /// Hosting note: the stroke layer goes on `bg.layer` (the rounded,
-    /// `masksToBounds=true` background view) rather than
-    /// `contentView.layer`. Attaching to the contentView's layer puts
-    /// the stroke as a sibling sublayer of bg's implicit layer, and
-    /// the bg subview ends up painting OVER the stroke along the
-    /// panel's straight edges (the corners stay visible because bg's
-    /// rounded mask makes those regions transparent — the user saw
-    /// "4 corners only" in PR #111 follow-up). Hosting on bg.layer
-    /// places the stroke inside bg's mask, so the entire rounded rim
-    /// renders cleanly.
+    /// Hosting note: previous attempts placed the stroke either on
+    /// `contentView.layer` (bg's subview layer painted OVER the stroke
+    /// along straight edges — the "4 corners only" bug) or on
+    /// `bg.layer` (bg's rounded `masksToBounds` clipped the stroke,
+    /// leaving a ~1 px anti-aliased dark fringe between bg's rounded
+    /// edge and the stroke's outer side — the "黒い枠" issue). The
+    /// fix is a dedicated `rim` NSView added as a sibling of `bg` in
+    /// `contentView` *after* bg, so its implicit subview layer ends
+    /// up above bg in z-order. `rim` has no mask, so the stroke draws
+    /// without any clipping fringe; its geometry (path centerline at
+    /// `inset = lw / 2`, path corner radius = `cornerRadius - inset`)
+    /// makes the stroke's outer edge align with bg's rounded outer
+    /// edge by construction.
     private func installBorderDecoration() {
         guard border != .off else { return }
         // Force Auto Layout to resolve bg's constraints NOW (`bg` is
         // pinned to all four edges of contentView via constraints).
         // Without this, bg.bounds is still `.zero` at install time —
         // the panel hasn't been ordered front yet, so layout hasn't
-        // run, and the stroke ends up at a degenerate (0, 0, 0, 0)
-        // path that paints nothing. The previously visible "four
-        // corners only" rainbow rim was actually drawn against
-        // contentView.bounds (which buildContent sets explicitly)
-        // and only the bits poking outside bg's rounded mask showed
-        // through.
+        // run, and the stroke would end up at a degenerate path that
+        // paints nothing.
         panel.contentView?.layoutSubtreeIfNeeded()
-        guard let bg = panel.contentView?.subviews.first,
-              let host = bg.layer else { return }
+        guard let content = panel.contentView,
+              let bg = content.subviews.first else { return }
+        // Dedicated unmasked overlay sitting on top of bg. Auto-resize
+        // covers any later panel resizing (we don't currently resize
+        // post-show, but the autoresizing mask keeps it correct if
+        // that ever changes). `wantsLayer` builds a CALayer we can
+        // hang the CAShapeLayer on.
+        let rim = NSView(frame: bg.frame)
+        rim.wantsLayer = true
+        rim.autoresizingMask = [.width, .height]
+        rim.translatesAutoresizingMaskIntoConstraints = true
+        content.addSubview(rim)
+        guard let host = rim.layer else { return }
         let stroke = CAShapeLayer()
-        // Inset by half the line width so the centerline of the stroke
-        // sits at `(borderWidth / 2)` from the edge — the entire stroke
-        // is inside bg's rounded mask and reads as a clean rim.
+        // Path centerline at lw/2 from rim edge. Stroke half-width
+        // outward then aligns the stroke's outer edge with rim's
+        // (= bg's) outer edge; matching the corner radius by
+        // `corner - inset` keeps the outer curve concentric with bg's
+        // rounded mask, so the rim reads as one continuous edge.
         let lw = CGFloat(borderWidth)
         let inset = lw / 2
         let corner: CGFloat = PanelLayout.cornerRadius
-        // `bg.bounds` is now resolved (layoutSubtreeIfNeeded above)
-        // and locked at panel `frame.size`. The panel doesn't resize
-        // after show, so a static path is safe.
-        let rect = bg.bounds.insetBy(dx: inset, dy: inset)
+        let rect = rim.bounds.insetBy(dx: inset, dy: inset)
         stroke.path = CGPath(roundedRect: rect,
                               cornerWidth: max(0, corner - inset),
                               cornerHeight: max(0, corner - inset),
