@@ -443,17 +443,23 @@ anim-enabled = true
 #   sparkle   — twinkles around the card's perimeter
 #   marching  — dashed border that scrolls ("marching ants")
 #
-# `chomp` is an orthogonal bool — when true, an animated yellow pac-
-# man pellet orbits the firing card's perimeter, chomping as it goes.
-# Independent of `armed`, so the two stack (`armed = "pulse"` +
-# `chomp = true` breathes the card while a pellet circles it). Only
-# renders under `[cast].theme = "pac-man"`; under other themes the
-# flag is silently a no-op.
+# `line-pet` lists pac-man "pets" walking the firing card's outline,
+# chasing each other in array order (first leads, the rest trail at
+# a fixed gap). Mirrors `[tome.decoration].line-pet` on the menu
+# side so both surfaces share a vocabulary. Theme-agnostic — each
+# pet's silhouette is its own colour signature.
+#
+#   "pac-man" — yellow chomping wedge
+#   "ghost"   — red Blinky-style ghost (dome + eyes + skirt)
+#
+# Retired in this PR: `chomp = true`. Equivalent to
+# `line-pet = ["pac-man"]` — the old key still parses but logs a
+# warning to /tmp/wand.log and is silently ignored.
 [cast.overlay.cards]
 match = "none"        # the firing card, on button-up
 unmatch = "none"      # cards that became unreachable mid-gesture
 armed = "none"        # live cue on the firing card mid-stroke
-chomp = false         # pac-man pellet orbiting the firing card
+line-pet = []         # pac-man pets orbiting the firing card
 
 # Card-text base font size in points. The arrow column rides at
 # `font-size + 1` so directional glyphs stay a hair taller than

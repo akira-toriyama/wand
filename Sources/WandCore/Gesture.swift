@@ -386,13 +386,19 @@ public struct GestureOverlayCardsSpec: Sendable, Equatable {
     /// at button-up) — `armed` is a continuous, looping cue layered
     /// on top of the existing rainbow-border firing signal.
     public let armed: ArmedEffect
-    /// pac-man theme-specific: when `true`, an animated yellow pellet
-    /// orbits the firing card's perimeter, chomping as it travels.
-    /// Independent of `armed` (the in-card cue) so the two can stack
-    /// — e.g. `armed = .pulse` + `chomp = true` breathes the card
-    /// while a pellet circles it. No-op outside the pac-man theme;
-    /// the rest of the kinds still render.
-    public let chomp: Bool
+    /// Pac-man "pets" walking the firing card's rounded outline.
+    /// Empty `[]` (default) draws nothing. Theme-agnostic — each
+    /// pet's silhouette is its own colour signature, so they
+    /// stand alongside any `[cast].theme`. When more than one is
+    /// listed they chase each other around the card in array
+    /// order (first leads, the rest trail at a fixed gap).
+    ///
+    /// Mirrors `[tome.decoration].line-pet` on the menu side so the
+    /// two surfaces share a vocabulary. Replaces the `chomp = true`
+    /// bool that lived through PR #111 — config-side, the old key
+    /// now logs a deprecation warning and is silently ignored
+    /// (use `line-pet = ["pac-man"]` instead).
+    public let linePets: [LinePet]
     /// Card-text base font size in points. The arrow column rides at
     /// `fontSize + 1` so the directional glyphs stay a hair taller
     /// than the rule name (legibility on dense layouts). The card's
@@ -410,12 +416,12 @@ public struct GestureOverlayCardsSpec: Sendable, Equatable {
     public init(match: Effect = .none,
                 unmatch: Effect = .none,
                 armed: ArmedEffect = .none,
-                chomp: Bool = false,
+                linePets: [LinePet] = [],
                 fontSize: Int = 13) {
         self.match = match
         self.unmatch = unmatch
         self.armed = armed
-        self.chomp = chomp
+        self.linePets = linePets
         self.fontSize = fontSize
     }
 

@@ -303,7 +303,25 @@ public struct WandConfig: Sendable {
             cd, key: "unmatch", section: "cast.overlay.cards", default: .none)
         let cardsArmed: ArmedEffect = parseEnum(
             cd, key: "armed", section: "cast.overlay.cards", default: .none)
-        let cardsChomp = cd.bool("chomp", false)
+        // `chomp = true` retired in favour of the more general
+        // `line-pet = [...]` array (mirrors `[tome.decoration]`).
+        // Honour the old key for one release with a loud warning.
+        if cd.bool("chomp", false) {
+            Log.line("config: [cast.overlay.cards].chomp = true was"
+                     + " retired — use line-pet = [\"pac-man\"]"
+                     + " instead (value silently ignored)")
+        }
+        let cardsLinePets: [LinePet] =
+            cd.strings("line-pet").compactMap { raw in
+                let v = raw.lowercased()
+                if let pet = LinePet(rawValue: v) { return pet }
+                let valid = LinePet.allCases.map(\.rawValue)
+                    .sorted().joined(separator: ", ")
+                Log.line("config: [cast.overlay.cards].line-pet contains"
+                         + " unrecognised entry \"\(raw)\" — dropped"
+                         + " (valid: \(valid))")
+                return nil
+            }
         let cardsFontSize = clampInt(
             cd, key: "font-size", default: 13, lo: 8, hi: 32)
         // Card colours retired from `[cast.overlay.cards]` (#116) —
@@ -315,7 +333,7 @@ public struct WandConfig: Sendable {
         let cards = GestureOverlayCardsSpec(
             match: cardsMatch, unmatch: cardsUnmatch,
             armed: cardsArmed,
-            chomp: cardsChomp,
+            linePets: cardsLinePets,
             fontSize: cardsFontSize)
 
         let overlay = GestureOverlaySpec(
