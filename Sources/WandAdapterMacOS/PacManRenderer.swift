@@ -528,6 +528,15 @@ enum PacManRenderer {
     /// upright (arcade ghosts don't rotate); only the eyes look
     /// along `tangent`. Body colour flows from `color`
     /// (= `trailColorNoMatch`, typically red).
+    ///
+    /// The whole sprite picks up a `panic-jitter` offset
+    /// (Lissajous-style, ~`cell × 1.0` pt amplitude with co-prime
+    /// frequencies on each axis) — reads as the chased ghost
+    /// shaking from the "you've lost the rule" no-match state. The
+    /// amplitude is visibly larger than a sub-pixel tremor so the
+    /// jitter registers at a glance, but still capped to roughly
+    /// one pixel-grid cell so the sprite never tears free of the
+    /// pellet line it's chasing.
     private static func drawGhost(at p: CGPoint, tangent: CGPoint,
                                     radius: CGFloat, color: NSColor) {
         let cell = max(2, radius * pixelCellRatio)
@@ -544,10 +553,19 @@ enum PacManRenderer {
         // every ghost on screen pulses together.
         let legFrame = Int(CACurrentMediaTime() * ghostSkirtHz) & 1
 
+        // Panic-jitter: noticeable per-frame offset on the whole
+        // sprite body. Co-prime frequencies on x/y give a Lissajous-
+        // like chaotic shake that doesn't read as a sine wave (=
+        // too smooth) or a random twitch (= too violent).
+        let t = CACurrentMediaTime()
+        let jitterAmp = cell * 1.0
+        let jx = CGFloat(sin(t * 17.0)) * jitterAmp
+        let jy = CGFloat(sin(t * 13.0 + 1.0)) * jitterAmp
+
         NSGraphicsContext.saveGraphicsState()
         defer { NSGraphicsContext.restoreGraphicsState() }
         let xform = NSAffineTransform()
-        xform.translateX(by: p.x, yBy: p.y)
+        xform.translateX(by: p.x + jx, yBy: p.y + jy)
         xform.concat()
 
         color.withAlphaComponent(0.95).setFill()
