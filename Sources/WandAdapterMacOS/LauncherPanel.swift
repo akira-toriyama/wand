@@ -91,6 +91,7 @@ public enum LauncherPanel {
                                 openAnim: LauncherOpenAnim = .off,
                                 closeAnim: LauncherCloseAnim = .off,
                                 border: LauncherBorder = .off,
+                                borderCycleMs: Int = 4000,
                                 palette: TomeThemePalette = TomeThemePalette(),
                                 onSelect: @escaping (LauncherItem, Target) -> Void) {
         current?.dismiss()
@@ -121,6 +122,7 @@ public enum LauncherPanel {
             openAnim: openAnim,
             closeAnim: closeAnim,
             border: border,
+            borderCycleMs: borderCycleMs,
             colors: colors,
             onDismissRoot: { current = nil })
         current = controller
@@ -876,6 +878,11 @@ private final class PanelController {
     /// blur, with a hue-rotating CAKeyframeAnimation. Child panels
     /// inherit the root's value.
     private let border: LauncherBorder
+    /// Cycle period (ms) for any animated `border` kind — feeds the
+    /// CAKeyframeAnimation `duration` in `installBorderDecoration`.
+    /// Static border kinds ignore this value. Child panels inherit
+    /// from the root for visual consistency.
+    private let borderCycleMs: Int
     /// Re-entry guard: a fade-out can dispatch async, and a global
     /// click or follow-up `dismiss()` could land mid-fade. Once `true`
     /// the panel is committed to its current teardown path and any
@@ -910,6 +917,7 @@ private final class PanelController {
          openAnim: LauncherOpenAnim = .off,
          closeAnim: LauncherCloseAnim = .off,
          border: LauncherBorder = .off,
+         borderCycleMs: Int = 4000,
          colors: TomeColors = .none,
          onDismissRoot: (() -> Void)? = nil) {
         self.layout = layout
@@ -919,6 +927,7 @@ private final class PanelController {
         self.openAnim = openAnim
         self.closeAnim = closeAnim
         self.border = border
+        self.borderCycleMs = borderCycleMs
         self.colors = colors
         self.onDismissRoot = isRoot ? onDismissRoot : nil
 
@@ -1031,7 +1040,7 @@ private final class PanelController {
                     saturation: 0.85, brightness: 1.0,
                     alpha: 0.95).cgColor
         }
-        anim.duration = 4.0
+        anim.duration = Double(borderCycleMs) / 1000.0
         anim.repeatCount = .infinity
         anim.calculationMode = .linear
         stroke.add(anim, forKey: "rainbow")
@@ -1170,6 +1179,7 @@ private final class PanelController {
             openAnim: openAnim,
             closeAnim: closeAnim,
             border: border,
+            borderCycleMs: borderCycleMs,
             colors: colors)
         c.parent = self
         child = c

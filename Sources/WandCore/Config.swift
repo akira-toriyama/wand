@@ -397,8 +397,11 @@ public struct WandConfig: Sendable {
         let ld = doc.tables["tome.decoration"] ?? [:]
         let launcherDecorBorder: LauncherBorder = parseEnum(
             ld, key: "border", section: "tome.decoration", default: .off)
+        let launcherDecorCycleMs = clampInt(
+            ld, key: "cycle-ms", default: 4000, lo: 500, hi: 10000)
         let launcherDecoration = LauncherDecorationSpec(
-            border: launcherDecorBorder)
+            border: launcherDecorBorder,
+            cycleMs: launcherDecorCycleMs)
 
         // Warn when the user opted out of the launcher but still
         // configured non-default panel cosmetics — those only fire

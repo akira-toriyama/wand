@@ -688,11 +688,22 @@ close = "off"
 #
 #   "off"     — no border (default)
 #   "rainbow" — animated hue-rotating outline cycling around the
-#               panel's rounded rect (~4s loop)
+#               panel's rounded rect (~4s loop by default; period
+#               configurable via `cycle-ms` below)
 #
 # Future palette variants (vapor / pencil / solid hues) will land in
 # follow-ups under this same block.
 border = "off"
+
+# Cycle period (ms) for any animated `border` kind — currently only
+# `"rainbow"`. Smaller = faster strobe; larger = slower drift.
+# Static border kinds (`off`) ignore this value. Clamped 500..10000.
+#
+#   500   — strobing (very fast hue churn)
+#   1000  — flicker
+#   4000  — default; smooth visible cycle over a typical panel session
+#   8000  — slow drift, almost-solid feel
+cycle-ms = 4000
 
 
 # -----------------------------------------------------------------

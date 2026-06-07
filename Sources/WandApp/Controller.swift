@@ -212,6 +212,7 @@ public final class Controller: @unchecked Sendable {
             openAnim: cfg.launcher.animation.open,
             closeAnim: cfg.launcher.animation.close,
             border: cfg.launcher.decoration.border,
+            borderCycleMs: cfg.launcher.decoration.cycleMs,
             palette: cfg.launcher.theme.palette
         ) { [weak self] item, target in
             self?.counterLauncherDispatched += 1
@@ -291,6 +292,7 @@ public final class Controller: @unchecked Sendable {
             openAnim: cfg.launcher.animation.open,
             closeAnim: cfg.launcher.animation.close,
             border: cfg.launcher.decoration.border,
+            borderCycleMs: cfg.launcher.decoration.cycleMs,
             palette: cfg.launcher.theme.palette
         ) { [weak self] item, target in
             self?.counterShowMenuDispatched += 1

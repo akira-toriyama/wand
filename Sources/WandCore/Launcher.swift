@@ -440,9 +440,15 @@ public struct LauncherAnimationSpec: Sendable, Equatable {
 /// vapor / pencil variants that paint once and don't animate.
 public struct LauncherDecorationSpec: Sendable, Equatable {
     public let border: LauncherBorder
+    /// Cycle period (ms) for animated decorations — currently only the
+    /// `border = "rainbow"` outline. Clamped 500..10000. Static border
+    /// kinds (`off`) ignore it.
+    public let cycleMs: Int
 
-    public init(border: LauncherBorder = .off) {
+    public init(border: LauncherBorder = .off,
+                cycleMs: Int = 4000) {
         self.border = border
+        self.cycleMs = cycleMs
     }
 
     public static let `default` = LauncherDecorationSpec()
