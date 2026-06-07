@@ -1248,16 +1248,12 @@ private final class TrailView: NSView {
         }
         walkPath(origin: origin, interval: interval, step: plot)
 
-        // 3) Draw the face. Path too short for a meaningful lag (just
-        // pressed the button) → fall back to the cursor so the face
-        // is visible immediately instead of hiding for the first
-        // stretch of motion.
+        // 3) Draw the face only once the trail is long enough for a
+        // real lag — the face then emerges naturally `faceLag` pt
+        // behind the cursor instead of popping in glued to the
+        // cursor at button-down.
         if let anchor = faceAnchor {
             drawPacmanFace(at: anchor.point, tangent: anchor.tangent,
-                            radius: faceRadius,
-                            color: color, outline: outline)
-        } else {
-            drawPacmanFace(at: cursor, tangent: CGPoint(x: 1, y: 0),
                             radius: faceRadius,
                             color: color, outline: outline)
         }
