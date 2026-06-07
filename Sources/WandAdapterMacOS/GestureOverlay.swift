@@ -157,6 +157,10 @@ public final class GestureOverlay {
             ? nil
             : TrailColorMode.parse(palette.cardsFiresTextColor,
                                     fallback: .white)
+        view.cardFiresBorderMode = palette.cardsFiresBorderColor.isEmpty
+            ? nil
+            : TrailColorMode.parse(palette.cardsFiresBorderColor,
+                                    fallback: NSColor.white.withAlphaComponent(0.18))
         view.badgeBackgroundColor = palette.badgeBackgroundColor.isEmpty
             ? nil
             : NSColorParse.nsColor(palette.badgeBackgroundColor)
@@ -294,6 +298,15 @@ private final class TrailView: NSView {
     /// cards run yellow-on-black and the firing card flips to
     /// black-on-yellow.
     var cardFiresTextMode: TrailColorMode? = nil
+    /// Border colour mode for the firing card only (`nil` = inherit
+    /// `cardBorderMode`, same border as directional cards). Set
+    /// live from `[cast].theme`'s palette via
+    /// `cardsFiresBorderColor`. Lets a theme reserve one border
+    /// colour for the directional state and a different one for
+    /// the firing state — e.g. pac-man: blue maze-wall border on
+    /// directional cards, yellow body-matched border on the firing
+    /// tile so the blue stays the "approach" signal.
+    var cardFiresBorderMode: TrailColorMode? = nil
     /// Solid backdrop for the app-icon badge. `nil` (the default)
     /// keeps the historical frosted-blur behind the badge — the
     /// icon rides on whatever vibrancy the `[cast.overlay].blur-
@@ -1894,7 +1907,18 @@ private final class HUDContentView: NSView {
             fill.setFill()
             bg.fill()
         }
-        let border = o.cardBorderMode.currentColor(
+        // Firing-card border priority: `cardFiresBorderMode` (theme
+        // override for the firing state only) > `cardBorderMode`
+        // (shared default for every card). Empty fires-border mode
+        // falls back so themes that don't care about per-state
+        // borders keep the historical "one border colour" behaviour.
+        let borderMode: TrailColorMode
+        if c.kind == .fires, let firesBorder = o.cardFiresBorderMode {
+            borderMode = firesBorder
+        } else {
+            borderMode = o.cardBorderMode
+        }
+        let border = borderMode.currentColor(
             at: now, strokeSeed: o.strokeSeed,
             cyclePeriod: o.colorCyclePeriod)
         border.setStroke()

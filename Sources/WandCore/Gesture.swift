@@ -40,6 +40,14 @@ public struct CastThemePalette: Sendable, Equatable {
     /// — e.g. directional cards use yellow-on-black, firing card
     /// flips to black-on-yellow.
     public let cardsFiresTextColor: String
+    /// Border colour for the **firing** card only. Empty = inherit
+    /// `cardsBorderColor` (the historical behaviour, where the
+    /// firing card shares its border treatment with the directional
+    /// cards). Themes that want different border colours per card
+    /// state (e.g. pac-man: neon-blue maze-wall border on
+    /// directional cards but yellow body-matched border on the
+    /// firing tile) set this to a non-empty value.
+    public let cardsFiresBorderColor: String
     /// Burst particle colour. Empty = inherit `trail.color`. Same
     /// grammar as the trail colour fields.
     public let burstColor: String
@@ -61,6 +69,7 @@ public struct CastThemePalette: Sendable, Equatable {
                 cardsTextColor: String,
                 cardsFiresColor: String = "",
                 cardsFiresTextColor: String = "",
+                cardsFiresBorderColor: String = "",
                 burstColor: String = "",
                 badgeBackgroundColor: String = "") {
         self.trailColor = trailColor
@@ -71,6 +80,7 @@ public struct CastThemePalette: Sendable, Equatable {
         self.cardsTextColor = cardsTextColor
         self.cardsFiresColor = cardsFiresColor
         self.cardsFiresTextColor = cardsFiresTextColor
+        self.cardsFiresBorderColor = cardsFiresBorderColor
         self.burstColor = burstColor
         self.badgeBackgroundColor = badgeBackgroundColor
     }
@@ -191,25 +201,36 @@ public enum CastTheme: String, Sendable, CaseIterable {
             // canonical arcade yellow.
             //
             // Card scheme is a deliberate two-state design:
-            //   directional cards — black body + yellow text
-            //                       (the arcade backdrop)
+            //   directional cards — black body + yellow text +
+            //                       arcade-maze neon-blue border
+            //                       (matches the corridor walls;
+            //                       cards read as arcade maze tiles
+            //                       cut from the same palette).
             //   firing card       — INVERTED to yellow pellet body
-            //                       + black text, so the "fires on
-            //                       release" moment reads as the
-            //                       trail's yellow pellet finally
-            //                       latching onto its rule.
-            // Outline = arcade-maze neon blue (#2121ff). Under the
-            // pac-man theme this becomes the corridor's flanking
-            // wall colour rather than a per-pellet halo.
+            //                       + black text, with a YELLOW
+            //                       (body-matched) border so the
+            //                       blue maze-wall accent stays
+            //                       reserved for the "still on the
+            //                       playfield" directional state.
+            //                       The "fires on release" moment
+            //                       reads as the trail's yellow
+            //                       pellet finally latching onto
+            //                       its rule, distinct from the
+            //                       blue-bordered approach cards.
+            // Outline = arcade-maze neon blue (#2121ff). Same hue
+            // drives the corridor walls AND the directional cards'
+            // border, so HUD + trail share one signature blue
+            // across surfaces.
             return CastThemePalette(
                 trailColor: "#ffea00",
                 trailColorNoMatch: "#ff0000",
                 trailColorOutline: "#2121ff",
-                cardsBorderColor: "#ffea00",
+                cardsBorderColor: "#2121ff",
                 cardsBodyColor: "#000000",
                 cardsTextColor: "#ffea00",
                 cardsFiresColor: "#ffea00",
                 cardsFiresTextColor: "#000000",
+                cardsFiresBorderColor: "#ffea00",
                 badgeBackgroundColor: "#000000")
         }
     }
