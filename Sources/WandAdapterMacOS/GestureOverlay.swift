@@ -823,12 +823,13 @@ private final class TrailView: NSView {
             // Arcade "GAME OVER" overlay — shown only when the stroke
             // is currently off every rule (`gameOverStartedAt != nil`
             // ⇒ valid went true→false at some point and hasn't
-            // recovered). Anchored above the stroke's origin point so
-            // the message stays put even as the cursor wanders. A
-            // brief scale-in pop on first appearance + 2 Hz blink
+            // recovered). Anchored at the assist-card position
+            // (`cursor + gap` upper-right) so it lands where the
+            // firing card would have sat had a rule been reachable.
+            // A brief scale-in pop on first appearance + 2 Hz blink
             // sells the arcade respawn moment.
             if let gameOverAt = gameOverStartedAt {
-                drawGameOverOverlay(origin: origin, startedAt: gameOverAt)
+                drawGameOverOverlay(cursor: cursor, startedAt: gameOverAt)
             }
             NSGraphicsContext.restoreGraphicsState()
             return
@@ -927,17 +928,19 @@ private final class TrailView: NSView {
         return path
     }
 
-    /// Arcade "GAME OVER" banner anchored above the stroke's origin
-    /// point. Pac-man theme only — called from the pac-man branch of
-    /// `draw`, gated on `gameOverStartedAt != nil`.
+    /// Arcade "GAME OVER" banner anchored at the assist-card position
+    /// (upper-right diagonal off `cursor` by `gap`) so the message
+    /// lands where the firing card would have appeared had a rule
+    /// been reachable. Pac-man theme only — called from the pac-man
+    /// branch of `draw`, gated on `gameOverStartedAt != nil`.
     ///
     /// First ~140 ms after appearance: scale-in pop (0.7 → 1.0
     /// ease-out cubic) so the message lands with arcade impact. After
-    /// the pop, a 2 Hz alpha blink (1.0 ↔ 0.5) sells the classic
+    /// the pop, a 2 Hz alpha blink (1.0 ↔ 0.55) sells the classic
     /// arcade "respawn screen" feel. Colour is hot arcade-red on a
     /// black backdrop with a yellow outline, matching pac-man's
     /// danger palette.
-    private func drawGameOverOverlay(origin: CGPoint,
+    private func drawGameOverOverlay(cursor: CGPoint,
                                       startedAt: TimeInterval) {
         let now = CACurrentMediaTime()
         let elapsed = now - startedAt
@@ -978,9 +981,21 @@ private final class TrailView: NSView {
         let padY: CGFloat = 8
         let cardSize = CGSize(width: textSize.width + 2 * padX,
                                height: textSize.height + 2 * padY)
-        // Anchor 36 pt above origin (above the trail/face).
-        let cx = origin.x
-        let cy = origin.y + 36 + cardSize.height / 2
+        // Anchor at the assist-card position — `cursor + (gap, gap)`,
+        // matching the natural upper-right diagonal where the firing
+        // card sits in `layoutHUD`. Card-edge coords clamped to the
+        // overlay bounds so the banner never spills off-screen.
+        let gap: CGFloat = 24
+        var cardRect = CGRect(x: cursor.x + gap,
+                               y: cursor.y + gap,
+                               width: cardSize.width,
+                               height: cardSize.height)
+        cardRect.origin.x = min(max(cardRect.origin.x, 8),
+                                 bounds.maxX - cardSize.width - 8)
+        cardRect.origin.y = min(max(cardRect.origin.y, 8),
+                                 bounds.maxY - cardSize.height - 8)
+        let cx = cardRect.midX
+        let cy = cardRect.midY
 
         NSGraphicsContext.saveGraphicsState()
         NSGraphicsContext.current?.cgContext.setAlpha(blinkAlpha)
@@ -989,11 +1004,14 @@ private final class TrailView: NSView {
         tx.scaleX(by: scale, yBy: scale)
         tx.concat()
 
-        let cardRect = CGRect(x: -cardSize.width / 2,
+        // Local rect centered on the transform's origin — separate
+        // from `cardRect` above (in overlay-bounds coords) so the
+        // post-transform draw is centred regardless of clamping.
+        let drawRect = CGRect(x: -cardSize.width / 2,
                                y: -cardSize.height / 2,
                                width: cardSize.width,
                                height: cardSize.height)
-        let card = NSBezierPath(roundedRect: cardRect,
+        let card = NSBezierPath(roundedRect: drawRect,
                                  xRadius: 6, yRadius: 6)
         NSColor.black.withAlphaComponent(0.92).setFill()
         card.fill()

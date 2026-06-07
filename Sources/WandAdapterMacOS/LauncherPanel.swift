@@ -149,10 +149,17 @@ public enum LauncherPanel {
         let header = layout == .list
             ? PanelLayout.makeHeaderSpec(for: target)
             : nil
+        // The chomp pellet needs a margin around bg to ride along the
+        // border (the panel window clips at content.bounds, so without
+        // this the outer half of the pellet would be invisible). 10 pt
+        // gives the 7-pt-radius pellet a small breathing room beyond
+        // the rim. No other decoration currently asks for an outer
+        // margin; future ones can reuse the same axis.
+        let outerMargin: CGFloat = chomp ? 10 : 0
         let (content, rows) = PanelLayout.buildContent(
             nodes: nodes, header: header, layout: layout,
             shortcutBadge: shortcutBadge, iconChip: iconChip,
-            colors: colors)
+            colors: colors, outerMargin: outerMargin)
         let frame = PanelLayout.placeRoot(
             atCursor: cocoaPoint, contentSize: content.fittingSize)
         let controller = PanelController(
@@ -278,7 +285,8 @@ private enum PanelLayout {
                               layout: LauncherLayout,
                               shortcutBadge: Bool = true,
                               iconChip: Bool = true,
-                              colors: TomeColors = .none)
+                              colors: TomeColors = .none,
+                              outerMargin: CGFloat = 0)
         -> (view: NSView, rows: [ItemRow]) {
         // Backdrop: themed solid colour replaces the system frosted
         // blur when `colors.background` is set. The blur can't be
@@ -412,13 +420,28 @@ private enum PanelLayout {
 
         let content = NSView()
         content.addSubview(bg)
+        // `outerMargin > 0` insets bg from content on all four sides
+        // so a decoration view layered above bg (chomp pellet, …) has
+        // room to draw OUTSIDE bg's rounded edge without being
+        // clipped by the panel window. The panel's frame is then
+        // sized to `stack.fittingSize + 2 * outerMargin` so the
+        // rendered bg footprint matches the no-margin case visually.
         NSLayoutConstraint.activate([
-            bg.topAnchor.constraint(equalTo: content.topAnchor),
-            bg.leadingAnchor.constraint(equalTo: content.leadingAnchor),
-            bg.trailingAnchor.constraint(equalTo: content.trailingAnchor),
-            bg.bottomAnchor.constraint(equalTo: content.bottomAnchor),
+            bg.topAnchor.constraint(equalTo: content.topAnchor,
+                                     constant: outerMargin),
+            bg.leadingAnchor.constraint(equalTo: content.leadingAnchor,
+                                         constant: outerMargin),
+            bg.trailingAnchor.constraint(equalTo: content.trailingAnchor,
+                                          constant: -outerMargin),
+            bg.bottomAnchor.constraint(equalTo: content.bottomAnchor,
+                                        constant: -outerMargin),
         ])
-        content.frame = NSRect(origin: .zero, size: stack.fittingSize)
+        content.frame = NSRect(origin: .zero,
+                                size: CGSize(
+                                    width: stack.fittingSize.width
+                                        + 2 * outerMargin,
+                                    height: stack.fittingSize.height
+                                        + 2 * outerMargin))
         // Apply the resolved theme to every row built above. Cheap —
         // each call re-runs `applyIdleStyle`, no view rebuild — and
         // keeping it post-build means the factory functions stay
@@ -1117,17 +1140,21 @@ private final class PanelController {
     }
 
     /// Install the pac-man chomp pellet view above `bg` when
-    /// `chomp == true`. The view runs its own 60 fps timer to drive
-    /// the orbit + chomp animation; the timer dies with the view
-    /// (which goes away with the panel content view at teardown), so
-    /// no explicit cleanup is needed.
+    /// `chomp == true`. The view spans `content` (which is bg + the
+    /// outer margin set in `buildContent`) so the pellet has room to
+    /// ride along bg's rounded edge without being clipped. Its own
+    /// 60 fps timer drives the orbit + chomp; the timer dies with the
+    /// view (cleaned up in `viewWillMove(toWindow:)`), so no explicit
+    /// cleanup is needed here.
     private func installChompDecoration() {
         guard chomp,
               let content = panel.contentView,
               let bg = content.subviews.first else { return }
         panel.contentView?.layoutSubtreeIfNeeded()
-        let view = TomeChompView(frame: bg.frame,
-                                  cornerRadius: PanelLayout.cornerRadius)
+        let view = TomeChompView(
+            frame: content.bounds,
+            bgFrameInView: bg.frame,    // bg.frame is in content coords
+            cornerRadius: PanelLayout.cornerRadius)
         view.autoresizingMask = [.width, .height]
         content.addSubview(view)
     }
@@ -1250,7 +1277,8 @@ private final class PanelController {
         // from rows-with-labels anyway.
         let (content, rows) = PanelLayout.buildContent(
             nodes: children, header: nil, layout: .list,
-            colors: colors)
+            colors: colors,
+            outerMargin: chomp ? 10 : 0)
         let frame = PanelLayout.placeChild(
             rowFrameOnScreen: rowOnScreen,
             parentPanelFrame: panel.frame,
@@ -1321,10 +1349,18 @@ private final class PanelController {
 @MainActor
 private final class TomeChompView: NSView {
     private let startedAt: CFTimeInterval = CACurrentMediaTime()
+    /// `bg`'s rect expressed in this view's local coordinate space.
+    /// The pellet's orbit path follows this rect's outer edge — its
+    /// center traces the rounded perimeter so the visible pellet
+    /// rides ON the panel border, with room provided by the view's
+    /// outer margin (`content.bounds` is larger than `bg` when
+    /// `buildContent` is given `outerMargin > 0`).
+    private let bgFrameInView: CGRect
     private let cornerRadius: CGFloat
     private var timer: Timer?
 
-    init(frame: NSRect, cornerRadius: CGFloat) {
+    init(frame: NSRect, bgFrameInView: CGRect, cornerRadius: CGFloat) {
+        self.bgFrameInView = bgFrameInView
         self.cornerRadius = cornerRadius
         super.init(frame: frame)
         wantsLayer = true
@@ -1364,7 +1400,8 @@ private final class TomeChompView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         let now = CACurrentMediaTime() - startedAt
-        drawChompPellet(in: bounds, cornerR: cornerRadius, now: now)
+        drawChompPellet(on: bgFrameInView, cornerR: cornerRadius,
+                         now: now)
     }
 
     /// Pellet shape + position derived from `now`. Geometry mirrors
@@ -1374,13 +1411,17 @@ private final class TomeChompView: NSView {
     /// perimeter at a fixed pt/s speed. The two implementations don't
     /// share code yet because the gesture overlay's lives inside a
     /// larger draw context — that extraction is a tracked follow-up.
-    private func drawChompPellet(in rect: CGRect,
+    ///
+    /// The pellet's CENTER traces `bgFrame`'s rounded edge directly
+    /// (no inset). Since this view extends beyond `bgFrame` by the
+    /// configured outer margin, the outer half of the pellet has room
+    /// to spill past the border instead of being clipped — that's how
+    /// "走らせる感じ 少し外側" reads.
+    private func drawChompPellet(on bgFrame: CGRect,
                                   cornerR: CGFloat,
                                   now: CFTimeInterval) {
         let pelletR: CGFloat = 7
-        // Travel just outside the panel edge so the pellet rides ON
-        // TOP of the border rather than inside it.
-        let path = rect.insetBy(dx: pelletR, dy: pelletR)
+        let path = bgFrame
         guard path.width > 0, path.height > 0 else { return }
         let perim = 2 * (path.width + path.height)
         let speed: CGFloat = 160  // pt/s — a touch faster than the
