@@ -746,7 +746,8 @@ private final class TrailView: NSView {
                     lastDir: lastDir,
                     straightenOnTurn: straightenOnTurn,
                     strokeWidth: strokeWidth,
-                    valid: valid),
+                    valid: valid,
+                    isFinalHold: holdingFinal),
                 color: color, outline: outlineColor)
             NSGraphicsContext.restoreGraphicsState()
             return

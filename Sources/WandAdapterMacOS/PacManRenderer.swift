@@ -50,8 +50,17 @@ enum PacManRenderer {
         /// dimension below scales off this.
         let strokeWidth: CGFloat
         /// Match state. `false` swaps the pac-man face for the
-        /// chased red ghost sprite.
+        /// chased red ghost sprite AND dims the trail's pellets,
+        /// reading as "rule unreachable, no more bonus to eat".
         let valid: Bool
+        /// `true` while the trail is in its post-fire final-hold
+        /// frame (button-up has happened; the trail is held at
+        /// full alpha briefly before fading out). Used to drive
+        /// the wide-open chomp flourish on the face — the mouth
+        /// freezes wide open instead of cycling through the
+        /// normal 4-frame chomp, reading as "Pac-Man caught the
+        /// rule and is mid-bite".
+        let isFinalHold: Bool
     }
 
     // MARK: - Tuning constants
@@ -246,7 +255,8 @@ enum PacManRenderer {
         if let anchor = faceAnchor {
             if state.valid {
                 drawFace(at: anchor.point, tangent: anchor.tangent,
-                          radius: radius, color: color)
+                          radius: radius, color: color,
+                          isFinalHold: state.isFinalHold)
             } else {
                 drawGhost(at: anchor.point, tangent: anchor.tangent,
                            radius: radius, color: color)
@@ -448,14 +458,27 @@ enum PacManRenderer {
     /// `chompHz` instead of being smoothly interpolated, so the
     /// open/close cadence reads as arcade sprite-swapping rather
     /// than analog easing.
+    ///
+    /// `isFinalHold = true` freezes the mouth wide open instead of
+    /// cycling — used during the post-fire hold so the moment a
+    /// rule fires reads as Pac-Man "biting" the matched rule. The
+    /// trail's `finalHoldMs` window also keeps the sprite on
+    /// screen, so the wide-open frame stays visible for that
+    /// duration before the trail fades.
     private static func drawFace(at p: CGPoint, tangent: CGPoint,
-                                   radius: CGFloat, color: NSColor) {
-        let frames = chompFrames
-        let cyclePos = (CACurrentMediaTime() * chompHz)
-            .truncatingRemainder(dividingBy: 1)
-        let frameIdx = min(frames.count - 1,
-                            Int(cyclePos * Double(frames.count)))
-        let phase = frames[frameIdx]
+                                   radius: CGFloat, color: NSColor,
+                                   isFinalHold: Bool) {
+        let phase: CGFloat
+        if isFinalHold {
+            phase = 1.0
+        } else {
+            let frames = chompFrames
+            let cyclePos = (CACurrentMediaTime() * chompHz)
+                .truncatingRemainder(dividingBy: 1)
+            let frameIdx = min(frames.count - 1,
+                                Int(cyclePos * Double(frames.count)))
+            phase = frames[frameIdx]
+        }
         let mouthHalfRad = (mouthHalfAngleMinDeg
             + (mouthHalfAngleMaxDeg - mouthHalfAngleMinDeg) * phase)
             * .pi / 180
