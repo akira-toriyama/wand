@@ -248,11 +248,17 @@ A rule looks like this:
 ```toml
 [[cast.rule]]
 name = "close tab"
+icon = "SF:xmark.square"              # optional — drawn next to `name` in the assist card
 pattern = "DR"                        # down → right
 apps = ["*chrome*", "*safari*"]       # matches the window under the cursor
 action-type = "key"
 action-keys = "cmd+w"
 ```
+
+`icon` mirrors `[[tome.item]].icon` syntax — SF Symbols
+(`"SF:globe"`), emoji / text glyphs (`"🌐"`), installed app icons
+(`"app:com.apple.Safari"`), or a file path. Empty / omitted = no
+icon (the assist card just shows arrow + name).
 
 Pattern alphabet is `L U R D` (left / up / right / down) —
 **no consecutive duplicates**, because the recogniser coalesces
@@ -312,15 +318,15 @@ it eases out instead. Two hooks:
 
 ```toml
 [cast.overlay.cards]
-unmatch = "drop"        # cards that became unreachable mid-gesture
-match   = "fireworks"   # the firing card, on button-up
+cancel = "drop"         # cards that became unreachable mid-gesture
+fire   = "fireworks"    # the firing card, on button-up
 ```
 
-Available kinds: `none` (default), `drop`, `rise`, `slide-left`,
+Available kinds: `off` (default), `drop`, `rise`, `slide-left`,
 `slide-right`, `explode`, `vibrate`, `fade`, `fireworks`, `confetti`,
 and `random` (picks a different one each time a card disappears).
 Particle effects (`fireworks` / `confetti`) read most naturally on
-`match`.
+`fire`.
 
 Fire-moment effects that work independently of the overlay live in
 their own click-through windows:
@@ -355,8 +361,7 @@ wand                    # run as agent (CGEventTap loop)
 WAND_DEBUG=1 wand       # verbose log to /tmp/wand.log + stderr
 
 wand --validate         # parse config.toml, exit 0/2.  Warnings
-                          # (clamps, retired keys, collisions, typos)
-                          # print to stderr.
+                          # (clamps, collisions, typos) print to stderr.
 wand --validate --items <PATH>   # also validate an [[tome.item]] file
                                   # intended for --show-menu
 wand --doctor           # health check: Accessibility, config, daemon, tap

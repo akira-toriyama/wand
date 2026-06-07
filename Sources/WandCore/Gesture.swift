@@ -1,17 +1,9 @@
-// Gesture-family configuration containers. Mirrors the TOML
-// nesting: each `[gesture.<sub>]` (and `[gesture.<sub>.<sub>]`)
-// section maps to one struct. v6.0 explicitly splits previously
-// flat fields (`badge-enabled`, `trail-style`, `card-match`, ...)
-// into scoped sub-blocks so each field's responsibility is visible
-// from the section path alone.
-//
-// Consumers reach values via dotted paths on `WandConfig`:
+// Cast-family configuration containers. Mirrors the TOML nesting:
+// each `[cast.<sub>]` (and `[cast.<sub>.<sub>]`) section maps to one
+// struct. Consumers reach values via dotted paths on `WandConfig`:
 //   `cfg.overlay.trail.color`
-//   `cfg.overlay.cards.match`
+//   `cfg.overlay.cards.fire`
 //   `cfg.fire.decal.kind`
-// — no flat-prefix soup, no ambiguity about what `anim-enabled`
-// means (in v5 it could only have been the badge; v6 makes that
-// explicit via `[gesture.overlay.badge].anim-enabled`).
 
 import CoreGraphics
 import Foundation
@@ -52,16 +44,12 @@ public struct CastThemePalette: Sendable, Equatable {
     /// grammar as the trail colour fields.
     public let burstColor: String
     /// Solid backdrop colour for the app-icon badge. Empty = keep the
-    /// system frosted blur behind the badge (the historical look).
-    /// Non-empty draws a solid theme colour underneath the badge
-    /// icon — pairs with the matching tome `[tome].theme` so the
-    /// app icon doesn't visually float on a frosted patch while the
-    /// rest of the HUD reads as themed.
+    /// system frosted blur behind the badge. Non-empty draws a solid
+    /// theme colour underneath the badge icon — pairs with the
+    /// matching tome `[tome].theme` so the app icon doesn't visually
+    /// float on a frosted patch while the rest of the HUD reads as
+    /// themed.
     public let badgeBackgroundColor: String
-
-    // Note: a `decalColor` entry lived here through #114 but was
-    // retired alongside `[cast.fire.decal].color` — decal is always
-    // the Splatoon multi-team palette when enabled.
 
     public init(trailColor: String, trailColorNoMatch: String,
                 trailColorOutline: String,
@@ -111,19 +99,9 @@ public enum CastTheme: String, Sendable, CaseIterable {
     case mono
     case vapor
     /// **Special theme** — see the comment above. Locks the trail's
-    /// shape + straighten-on-turn and exposes `[cast.pac-man]
-    /// .size` instead of `[cast.overlay.trail].width`. Renamed from
-    /// `pacman` in v8 to align with the canonical "Pac-Man" spelling
-    /// (the v8 schema bump that also retired `TrailStyle.pacman`).
+    /// shape + straighten-on-turn and exposes `[cast.pac-man].size`
+    /// instead of `[cast.overlay.trail].width`.
     case pacMan = "pac-man"
-
-    // Note: a `paper` (light-background) theme lived here through
-    // #115 but was retired — wand's HUD overlays a dark blur on
-    // whatever's behind, so a light theme's dark trail blended into
-    // the dark backing and the bright cards floated as detached
-    // patches. Light themes need a different overlay model than what
-    // wand ships, so dropping the option beats shipping one that
-    // reads as broken.
 
     public var palette: CastThemePalette {
         switch self {
@@ -194,67 +172,16 @@ public enum CastTheme: String, Sendable, CaseIterable {
                 cardsTextColor: "#f8f8f2",
                 badgeBackgroundColor: "#282a36")
         case .pacMan:
-            // Pac-Man arcade palette: yellow Pac-Man on a black
-            // backdrop, red-ghost no-match. The yellow accent is
-            // paired with the locked-in pac-man trail render so the
-            // wedge face inherits the trail colour and ends up the
-            // canonical arcade yellow.
-            //
-            // Card scheme is "uniform body, border tells the
-            // state":
-            //   directional cards — black body + yellow text +
-            //                       arcade-maze neon-blue border
-            //                       (matches the corridor walls;
-            //                       cards read as arcade maze
-            //                       tiles cut from the same
-            //                       palette).
-            //   firing card       — SAME black body + yellow text
-            //                       as the directional cards, but
-            //                       with a **rainbow** animated
-            //                       border so the "fires on
-            //                       release" tile reads as the
-            //                       special-bonus glow against the
-            //                       solid-blue approach cards.
-            //                       Empty `cardsFiresColor` /
-            //                       `cardsFiresTextColor` means the
-            //                       firing card inherits the
-            //                       directional body / text — only
-            //                       the border distinguishes the
-            //                       two states.
-            // Outline = arcade-maze neon blue (#2121ff). Same hue
-            // drives the corridor walls AND the directional cards'
-            // border, so HUD + trail share one signature blue
-            // across surfaces.
-            return CastThemePalette(
-                trailColor: "#ffea00",
-                trailColorNoMatch: "#ff0000",
-                trailColorOutline: "#2121ff",
-                cardsBorderColor: "#2121ff",
-                cardsBodyColor: "#000000",
-                cardsTextColor: "#ffea00",
-                // Empty `cardsFiresColor` / `cardsFiresTextColor`
-                // make the firing card share the directional
-                // card's body / text — the layout code special-
-                // cases pac-man to leave the firing card's `fill`
-                // nil (= same frosted backdrop as directional)
-                // instead of the historical accent fallback. The
-                // rainbow border is then the sole "fires on
-                // release" signal.
-                cardsFiresColor: "",
-                cardsFiresTextColor: "",
-                cardsFiresBorderColor: "rainbow",
-                badgeBackgroundColor: "#000000")
+            return PacMan.castPalette
         }
     }
 }
 
 // MARK: - Recognition tuning
 
-/// `[gesture.recognition]` — knobs that tune how raw mouse samples
-/// turn into a direction string. Independent of any visual output;
-/// purely a recognition-quality axis. v5 had these flat under
-/// `[gesture]` next to `button` / `modifiers`, which conflated
-/// trigger identity with recognition behaviour.
+/// `[cast.recognition]` — knobs that tune how raw mouse samples turn
+/// into a direction string. Independent of any visual output; purely
+/// a recognition-quality axis.
 public struct GestureRecognitionSpec: Sendable, Equatable {
     /// Minimum displacement (px) before a new direction is emitted.
     /// Smaller = catches small flicks, bigger = tolerant of jitter.
@@ -289,7 +216,7 @@ public struct GestureRecognitionSpec: Sendable, Equatable {
 
 // MARK: - Overlay sub-blocks
 
-/// `[gesture.overlay.trail]` — the line itself.
+/// `[cast.overlay.trail]` — the line itself.
 public struct GestureOverlayTrailSpec: Sendable, Equatable {
     /// While the in-progress shape matches a rule (or is too short to
     /// match anything yet).
@@ -308,18 +235,11 @@ public struct GestureOverlayTrailSpec: Sendable, Equatable {
     /// the outline becomes the corridor's flanking wall colour
     /// (the theme palette already supplies neon-arcade blue).
     public let colorOutline: String
-    /// Stroke width in points. Clamped 1..40. Style presets may
-    /// adjust this — `thin` halves, `thick` doubles, etc.
+    /// Stroke width in points. Clamped 1..40.
     public let width: Int
-    /// Named preset bundling width × glow × dash. Shape only — colour
-    /// always comes from `color` / `colorNoMatch`.
+    /// Named line-shape preset. Shape only — colour always comes from
+    /// `color` / `colorNoMatch`.
     public let style: TrailStyle
-    // Note: an `arrowhead` (cursor-tip glyph) field lived here
-    // through #115 but was retired in favour of the `arrow`
-    // TrailStyle, which draws a continuous chevron chain along the
-    // whole path. The cursor-only tip wasn't expressive enough and
-    // duplicated direction information the path itself already
-    // carried.
     /// How long (ms) the trail lingers after a gesture fires.
     /// Clamped 0..2000; `0` = instant clear.
     public let finalHoldMs: Int
@@ -352,8 +272,8 @@ public struct GestureOverlayTrailSpec: Sendable, Equatable {
     public static let `default` = GestureOverlayTrailSpec()
 }
 
-/// `[gesture.overlay.badge]` — origin badge that shows the target
-/// app's icon at the gesture's start point.
+/// `[cast.overlay.badge]` — origin badge that shows the target app's
+/// icon at the gesture's start point.
 public struct GestureOverlayBadgeSpec: Sendable, Equatable {
     public let enabled: Bool
     /// Badge size in points. Clamped 32..96.
@@ -372,17 +292,16 @@ public struct GestureOverlayBadgeSpec: Sendable, Equatable {
     public static let `default` = GestureOverlayBadgeSpec()
 }
 
-/// `[gesture.overlay.cards]` — assist-card exit animations. These
-/// animate cards inside the overlay, so they require
-/// `[gesture.overlay].enabled = true`. Default `.none` (cards just
-/// vanish).
+/// `[cast.overlay.cards]` — assist-card exit animations. These animate
+/// cards inside the overlay, so they require `[cast.overlay].enabled
+/// = true`. Default `.off` (cards just vanish).
 public struct GestureOverlayCardsSpec: Sendable, Equatable {
     /// Animation when the firing card actually fires at button-up.
-    public let match: Effect
+    public let fire: Effect
     /// Animation when a card becomes unreachable mid-gesture.
-    public let unmatch: Effect
+    public let cancel: Effect
     /// Live decoration on the currently-armed firing card while the
-    /// stroke is still in progress. Distinct from `match` (one-shot
+    /// stroke is still in progress. Distinct from `fire` (one-shot
     /// at button-up) — `armed` is a continuous, looping cue layered
     /// on top of the existing rainbow-border firing signal.
     public let armed: ArmedEffect
@@ -391,35 +310,23 @@ public struct GestureOverlayCardsSpec: Sendable, Equatable {
     /// pet's silhouette is its own colour signature, so they
     /// stand alongside any `[cast].theme`. When more than one is
     /// listed they chase each other around the card in array
-    /// order (first leads, the rest trail at a fixed gap).
-    ///
-    /// Mirrors `[tome.decoration].line-pet` on the menu side so the
-    /// two surfaces share a vocabulary. Replaces the `chomp = true`
-    /// bool that lived through PR #111 — config-side, the old key
-    /// now logs a deprecation warning and is silently ignored
-    /// (use `line-pet = ["pac-man"]` instead).
+    /// order (first leads, the rest trail at a fixed gap). Mirrors
+    /// `[tome.decoration].line-pets` on the menu side so the two
+    /// surfaces share a vocabulary.
     public let linePets: [LinePet]
     /// Card-text base font size in points. The arrow column rides at
     /// `fontSize + 1` so the directional glyphs stay a hair taller
-    /// than the rule name (legibility on dense layouts). The card's
-    /// padding is fixed in pt, so a larger font expands the card
-    /// naturally rather than just changing typography. Clamped 8..32.
+    /// than the rule name. The card's padding is fixed in pt, so a
+    /// larger font expands the card naturally. Clamped 8..32.
     public let fontSize: Int
 
-    // Note: per-card-colour knobs (`borderColor` / `bodyColor` /
-    // `textColor` / `firesColor` / `firesTextColor`) lived here
-    // through #116 but were retired — card colours come exclusively
-    // from `[cast].theme` now, so the trail and the cards always
-    // read as a coordinated set. `applyConfig` resolves them
-    // straight from `cfg.theme.palette`.
-
-    public init(match: Effect = .none,
-                unmatch: Effect = .none,
-                armed: ArmedEffect = .none,
+    public init(fire: Effect = .off,
+                cancel: Effect = .off,
+                armed: ArmedEffect = .off,
                 linePets: [LinePet] = [],
                 fontSize: Int = 13) {
-        self.match = match
-        self.unmatch = unmatch
+        self.fire = fire
+        self.cancel = cancel
         self.armed = armed
         self.linePets = linePets
         self.fontSize = fontSize
@@ -428,7 +335,21 @@ public struct GestureOverlayCardsSpec: Sendable, Equatable {
     public static let `default` = GestureOverlayCardsSpec()
 }
 
-/// `[gesture.overlay]` — the whole HUD (trail + badge + cards) plus
+/// `[cast.overlay.no-match]` — banner shown at the cursor while the
+/// in-progress gesture is currently off every reachable rule. Default
+/// `kind = .off`. Decoupled from `[cast].theme` so the GAME OVER cue
+/// can pair with any theme.
+public struct GestureOverlayNoMatchSpec: Sendable, Equatable {
+    public let kind: NoMatchBanner
+
+    public init(kind: NoMatchBanner = .off) {
+        self.kind = kind
+    }
+
+    public static let `default` = GestureOverlayNoMatchSpec()
+}
+
+/// `[cast.overlay]` — the whole HUD (trail + badge + cards) plus
 /// shared toggles. `enabled = false` keeps the overlay window from
 /// being created at all (the daemon must restart to flip back on —
 /// surfaced as pending-restart in `--status`).
@@ -450,19 +371,22 @@ public struct GestureOverlaySpec: Sendable, Equatable {
     public let trail: GestureOverlayTrailSpec
     public let badge: GestureOverlayBadgeSpec
     public let cards: GestureOverlayCardsSpec
+    public let noMatch: GestureOverlayNoMatchSpec
 
     public init(enabled: Bool = true,
                 blurEnabled: Bool = true,
                 colorCycleMs: Int = 2000,
                 trail: GestureOverlayTrailSpec = .default,
                 badge: GestureOverlayBadgeSpec = .default,
-                cards: GestureOverlayCardsSpec = .default) {
+                cards: GestureOverlayCardsSpec = .default,
+                noMatch: GestureOverlayNoMatchSpec = .default) {
         self.enabled = enabled
         self.blurEnabled = blurEnabled
         self.colorCycleMs = colorCycleMs
         self.trail = trail
         self.badge = badge
         self.cards = cards
+        self.noMatch = noMatch
     }
 
     public static let `default` = GestureOverlaySpec()
@@ -470,17 +394,13 @@ public struct GestureOverlaySpec: Sendable, Equatable {
 
 // MARK: - Fire-moment sub-blocks
 
-/// `[gesture.fire.burst]` — omnidirectional particle explosion at
-/// the cursor when a rule fires. Lives in its own click-through
-/// window so the burst fires even when `[gesture.overlay].enabled =
-/// false`.
+/// `[cast.fire.burst]` — omnidirectional particle explosion at the
+/// cursor when a rule fires. Lives in its own click-through window so
+/// the burst fires even when `[cast.overlay].enabled = false`.
 public struct GestureFireBurstSpec: Sendable, Equatable {
     public let kind: TrailEndKind
-    /// Burst particle colour. Same three-mode grammar as
-    /// `[cast.fire.decal].color`:
-    ///   `""` / `"trail"`  — inherit `[cast.overlay.trail].color`
-    ///                       (the historical default — burst reads
-    ///                       as tied to the trail accent).
+    /// Burst particle colour:
+    ///   `""` / `"trail"`  — inherit `[cast.overlay.trail].color`.
     ///   `"splatoon"`     — pick a random hue from the Splatoon ink
     ///                       palette at each fire (Turf War feel).
     ///   `<hex / name>`   — any value `trail.color` accepts.
@@ -494,7 +414,7 @@ public struct GestureFireBurstSpec: Sendable, Equatable {
     public static let `default` = GestureFireBurstSpec()
 }
 
-/// `[gesture.fire.decal]` — post-fire ink decal at the cursor.
+/// `[cast.fire.decal]` — post-fire ink decal at the cursor.
 /// Independent of overlay; sits above every app in its own click-
 /// through window.
 public struct GestureFireDecalSpec: Sendable, Equatable {
@@ -504,12 +424,6 @@ public struct GestureFireDecalSpec: Sendable, Equatable {
     public let durationMs: Int
     /// Decal footprint in points. Clamped 10..500.
     public let size: Int
-
-    // Note: a `color` knob lived here through #114 but was retired —
-    // the decal's identity is the Splatoon-style multi-team ink, and
-    // letting users force it to a single colour fought the whole
-    // point of the shape. The dispatch path now hard-codes the
-    // Splatoon palette when `kind != .off`.
 
     public init(kind: DecalKind = .off,
                 durationMs: Int = 3000,
@@ -522,7 +436,7 @@ public struct GestureFireDecalSpec: Sendable, Equatable {
     public static let `default` = GestureFireDecalSpec()
 }
 
-/// `[gesture.fire]` — fire-moment cursor-anchored effects. Both
+/// `[cast.fire]` — fire-moment cursor-anchored effects. Both
 /// sub-blocks render in their own click-through windows and are
 /// triggered from `Controller.onGestureFire` regardless of the
 /// overlay's enabled state.
@@ -537,55 +451,4 @@ public struct GestureFireSpec: Sendable, Equatable {
     }
 
     public static let `default` = GestureFireSpec()
-}
-
-// MARK: - Pac-Man special theme
-
-/// Scale tier for the `pac-man` special theme. Replaces
-/// `[cast.overlay.trail].width` when `[cast].theme = "pac-man"` is
-/// picked — the arcade aesthetic is always a single line of pellets,
-/// so a free-form integer width fights the visual; three named tiers
-/// give the user real choices without misconfiguration.
-///
-/// `.m` is the calibrated baseline (matches the historical
-/// `width = 3` look). `.s` reads as compact arcade-pixel-art; `.l`
-/// goes chunky / over-the-top. Carried into `PacManRenderer` as a
-/// scale multiplier on pellet diameter, spacing, face radius,
-/// wall offset, and trail lag — every pac-man dimension scales
-/// proportionally so the three sizes stay self-consistent.
-public enum PacManSize: String, Sendable, Hashable, CaseIterable {
-    case s
-    case m
-    case l
-
-    /// Scale multiplier applied to every pac-man dimension. Tuned
-    /// so each step is visibly different at a glance without the
-    /// large tier crowding the corridor walls. `.m = 3.0` keeps
-    /// the v7 default look intact for users migrating from
-    /// `style = "pacman"` + `width = 3`.
-    public var scale: CGFloat {
-        switch self {
-        case .s: return 2.0
-        case .m: return 3.0
-        case .l: return 4.5
-        }
-    }
-}
-
-/// `[cast.pac-man]` — pac-man-special-theme knobs. Only read
-/// when `[cast].theme = "pac-man"`; the parser warns and ignores
-/// when the user sets this block under a different theme. The block
-/// stays a separate struct (not folded into `GestureOverlayTrailSpec`)
-/// so the "this only applies under one specific theme" scope is
-/// visible from the type alone — and so future special themes
-/// (`[cast.theme.invader]`, …) can follow the same shape without
-/// bleeding into the standard trail spec.
-public struct PacManSpec: Sendable, Equatable {
-    public let size: PacManSize
-
-    public init(size: PacManSize = .m) {
-        self.size = size
-    }
-
-    public static let `default` = PacManSpec()
 }

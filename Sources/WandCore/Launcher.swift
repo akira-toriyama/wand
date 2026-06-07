@@ -1,29 +1,16 @@
-// Launcher data model — the second trigger family wand exposes,
-// alongside the gesture trigger. A single button-press (default
+// Tome data model — the second trigger family wand exposes,
+// alongside the cast trigger. A single button-press (default
 // middle-click) pops up a contextual menu near the cursor; each
 // entry is one of the existing `Action` cases, so the dispatcher
 // stays trigger-agnostic.
 //
-// The TOML shape (`[[item]]`) is intentionally parallel to
-// `[[rules]]` minus `pattern` plus `group` for nesting:
-//
-//   [[item]]
-//   name = "タブを閉じる"
-//   apps = ["*chrome*", "*safari*"]
-//   action-type = "key"
-//   action-keys = "cmd+w"
-//
-//   [[item]]
-//   name = "なし"
-//   group = ["表示順序"]            # in the "表示順序" submenu
-//   separator-before = true
-//   action-type = "shell"
-//   action-cmd = "..."
+// The TOML shape (`[[tome.item]]`) is intentionally parallel to
+// `[[cast.rule]]` minus `pattern` plus `group` for nesting.
 
 import Foundation
 
-/// One row of the launcher menu. Same target / app-filter / action
-/// semantics as `Rule`, minus the gesture pattern, plus presentation
+/// One row of the tome menu. Same target / app-filter / action
+/// semantics as `Rule`, minus the cast pattern, plus presentation
 /// hints (`group`, `separatorBefore`).
 /// Template for the rows a `dynamic` item expands to at menu-open
 /// time. Each field can carry the `{line}` placeholder; the adapter
@@ -68,7 +55,7 @@ public struct LauncherItem: Sendable, Equatable {
     public let apps: [String]
     /// Optional section header — a short label drawn above this item
     /// when its value differs from the previous item's. Lets a long
-    /// `[[launcher.item]]` list split into labelled bands ("Editing",
+    /// `[[tome.item]]` list split into labelled bands ("Editing",
     /// "Window", "Tools") without nesting into submenus. Empty value
     /// (the default) inherits whatever the previous item used, so a
     /// run of items can share one header without repeating it on each
@@ -256,12 +243,6 @@ public struct TomeThemePalette: Sendable, Equatable {
     /// "tinted blur" rather than "themed surface".
     public let backgroundColor: String
 
-    // Note: a `borderColor` field lived here through PR #111 to draw a
-    // 1pt static frame in the theme's signature hue. Retired because
-    // it overlapped (and visually swallowed) the animated rim drawn
-    // by `[tome.decoration].border`. Panel outlines are now solely a
-    // `[tome.decoration]` axis concern.
-
     public init(accentColor: String = "",
                 accentTextColor: String = "",
                 textColor: String = "",
@@ -286,28 +267,17 @@ public enum TomeTheme: String, Sendable, CaseIterable {
     case mono
     case vapor
     /// Pairs with `[cast].theme = "pac-man"` for a coordinated arcade
-    /// look across both surfaces. Renamed from `pacman` in v8.
+    /// look across both surfaces.
     case pacMan = "pac-man"
-    /// Vivid rainbow palette inspired by facet's namesake — white
-    /// text on a deep violet-black backdrop, hot-rose hover accent,
-    /// electric-cyan static outline. Static palette: per-pixel hue
-    /// cycling isn't a fit (the panel doesn't redraw per-frame).
-    /// Pair with `[tome.decoration].border = "rainbow"` for an
-    /// animated cycling outline that brings the "rainbow" name to
-    /// life across the panel rim.
+    /// Vivid rainbow palette — white text on a deep violet-black
+    /// backdrop, hot-rose hover accent. Static palette: the panel
+    /// doesn't redraw per-frame. Pair with
+    /// `[tome.decoration].border = "rainbow"` for an animated cycling
+    /// outline that brings the "rainbow" name to life on the rim.
     case rainbow
     /// Polar-lights variant of `rainbow` — calmer pastel palette
-    /// (deep-navy backdrop, pastel-mint accent, gold rim, soft off-
-    /// white rows). Reads as the static cousin of `rainbow` for
-    /// users who want the same colour family without the high-
-    /// contrast vivid edge.
+    /// (deep-navy backdrop, pastel-mint accent, soft off-white rows).
     case aurora
-
-    // Dynamic per-frame colour cycling isn't a tome theme axis (the
-    // panel doesn't redraw frame-by-frame). The animated "rainbow"
-    // expression on this surface is `[tome.decoration].border =
-    // "rainbow"` — a `CAKeyframeAnimation` on the panel outline that
-    // pairs with the `.rainbow` theme above.
 
     public var palette: TomeThemePalette {
         switch self {
@@ -351,31 +321,17 @@ public enum TomeTheme: String, Sendable, CaseIterable {
                 textColor: "#f8f8f2",
                 backgroundColor: "#282a36")
         case .pacMan:
-            // Yellow PAC-MAN accent with black hover text on the
-            // canonical arcade black backdrop — pairs with
-            // `[cast].theme = "pac-man"` for a coordinated look
-            // across both surfaces.
-            return TomeThemePalette(
-                accentColor: "#ffea00",
-                accentTextColor: "#000000",
-                textColor: "#ffea00",
-                backgroundColor: "#000000")
+            return PacMan.tomePalette
         case .rainbow:
-            // facet's `rainbow` shape: deep violet-black backdrop,
-            // white rows, hot-rose hover (so the selection reads
-            // unambiguously even against the saturated bg). Pairs
-            // with `[tome.decoration].border = "rainbow"` for the
-            // animated outline that supplies the spectrum cycle —
-            // the panel rim is now solely a decoration concern.
+            // Deep violet-black backdrop, white rows, hot-rose hover.
+            // Pairs with `[tome.decoration].border = "rainbow"` for the
+            // animated cycling outline.
             return TomeThemePalette(
                 accentColor: "#ff3b6e",
                 accentTextColor: "#ffffff",
                 textColor: "#ffffff",
                 backgroundColor: "#1a0a2e")
         case .aurora:
-            // Polar-lights variant: deep navy backdrop, pastel-mint
-            // hover, off-white rows. Calmer counterpart to `rainbow`
-            // — same colour family, softer contrast.
             return TomeThemePalette(
                 accentColor: "#88e1c9",
                 accentTextColor: "#0a0e27",
@@ -385,10 +341,8 @@ public enum TomeTheme: String, Sendable, CaseIterable {
     }
 }
 
-/// `[launcher.row]` — per-row visual conventions that affect every
-/// `[[launcher.item]]` uniformly. Split out of the bare `[launcher]`
-/// block in v6 so the trigger-identity fields (button / modifiers /
-/// enabled / layout) don't mix with row cosmetics.
+/// `[tome.row]` — per-row visual conventions that affect every
+/// `[[tome.item]]` uniformly.
 public struct LauncherRowSpec: Sendable, Equatable {
     /// Auto-derive a `⌘W`-style glyph badge from an item's
     /// `action-keys` and render it right-aligned on `.list` rows
@@ -418,10 +372,8 @@ public struct LauncherRowSpec: Sendable, Equatable {
     public static let `default` = LauncherRowSpec()
 }
 
-/// `[launcher.animation]` — temporal panel transitions (open/close).
-/// Split from v5's `[launcher.effect]` because animations and the
-/// static `border` decoration sit on different axes — one moves in
-/// time, the other paints once. v6 makes that axis split explicit.
+/// `[tome.animation]` — temporal panel transitions (open/close).
+/// Distinct from `[tome.decoration]` (which paints once and stays).
 public struct LauncherAnimationSpec: Sendable, Equatable {
     public let open: LauncherOpenAnim
     public let close: LauncherCloseAnim
@@ -435,9 +387,7 @@ public struct LauncherAnimationSpec: Sendable, Equatable {
     public static let `default` = LauncherAnimationSpec()
 }
 
-/// `[launcher.decoration]` — static panel decoration. Currently just
-/// the `border`, but the section name leaves room for solid hues /
-/// vapor / pencil variants that paint once and don't animate.
+/// `[tome.decoration]` — static panel decoration that paints once.
 public struct LauncherDecorationSpec: Sendable, Equatable {
     public let border: LauncherBorder
     /// Cycle period (ms) for animated decorations — currently only the
@@ -457,10 +407,7 @@ public struct LauncherDecorationSpec: Sendable, Equatable {
     /// `[]` (no pets). Theme-agnostic — each pet's silhouette is
     /// baked in, so they stand alongside any `[tome].theme`. When
     /// more than one is configured they chase each other in array
-    /// order around the rim. Replaces the `chomp = true` boolean
-    /// retired in this PR — config-side, `chomp = true` now logs a
-    /// warning and is silently ignored (use `line-pet = ["pac-man"]`
-    /// instead).
+    /// order around the rim.
     public let linePets: [LinePet]
 
     public init(border: LauncherBorder = .off,
@@ -478,15 +425,11 @@ public struct LauncherDecorationSpec: Sendable, Equatable {
     public static let `default` = LauncherDecorationSpec()
 }
 
-/// The whole `[launcher]` block. `trigger` lives here (not the top-
-/// level `[trigger]` which gestures own) so each family has its own
-/// button. `enabled = false` keeps the tap from being installed at
-/// all — same opt-out shape as `overlay.enabled`. `layout` is the
-/// orientation primitive (single value, kept inline).
-///
-/// Row cosmetics, panel animations, and static decorations live in
-/// dedicated sub-blocks (`row` / `animation` / `decoration`) so each
-/// concern is visible from the section path alone.
+/// The whole `[tome]` block. `trigger` lives here (not at top level)
+/// so each trigger family has its own button. `enabled = false` keeps
+/// the tap from being installed at all. Row cosmetics, panel
+/// animations, and static decorations live in dedicated sub-blocks
+/// (`row` / `animation` / `decoration`).
 public struct LauncherSpec: Sendable, Equatable {
     public let enabled: Bool
     public let trigger: Trigger
@@ -528,7 +471,7 @@ public struct LauncherSpec: Sendable, Equatable {
 
 /// Result of parsing a standalone items file (the `--show-menu
 /// --items <PATH>` input). Carries both the items and the file's
-/// optional `[launcher].layout` declaration so the external-trigger
+/// optional `[tome].layout` declaration so the external-trigger
 /// path can pick the right UI without consulting the main config.
 public struct LauncherItemsFile: Sendable, Equatable {
     public let layout: LauncherLayout

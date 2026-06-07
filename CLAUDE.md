@@ -12,9 +12,10 @@ trigger, excludes, …), **not** the `Don't call it:` synonyms.
 Adding or renaming a term lands in the same PR as the code change.
 
 Swift type names (`LauncherSpec`, `LauncherPanel`, `LauncherSource`,
-`GestureOverlay`, `cfg.launcher`, …) intentionally retain the
-pre-v7 names — the v7 rename (#100) covered TOML keys and user-
-facing strings only; an internal-type rename is a tracked follow-up.
+`GestureOverlay`, `cfg.launcher`, …) intentionally retain the pre-
+rename names — the TOML / user-facing rename to `cast` / `tome`
+covered config keys and strings only; an internal-type rename is a
+tracked follow-up.
 
 ## What this is
 
@@ -392,11 +393,21 @@ AX observation, anything future) goes through this checklist:
   path.
 - **Breaking schema changes are OK when adding / reshaping
   features.** wand is config.toml-driven with no users beyond
-  whoever ran the `curl` template line, and we ship migration
-  warnings via `Log.line` (visible through `wand --validate`).
-  Don't preserve a retired key shape with shims; rename + warn,
-  and update the bundled `config.toml` in the same PR. The v5 /
-  v6 restructures (#90, #97) are the established pattern.
+  whoever ran the `curl` template line. Don't preserve retired
+  key shapes with shims or migration warnings — rename in place,
+  drop the old form, and update the bundled `config.toml` in the
+  same PR.
+- **Value-convention discipline.** Three shapes carry distinct
+  meaning and shouldn't mix:
+  - Enum fields whose "disabled / no animation" state is one option
+    use `"off"` (`kind`, `border`, `open`, `close`, `fire`,
+    `cancel`, `armed`). Don't introduce a parallel `"none"`.
+  - String fields whose empty value means "inherit theme / default"
+    use `""` (the colour fields under `[cast.overlay.trail]` /
+    `[cast.fire.burst]`).
+  - Arrays use `[]` for the empty case.
+  Pick the right shape when adding a new field rather than letting
+  a fourth convention drift in.
 - **Prefer the nested-sub-block style** when a config feature has
   multiple knobs that share a domain — keys live inside the
   sub-block that owns them, even if some keys repeat across
@@ -556,8 +567,8 @@ The workflow:
    capture+recognition half without side effects. (Refuses if the
    daemon is already running — they'd fight over the tap.)
 6. **Check config** with `wand --validate` (exit 0 + rule count +
-   warning count, or exit 2). Parser warnings (clamps / retired
-   keys / collisions / typos) mirror to stderr in addition to
+   warning count, or exit 2). Parser warnings (clamps / collisions
+   / typos) mirror to stderr in addition to
    `/tmp/wand.log` so the user sees them without tailing the log.
 
 **Known external interference to suspect first:** virtual-HID

@@ -18,9 +18,16 @@ public struct GestureHint: Sendable {
     public struct Row: Sendable {
         public let suffix: String
         public let name: String
+        /// Optional icon spec from `[[cast.rule]].icon`. Same syntax
+        /// as `[[tome.item]].icon` (SF:<name> / emoji / file path /
+        /// `app:<bundle-id>`). Empty = the card collapses its icon
+        /// column for this row.
+        public let icon: String
         public let fires: Bool
-        public init(suffix: String, name: String, fires: Bool) {
-            self.suffix = suffix; self.name = name; self.fires = fires
+        public init(suffix: String, name: String,
+                    icon: String = "", fires: Bool) {
+            self.suffix = suffix; self.name = name
+            self.icon = icon; self.fires = fires
         }
     }
     public let shape: String
@@ -91,6 +98,17 @@ public final class GestureOverlay {
         view.originIcon = icon
     }
 
+    /// Called when Pac-Man's face crosses a cherry on the trail
+    /// (`[cast].theme = "pac-man"` only). The point is in Cocoa
+    /// global screen coordinates (Y-up) — same shape
+    /// `ArcadeScoreManager.emit(at:)` and the rest of the App-layer
+    /// fire-moment effects expect, so the App layer can wire this
+    /// straight in.
+    public var onCherryEaten: ((CGPoint) -> Void)? {
+        get { view.onCherryEatenGlobal }
+        set { view.onCherryEatenGlobal = newValue }
+    }
+
     /// Apply a config change live — drives `[overlay]` hot-reload from
     /// `ConfigWatcher`. Every overlay field is reflected without a
     /// daemon restart, including `blur-enabled` (the blur subview is
@@ -131,15 +149,15 @@ public final class GestureOverlay {
         view.badgeSize = CGFloat(ov.badge.size)
         view.animEnabled = ov.badge.animEnabled
         view.setBlurEnabled(ov.blurEnabled)
-        view.effectUnmatch = ov.cards.unmatch
-        view.effectMatch = ov.cards.match
+        view.effectCancel = ov.cards.cancel
+        view.effectFire = ov.cards.fire
         view.effectArmed = ov.cards.armed
         view.cardLinePets = ov.cards.linePets
         view.cardFontSize = CGFloat(ov.cards.fontSize)
-        // Card colours come exclusively from the theme palette
-        // (per-card-colour knobs retired in #116). Empty palette
-        // entries fall back to the historical hard-coded values
-        // here, preserving the `theme = "default"` look.
+        view.noMatchBanner = ov.noMatch.kind
+        // Card colours come exclusively from the theme palette.
+        // Empty palette entries fall back to the hard-coded defaults,
+        // preserving the `theme = "default"` look.
         view.cardBorderMode = TrailColorMode.parse(
             palette.cardsBorderColor,
             fallback: NSColor.white.withAlphaComponent(0.18))
@@ -234,9 +252,6 @@ private final class TrailView: NSView {
     /// `nil` under every theme other than `.pacMan`, so the
     /// historical `trailStyle` switch is the default path.
     var pacMan: PacManSpec? = nil
-    // `arrowheadEnabled` was retired in #115 — the cursor-only tip
-    // is gone; `style = .arrow` provides direction along the whole
-    // path instead.
     /// When `true` (default), every committed turn snaps the
     /// just-completed segment onto its axis so the trail reads as a
     /// clean orthogonal polyline — the historical hard-coded
@@ -260,20 +275,25 @@ private final class TrailView: NSView {
     /// Exit-animation kinds from `[effect]`. Typed values come straight
     /// from `WandConfig` — `GestureOverlay.applyConfig` assigns them
     /// on init + hot-reload.
-    var effectUnmatch: Effect = .none
-    var effectMatch: Effect = .none
+    var effectCancel: Effect = .off
+    var effectFire: Effect = .off
     /// Live "armed" cue for the firing assist card while a stroke is
     /// in progress (`[cast.overlay.cards].armed`). Drives a per-frame
     /// transform / decoration in `HUDContentView.drawCard` and gates
     /// the tick loop in `kickExitAnimationTick` so the animation
     /// keeps running even when the cursor holds still mid-gesture.
-    var effectArmed: ArmedEffect = .none
+    var effectArmed: ArmedEffect = .off
     /// Pac-man "pets" walking the firing card's outline. Each entry
     /// is rendered every frame at a position lagging the previous
     /// one in the array, so listing `["pac-man", "ghost"]` reads as
     /// the ghost chasing pac-man. Empty array = no decoration.
     /// Theme-agnostic — silhouettes carry their own colour.
     var cardLinePets: [LinePet] = []
+    /// `[cast.overlay.no-match].kind` — banner shown at the cursor
+    /// while the in-progress stroke is off every reachable rule.
+    /// Decoupled from `[cast].theme` so the GAME OVER cue can pair
+    /// with any theme.
+    var noMatchBanner: NoMatchBanner = .off
     /// Base font size for assist-card text (set live from
     /// `[cast.overlay.cards].font-size`). The arrow column rides at
     /// `cardFontSize + 1` so directional glyphs stay a hair taller
@@ -385,6 +405,26 @@ private final class TrailView: NSView {
     /// flashes again on the second drop.
     fileprivate var noMatchFlashStartedAt: TimeInterval?
     fileprivate static let noMatchFlashDurationMs: Double = 200
+    /// Wall-time of the most recent cherry-eaten event under the
+    /// pac-man theme. While within `cherryFlashDurationMs` of this
+    /// timestamp, the corridor walls render as a hue-cycling rainbow
+    /// instead of the theme outline — the visible "bonus!" beat when
+    /// Pac-Man catches a cherry along the trail. Set by the
+    /// `onCherryEaten` callback wired into `PacManRenderer.draw`,
+    /// cleared at stroke end.
+    fileprivate var cherryFlashStartedAt: TimeInterval?
+    fileprivate static let cherryFlashDurationMs: Double = 450
+    /// Face's arc-length from the origin on the previous frame.
+    /// Fed back into `PacManRenderer.draw` so cherry-crossing
+    /// detection can compare against a stable reference frame.
+    /// Reset to 0 at stroke end.
+    fileprivate var prevFaceArcLength: CGFloat = 0
+    /// App-layer hook called once per cherry the face eats, with
+    /// the cherry's Cocoa-global position (Y-up). `GestureOverlay`
+    /// exposes this via its own `onCherryEaten` property so the
+    /// daemon's `ArcadeScoreManager` can fire a "+N" popup at the
+    /// exact cherry location.
+    var onCherryEatenGlobal: ((CGPoint) -> Void)?
     /// Wall-time of the most recent `true` → `false` transition that
     /// HASN'T been cleared yet. Drives the pac-man "GAME OVER" arcade
     /// overlay rendered above the stroke's origin point. Distinct
@@ -408,7 +448,7 @@ private final class TrailView: NSView {
     /// keys directional cards by their first arrow; `fires` keys the
     /// firing card. When a kind present in the previous layout is
     /// absent from the new one, that card "became unmatched" mid-
-    /// gesture and triggers `effectUnmatch`.
+    /// gesture and triggers `effectCancel`.
     fileprivate enum CardKind: Hashable {
         case direction(Character)
         case fires
@@ -419,7 +459,7 @@ private final class TrailView: NSView {
     /// dice roll. Other kinds pass through unchanged.
     fileprivate func resolveRandom(_ effect: Effect) -> Effect {
         guard effect == .random else { return effect }
-        return Effect.randomPool.randomElement() ?? .none
+        return Effect.randomPool.randomElement() ?? .off
     }
 
     /// Pre-computed positions of the currently-visible HUD elements.
@@ -626,15 +666,15 @@ private final class TrailView: NSView {
         // layoutHUD diff below from double-queueing it (and from
         // queueing unmatch effects for the directional cards that are
         // simply going away with the rest of the HUD).
-        if effectMatch != .none, let fires = prevCardsByKind[.fires] {
+        if effectFire != .off, let fires = prevCardsByKind[.fires] {
             let now = CACurrentMediaTime()
-            let e = resolveRandom(effectMatch)
+            let e = resolveRandom(effectFire)
             exitingCards.append(ExitingCard(
                 layout: fires, effect: e, startedAt: now))
             scheduleParticleEffect(fires, effect: e)
         }
-        // `prevCardsByKind` is only kept current when `effectMatch` /
-        // `effectUnmatch` is configured (layoutHUD gates the update on
+        // `prevCardsByKind` is only kept current when `effectFire` /
+        // `effectCancel` is configured (layoutHUD gates the update on
         // it), so we can't rely on it here. Detect fire directly from
         // the last `hint`: any row with an empty suffix == a `.fires`
         // card == the current shape exactly matches a rule.
@@ -711,6 +751,8 @@ private final class TrailView: NSView {
         badgeLayout = nil
         noMatchFlashStartedAt = nil
         gameOverStartedAt = nil
+        cherryFlashStartedAt = nil
+        prevFaceArcLength = 0
         // Re-roll the stroke seed so the NEXT stroke's `splatoon`-
         // mode trail picks a different team colour. The seed is also
         // ignored by static / rainbow / neon modes (they read time
@@ -810,7 +852,28 @@ private final class TrailView: NSView {
                         blue: 0.10, alpha: 1.0)
                 }
             }
-            PacManRenderer.draw(
+            // Cherry-eaten flash overrides the standard / no-match
+            // wall colour with a hue-cycling rainbow for a brief
+            // "bonus!" beat. Picks the latest event (no-match red
+            // and cherry rainbow rarely coincide; if they do the
+            // cherry win is the more interesting beat to show).
+            if let cherryStart = cherryFlashStartedAt {
+                let now = CACurrentMediaTime()
+                let elapsedMs = (now - cherryStart) * 1000
+                if elapsedMs < Self.cherryFlashDurationMs {
+                    let cycleHz = 6.0   // ~3 full hue cycles in 450 ms
+                    let hue = (now * cycleHz)
+                        .truncatingRemainder(dividingBy: 1)
+                    pacManOutline = NSColor(
+                        hue: CGFloat(hue),
+                        saturation: 1.0,
+                        brightness: 1.0,
+                        alpha: 1.0)
+                } else {
+                    cherryFlashStartedAt = nil
+                }
+            }
+            let newFaceArc = PacManRenderer.draw(
                 state: PacManRenderer.State(
                     origin: origin,
                     cursor: cursor,
@@ -820,19 +883,24 @@ private final class TrailView: NSView {
                     straightenOnTurn: straightenOnTurn,
                     strokeWidth: strokeWidth,
                     valid: valid,
-                    isFinalHold: holdingFinal),
+                    isFinalHold: holdingFinal,
+                    previousFaceArcLength: prevFaceArcLength,
+                    onCherryEaten: { [weak self] cherryPt in
+                        guard let self = self else { return }
+                        self.cherryFlashStartedAt = CACurrentMediaTime()
+                        self.kickExitAnimationTick()
+                        // Forward the cherry's screen position so the
+                        // App layer can fire the arcade-score popup.
+                        // `cherryPt` is in TrailView-local coords;
+                        // `originOffset` shifts back to Cocoa global.
+                        let cocoaGlobal = CGPoint(
+                            x: cherryPt.x + self.originOffset.x,
+                            y: cherryPt.y + self.originOffset.y)
+                        self.onCherryEatenGlobal?(cocoaGlobal)
+                    }),
                 color: color, outline: pacManOutline)
-            // Arcade "GAME OVER" overlay — shown only when the stroke
-            // is currently off every rule (`gameOverStartedAt != nil`
-            // ⇒ valid went true→false at some point and hasn't
-            // recovered). Anchored at the assist-card position
-            // (`cursor + gap` upper-right) so it lands where the
-            // firing card would have sat had a rule been reachable.
-            // A brief scale-in pop on first appearance + 2 Hz blink
-            // sells the arcade respawn moment.
-            if let gameOverAt = gameOverStartedAt {
-                drawGameOverOverlay(cursor: cursor, startedAt: gameOverAt)
-            }
+            prevFaceArcLength = newFaceArc
+            drawNoMatchBannerIfNeeded(cursor: cursor)
             NSGraphicsContext.restoreGraphicsState()
             return
         }
@@ -840,10 +908,7 @@ private final class TrailView: NSView {
         // Every remaining style shares the hybrid corner + freehand
         // polyline and only swaps the dash pattern. Colour always
         // comes from the resolved `color` so the match-vs-no-match
-        // signal stays legible regardless of dash. Width / glow /
-        // taper variants (`thin` / `thick` / `glow` / `comet`) were
-        // retired — `width` and the future neon/rainbow colour
-        // modes cover their use cases without a separate axis.
+        // signal stays legible regardless of dash.
         switch trailStyle {
         case .normal, .dashed, .dotted:
             drawSinglePath(origin: origin, cursor: cursor,
@@ -864,7 +929,23 @@ private final class TrailView: NSView {
             drawPawsPath(origin: origin, cursor: cursor,
                           color: color, outline: outlineColor)
         }
+        drawNoMatchBannerIfNeeded(cursor: cursor)
         NSGraphicsContext.restoreGraphicsState()
+    }
+
+    /// Shared dispatch for the `[cast.overlay.no-match]` banner —
+    /// pulled out of the pac-man trail branch so every theme can opt
+    /// in. The banner only renders when the in-progress stroke is
+    /// currently off every reachable rule (`gameOverStartedAt != nil`,
+    /// re-armed on each fresh true→false match transition).
+    private func drawNoMatchBannerIfNeeded(cursor: CGPoint) {
+        guard let gameOverAt = gameOverStartedAt else { return }
+        switch noMatchBanner {
+        case .off:
+            return
+        case .gameOver:
+            drawGameOverOverlay(cursor: cursor, startedAt: gameOverAt)
+        }
     }
 
     /// Build the standard hybrid corner-smoothed + freehand polyline
@@ -1618,17 +1699,39 @@ private final class TrailView: NSView {
                     fires.append(row)
                 }
             }
-            let gap: CGFloat = 24
+
+            // Pre-compute every directional card's size so the gap
+            // can expand to prevent overlap. A vertical card (↑/↓)
+            // wider than `2 * baseGap` would overlap the horizontal
+            // cards' (←/→) column unless `horizGap` grows past it,
+            // and vice versa.
+            var dirTexts: [Character: NSAttributedString] = [:]
+            var dirSizes: [Character: CGSize] = [:]
             for (arrow, rows) in byDir {
                 let s = cardText(rows, textMode: cardTextMode)
-                let size = cardSize(s)
+                dirTexts[arrow] = s
+                dirSizes[arrow] = cardSize(s)
+            }
+            let baseGap: CGFloat = 24
+            let margin: CGFloat = 8
+            let widestVertical: CGFloat = max(
+                dirSizes["↑"]?.width ?? 0,
+                dirSizes["↓"]?.width ?? 0)
+            let tallestHorizontal: CGFloat = max(
+                dirSizes["←"]?.height ?? 0,
+                dirSizes["→"]?.height ?? 0)
+            let horizGap = max(baseGap, widestVertical / 2 + margin)
+            let vertGap = max(baseGap, tallestHorizontal / 2 + margin)
+
+            for (arrow, size) in dirSizes {
+                guard let s = dirTexts[arrow] else { continue }
                 let o: CGPoint
                 switch arrow {
-                case "←": o = CGPoint(x: cursor.x - gap - size.width, y: cursor.y - size.height / 2)
-                case "→": o = CGPoint(x: cursor.x + gap,               y: cursor.y - size.height / 2)
-                case "↑": o = CGPoint(x: cursor.x - size.width / 2,    y: cursor.y + gap)
-                case "↓": o = CGPoint(x: cursor.x - size.width / 2,    y: cursor.y - gap - size.height)
-                default:  o = CGPoint(x: cursor.x + gap, y: cursor.y + gap)
+                case "←": o = CGPoint(x: cursor.x - horizGap - size.width, y: cursor.y - size.height / 2)
+                case "→": o = CGPoint(x: cursor.x + horizGap,               y: cursor.y - size.height / 2)
+                case "↑": o = CGPoint(x: cursor.x - size.width / 2,         y: cursor.y + vertGap)
+                case "↓": o = CGPoint(x: cursor.x - size.width / 2,         y: cursor.y - vertGap - size.height)
+                default:  o = CGPoint(x: cursor.x + horizGap, y: cursor.y + vertGap)
                 }
                 cardLayouts.append(CardLayout(
                     kind: .direction(arrow),
@@ -1645,23 +1748,23 @@ private final class TrailView: NSView {
                 // dark backdrop is missing too, so the tint goes more
                 // opaque to keep the card a distinct surface.
                 let firesAlpha: CGFloat = blurEnabled ? 0.5 : 0.78
-                // Collision avoidance: when the user has rules that
-                // share a prefix (e.g. `DL` + `DLU` + `DLU`), the
-                // fires card's natural upper-right anchor overlaps
-                // the ↑ directional card's rectangle. Try each
-                // diagonal anchor in turn and pick the first one
-                // that doesn't intersect any directional card. Order
-                // — ↗ ↘ ↙ ↖ — keeps the natural diagonal first so
-                // the simple case (no collision) is unchanged.
+                // Collision avoidance: try each diagonal anchor in
+                // turn and pick the first one that doesn't intersect
+                // any directional card. Order — ↗ ↘ ↙ ↖ — keeps the
+                // natural diagonal first so the simple case is
+                // unchanged. Uses the expanded `horizGap`/`vertGap`
+                // (which already pushed directional cards outward to
+                // accommodate the widest neighbours), so the fires
+                // card automatically lands clear of them.
                 let anchors: [CGPoint] = [
-                    CGPoint(x: cursor.x + gap,
-                            y: cursor.y + gap),
-                    CGPoint(x: cursor.x + gap,
-                            y: cursor.y - gap - size.height),
-                    CGPoint(x: cursor.x - gap - size.width,
-                            y: cursor.y - gap - size.height),
-                    CGPoint(x: cursor.x - gap - size.width,
-                            y: cursor.y + gap),
+                    CGPoint(x: cursor.x + horizGap,
+                            y: cursor.y + vertGap),
+                    CGPoint(x: cursor.x + horizGap,
+                            y: cursor.y - vertGap - size.height),
+                    CGPoint(x: cursor.x - horizGap - size.width,
+                            y: cursor.y - vertGap - size.height),
+                    CGPoint(x: cursor.x - horizGap - size.width,
+                            y: cursor.y + vertGap),
                 ]
                 var firesRect = clampedCardRect(at: anchors[0], size: size)
                 for a in anchors {
@@ -1767,14 +1870,14 @@ private final class TrailView: NSView {
         // Diff drives the unmatch effect and feeds reset()'s match
         // effect — skip both bookkeeping and dict construction when
         // neither hook is active (this runs on every mouse-move).
-        if effectUnmatch != .none || effectMatch != .none {
+        if effectCancel != .off || effectFire != .off {
             let newByKind = Dictionary(uniqueKeysWithValues:
                 cardLayouts.map { ($0.kind, $0) })
-            if effectUnmatch != .none {
+            if effectCancel != .off {
                 let now = CACurrentMediaTime()
                 for (kind, oldLayout) in prevCardsByKind
                     where newByKind[kind] == nil {
-                    let e = resolveRandom(effectUnmatch)
+                    let e = resolveRandom(effectCancel)
                     exitingCards.append(ExitingCard(
                         layout: oldLayout, effect: e, startedAt: now))
                     scheduleParticleEffect(oldLayout, effect: e)
@@ -1832,7 +1935,7 @@ private final class TrailView: NSView {
         // animation freezes whenever the cursor holds still. Line-
         // pets on the firing card count here too: any configured pet
         // is a continuous motion even when no `armed` kind is set.
-        let armedActive = (effectArmed != .none || !cardLinePets.isEmpty)
+        let armedActive = (effectArmed != .off || !cardLinePets.isEmpty)
             && origin != nil
             && !holdingFinal
             && cardLayouts.contains(where: { $0.kind == .fires })
@@ -1970,26 +2073,27 @@ private final class TrailView: NSView {
     fileprivate static let textOpts: NSString.DrawingOptions = [.usesLineFragmentOrigin]
     fileprivate let cardPadX: CGFloat = 12, cardPadY: CGFloat = 9
 
-    /// One card's text. Directional cards (`fires == false` rows)
-    /// stay tab-aligned past the widest arrows. The firing card has
-    /// no arrows left, so it drops the tab — its accent-tinted fill
-    /// (set in `layoutHUD`) does the "firing" signal. `textMode`
-    /// lets the caller pick a different colour for the firing card
-    /// (`cardFiresTextMode`) from the directional cards
-    /// (`cardTextMode`).
+    /// One card's text. Each row is laid out independently so a row
+    /// without an `icon` packs tight against its arrow rather than
+    /// reserving the icon column space for an icon that never
+    /// arrives. Columns per row:
+    ///   - Iconless row, arrow present:     `arrow → name`
+    ///   - Iconed row, arrow present:       `arrow → icon → name`
+    ///   - Iconless firing row (no arrow):  `name`
+    ///   - Iconed firing row (no arrow):    `icon → name`
+    /// Arrow column width is shared across rows (so all arrows align
+    /// past the widest one in this card); name x positions can differ
+    /// per row when iconed and iconless rows are mixed, the
+    /// deliberate trade-off for tight per-row packing.
     fileprivate func cardText(_ rows: [GestureHint.Row],
                                textMode: TrailColorMode) -> NSAttributedString {
         let arrowFont = Self.mono(cardFontSize + 1, .semibold)
+        let nameFont = Self.mono(cardFontSize, .regular)
+
         var arrowMax: CGFloat = 0
         for r in rows {
             let w = (r.suffix as NSString).size(withAttributes: [.font: arrowFont]).width
             arrowMax = max(arrowMax, w)
-        }
-        let useTab = arrowMax > 0
-        let para = NSMutableParagraphStyle()
-        para.lineSpacing = 4
-        if useTab {
-            para.tabStops = [NSTextTab(textAlignment: .left, location: arrowMax + 12)]
         }
 
         // Resolve current text colour from the supplied mode —
@@ -2000,19 +2104,93 @@ private final class TrailView: NSView {
             strokeSeed: strokeSeed,
             cyclePeriod: colorCyclePeriod)
 
+        // Icon size matches the tome panel's `IconResolver.pt`
+        // scaling so the same SF Symbol reads at the same legibility
+        // on both surfaces (~24pt for the user's 18pt cards).
+        let iconBoxSize = IconResolver.pt(forFontSize: Int(cardFontSize))
+
+        // Centre the icon's geometric middle with the text's
+        // cap-height middle so arrow / icon / name all share a
+        // visual centreline (instead of baseline-aligning, which
+        // pushes the taller icon visibly above the text).
+        let iconYOffset = (nameFont.capHeight - iconBoxSize) / 2
+
+        // Pre-resolve icons once per layout pass. Tint via
+        // `NSColor.labelColor` — same effective colour the tome
+        // panel uses (white in dark mode), which reads more clearly
+        // than text-coloured icons on dark card bodies. The palette
+        // is applied via `paletteColors` so the SF Symbol carries
+        // its colour as raster pixels rather than as a template
+        // image (NSTextAttachment doesn't apply text foreground to
+        // template images, so without an explicit colour the icon
+        // renders transparent).
+        let iconTint = NSColor.labelColor
+        let iconImages: [NSImage?] = rows.map { r in
+            guard !r.icon.isEmpty else { return nil }
+            return IconResolver.resolve(r.icon,
+                                         pointSize: iconBoxSize,
+                                         tintColor: iconTint)
+        }
+        let arrowColEnd: CGFloat = arrowMax > 0 ? arrowMax + 10 : 0
+        let iconColEnd: CGFloat = arrowColEnd + iconBoxSize + 6
+
         let s = NSMutableAttributedString()
         for (i, r) in rows.enumerated() {
             if i > 0 { s.append(NSAttributedString(string: "\n")) }
+            let lineStart = s.length
+            let hasIcon = iconImages[i] != nil
+
             if !r.suffix.isEmpty {
+                // Arrow shares the icon's `labelColor` tint — same
+                // visual weight as the SF Symbol next to it, instead
+                // of inheriting the theme's text colour. Keeps the
+                // glyphs reading as a single "this is a direction +
+                // its icon" cue rather than two competing accents.
                 s.append(NSAttributedString(string: r.suffix, attributes: [
-                    .font: arrowFont, .foregroundColor: textColor]))
+                    .font: arrowFont, .foregroundColor: iconTint]))
             }
-            s.append(NSAttributedString(string: (useTab ? "\t" : "") + r.name, attributes: [
-                .font: Self.mono(cardFontSize, .regular),
-                .foregroundColor: textColor]))
+            if hasIcon {
+                // Tab into the icon column only when an arrow
+                // precedes it; firing card icons go at x=0 directly.
+                if arrowMax > 0 {
+                    s.append(NSAttributedString(string: "\t"))
+                }
+                let att = NSTextAttachment()
+                att.image = iconImages[i]!
+                att.bounds = CGRect(x: 0, y: iconYOffset,
+                                     width: iconBoxSize,
+                                     height: iconBoxSize)
+                s.append(NSAttributedString(attachment: att))
+            }
+            // Tab into the name column — skipped only when neither
+            // arrow nor icon precedes the name (iconless firing row).
+            let needsNameTab = arrowMax > 0 || hasIcon
+            if needsNameTab {
+                s.append(NSAttributedString(string: "\t"))
+            }
+            s.append(NSAttributedString(string: r.name, attributes: [
+                .font: nameFont, .foregroundColor: textColor]))
+
+            // Per-row paragraph style — iconless rows skip the icon
+            // column entirely so the name sits flush against the
+            // arrow.
+            let para = NSMutableParagraphStyle()
+            para.lineSpacing = 4
+            var stops: [NSTextTab] = []
+            if arrowMax > 0 {
+                stops.append(NSTextTab(textAlignment: .left,
+                                        location: arrowColEnd))
+            }
+            if hasIcon {
+                let nameStop = arrowMax > 0 ? iconColEnd : iconBoxSize + 6
+                stops.append(NSTextTab(textAlignment: .left,
+                                        location: nameStop))
+            }
+            para.tabStops = stops
+            let lineRange = NSRange(location: lineStart,
+                                    length: s.length - lineStart)
+            s.addAttribute(.paragraphStyle, value: para, range: lineRange)
         }
-        s.addAttribute(.paragraphStyle, value: para,
-                       range: NSRange(location: 0, length: s.length))
         return s
     }
 
@@ -2043,7 +2221,7 @@ private final class HUDContentView: NSView {
             // `holdingFinal` means the gesture already fired — past
             // the moment either cue makes sense.
             let live = c.kind == .fires && !o.holdingFinal
-            let armed: ArmedEffect = live ? o.effectArmed : .none
+            let armed: ArmedEffect = live ? o.effectArmed : .off
             let pets: [LinePet] = live ? o.cardLinePets : []
             drawCard(c, in: o, alpha: 1, dx: 0, dy: 0, scale: 1,
                      armed: armed, linePets: pets)
@@ -2060,7 +2238,7 @@ private final class HUDContentView: NSView {
                                    intensity: o.effectIntensity)
             drawCard(ex.layout, in: o,
                      alpha: s.alpha, dx: s.dx, dy: s.dy, scale: s.scale,
-                     armed: .none, linePets: [])
+                     armed: .off, linePets: [])
         }
 
         if let b = o.badgeLayout {
@@ -2111,7 +2289,7 @@ private final class HUDContentView: NSView {
     /// layers a live "would-fire-on-release" cue on top; `chomp`
     /// adds a pac-man pellet orbiting the rect, independent of
     /// `armed` so the two stack. Only the firing card mid-stroke
-    /// passes a non-`.none` armed or a non-empty `linePets`.
+    /// passes a non-`.off` armed or a non-empty `linePets`.
     private func drawCard(_ c: TrailView.CardLayout,
                           in o: TrailView,
                           alpha: CGFloat,
@@ -2142,7 +2320,7 @@ private final class HUDContentView: NSView {
             // ~24 Hz tremor, ±1.2 px peak — high freq, low amplitude
             // so it reads as "armed" rather than "exiting".
             armedDx += 1.2 * CGFloat(sin(nowArmed * 2 * .pi * 24))
-        case .none, .glow, .sparkle, .marching:
+        case .off, .glow, .sparkle, .marching:
             break
         }
 
@@ -2232,7 +2410,7 @@ private final class HUDContentView: NSView {
                                       now: CFTimeInterval,
                                       in o: TrailView) {
         switch armed {
-        case .none, .pulse, .shake:
+        case .off, .pulse, .shake:
             return
         case .glow:
             // Outer halo: a wider, softer stroke sitting outside the
@@ -2466,7 +2644,7 @@ private final class HUDContentView: NSView {
                                 intensity k: CGFloat)
         -> (dx: CGFloat, dy: CGFloat, scale: CGFloat, alpha: CGFloat) {
         switch effect {
-        case .none, .random:
+        case .off, .random:
             // .random is resolved at queue time; reaching it here
             // would mean a card slipped through unresolved — render
             // as an identity transform rather than crash.

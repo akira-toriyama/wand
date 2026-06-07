@@ -106,49 +106,35 @@ public struct WandConfig: Sendable {
 
     static func parse(_ text: String) -> WandConfig {
         let doc = parseTOMLSubset(text)
-        logMigrationWarnings(doc)
 
-        // ── Global ────────────────────────────────────────────
-        // [exclude] — bundle ids where wand is fully disabled.
-        // Applies to BOTH gesture rules and launcher items; the old
-        // location was `[recognition].exclude-apps`, which was
-        // misleading (gesture-flavoured) and inconsistent with the
-        // actual scope.
+        // ── [exclude] ─────────────────────────────────────────
+        // Bundle ids where wand is fully disabled. Applies to BOTH
+        // cast rules and tome items.
         let excl = doc.tables["exclude"] ?? [:]
         let excludes = excl.strings("apps")
 
-        // ── [gesture.*] ───────────────────────────────────────
-        // Right-button-drag trigger family. Top-level [cast]
-        // holds the trigger (button / modifiers) AND the recognition
-        // timing knobs (min-stroke-px, max-segment-ms, cancel-*) —
-        // collapsing the old [trigger] + [recognition] split now
-        // that they're explicitly gesture-scoped.
+        // ── [cast] ────────────────────────────────────────────
+        // Trigger identity + family-wide knobs (intensity, theme).
         let g = doc.tables["cast"] ?? [:]
         let button = Trigger.Button(rawValue: g.string("button").lowercased())
             ?? .right
         let mods = Set(g.strings("modifiers")
             .compactMap { Modifier(rawValue: $0.lowercased()) })
 
-        // `[cast].intensity` — gesture-wide effect multiplier.
-        // Stays inline at the gesture level (next to button /
-        // modifiers) because its scope spans both [cast.overlay]
-        // cards and [cast.fire] burst — moving it inside either
-        // sub-block would mislead about what it scales.
+        // `[cast].intensity` — cast-wide effect multiplier. Scope
+        // spans both [cast.overlay] cards and [cast.fire] burst, so
+        // it lives at the cast-family level (not under either).
         let intensity: Intensity = parseEnum(
             g, key: "intensity", section: "cast", default: .normal)
 
-        // [cast].theme — coordinated colour palette supplying
+        // `[cast].theme` — coordinated colour palette supplying
         // defaults for trail + cards colour fields. Individual
         // keys still win when explicitly non-empty in the TOML.
         let theme: CastTheme = parseEnum(
             g, key: "theme", section: "cast", default: .default)
         let palette = theme.palette
 
-        // [cast.recognition] — sample → direction tuning. v6 split
-        // these out of the bare [cast] block (which now holds only
-        // trigger identity + the family-wide intensity knob) so
-        // recognition behaviour and trigger identity don't share a
-        // section.
+        // [cast.recognition] — sample → direction tuning.
         let rec = doc.tables["cast.recognition"] ?? [:]
         let minPx = clampInt(rec, key: "min-stroke-px",
                              default: 16, lo: 4, hi: 200)
@@ -165,8 +151,7 @@ public struct WandConfig: Sendable {
             cancelWindowMs: cancelWin)
 
         // [cast.overlay] — shared overlay toggles (enabled + blur);
-        // trail / badge / cards each live in their own nested sub-block
-        // so each field's scope is visible from the section path.
+        // trail / badge / cards live in their own nested sub-blocks.
         let ov = doc.tables["cast.overlay"] ?? [:]
         let overlayEnabled = ov.bool("enabled", true)
         let overlayBlurEnabled = ov.bool("blur-enabled", true)
@@ -190,27 +175,21 @@ public struct WandConfig: Sendable {
         let parsedTrailStyle: TrailStyle = parseEnum(
             tr, key: "style", section: "cast.overlay.trail",
             default: .normal)
-        // `arrowhead` knob was retired in #115 (replaced by
-        // `style = "arrow"` for direction-along-the-whole-path).
-        // Any stale `arrowhead = true / false` line in a user config
-        // silently drops, per wand's clamp-to-default policy.
         let trailFinalHoldMs = clampInt(tr, key: "final-hold-ms",
                                         default: 400, lo: 0, hi: 2000)
         let parsedTrailStraightenOnTurn = tr.bool("straighten-on-turn", false)
         let trailColorOutline = { let c = tr.string("color-outline")
             return c.isEmpty ? palette.trailColorOutline : c }()
 
-        // ── [cast.pac-man] ──────────────────────────────
-        // Special-theme override block. Only active when
-        // `[cast].theme = "pac-man"`; under every other theme it's
-        // nil so the rest of the codebase can branch on a single
-        // optional. The "size" knob replaces the trail's free-form
-        // `width`, and the parser also forces `straighten-on-turn =
-        // true` for the pac-man render (the arcade-maze metaphor
-        // only reads cleanly with axis-snapped corridors). Standard
-        // trail knobs (`style` / `width` / `straighten-on-turn`)
-        // are silently overridden when present — the warning loop
-        // below tells the user exactly which lines are dead.
+        // [cast.pac-man] — only read when `[cast].theme = "pac-man"`.
+        // Under every other theme it's nil so the rest of the codebase
+        // branches on a single optional. The `size` knob replaces
+        // the trail's free-form `width`, and the parser forces
+        // `straighten-on-turn = true` for the pac-man render (the
+        // arcade-maze metaphor only reads with axis-snapped corridors).
+        // Standard trail knobs (`style` / `width` / `straighten-on-turn`)
+        // are silently overridden when present — the warning below
+        // tells the user exactly which lines are dead.
         let pacManTable = doc.tables["cast.pac-man"] ?? [:]
         let pacMan: PacManSpec?
         if theme == .pacMan {
@@ -235,14 +214,11 @@ public struct WandConfig: Sendable {
             }
         } else {
             pacMan = nil
-            // Only complain when the dead block carries a NON-
-            // default value — the bundled config.toml ships the
-            // block with `size = "m"` for documentation, and that
-            // shouldn't read as a misconfiguration just because the
-            // user hasn't picked the pac-man theme yet. Mirrors the
-            // launcher's `nonDefault` check below: dead config
-            // worth warning about is dead config that's NOT just
-            // the default.
+            // Only complain when the block carries a non-default value
+            // — the bundled config.toml ships `size = "m"` for
+            // documentation, and that shouldn't read as a
+            // misconfiguration just because the user hasn't picked
+            // the pac-man theme yet.
             let sizeForCheck: PacManSize = parseEnum(
                 pacManTable, key: "size",
                 section: "cast.pac-man", default: .m)
@@ -256,21 +232,12 @@ public struct WandConfig: Sendable {
             }
         }
 
-        // When pac-man is active, force the trail render shape to
-        // the arcade pellet line:
-        //   - `straightenOnTurn = true` (arcade corridors are
-        //     orthogonal — the metaphor only reads cleanly with
-        //     axis-snapped segments).
-        //   - `style = .normal` (the pac-man dispatch in the
-        //     adapter is gated on `cfg.pacMan != nil`, not on a
-        //     TrailStyle case — `.normal` here is just an inert
-        //     placeholder since the renderer never reads it under
-        //     pac-man).
-        // `width` is left at whatever the user wrote (or default 3)
-        // — under pac-man the adapter ignores `trail.width` and
-        // uses `cfg.pacMan!.size.scale` directly, so the precise
-        // sub-integer values for `.s` / `.m` / `.l` survive without
-        // losing the `.l` step to an `Int` cast.
+        // Pac-man locks the trail's render shape to the arcade pellet
+        // line. `style = .normal` is just an inert placeholder since
+        // the renderer is gated on `cfg.pacMan != nil`, not on
+        // `TrailStyle`. `width` is left as written — the adapter
+        // reads `cfg.pacMan!.size.scale` directly, so the precise
+        // sub-integer values for `.s` / `.m` / `.l` survive.
         let trailStyle: TrailStyle =
             pacMan != nil ? .normal : parsedTrailStyle
         let trailStraightenOnTurn =
@@ -297,50 +264,35 @@ public struct WandConfig: Sendable {
 
         // [cast.overlay.cards]
         let cd = doc.tables["cast.overlay.cards"] ?? [:]
-        let cardsMatch: Effect = parseEnum(
-            cd, key: "match", section: "cast.overlay.cards", default: .none)
-        let cardsUnmatch: Effect = parseEnum(
-            cd, key: "unmatch", section: "cast.overlay.cards", default: .none)
+        let cardsFire: Effect = parseEnum(
+            cd, key: "fire", section: "cast.overlay.cards", default: .off)
+        let cardsCancel: Effect = parseEnum(
+            cd, key: "cancel", section: "cast.overlay.cards", default: .off)
         let cardsArmed: ArmedEffect = parseEnum(
-            cd, key: "armed", section: "cast.overlay.cards", default: .none)
-        // `chomp = true` retired in favour of the more general
-        // `line-pet = [...]` array (mirrors `[tome.decoration]`).
-        // Honour the old key for one release with a loud warning.
-        if cd.bool("chomp", false) {
-            Log.line("config: [cast.overlay.cards].chomp = true was"
-                     + " retired — use line-pet = [\"pac-man\"]"
-                     + " instead (value silently ignored)")
-        }
-        let cardsLinePets: [LinePet] =
-            cd.strings("line-pet").compactMap { raw in
-                let v = raw.lowercased()
-                if let pet = LinePet(rawValue: v) { return pet }
-                let valid = LinePet.allCases.map(\.rawValue)
-                    .sorted().joined(separator: ", ")
-                Log.line("config: [cast.overlay.cards].line-pet contains"
-                         + " unrecognised entry \"\(raw)\" — dropped"
-                         + " (valid: \(valid))")
-                return nil
-            }
+            cd, key: "armed", section: "cast.overlay.cards", default: .off)
+        let cardsLinePets: [LinePet] = parseLinePets(
+            cd, section: "cast.overlay.cards")
         let cardsFontSize = clampInt(
             cd, key: "font-size", default: 13, lo: 8, hi: 32)
-        // Card colours retired from `[cast.overlay.cards]` (#116) —
-        // sole source is now `[cast].theme`. Any stale `border-color`
-        // / `body-color` / `text-color` / `fires-color` /
-        // `fires-text-color` lines are silently dropped per wand's
-        // clamp-to-default policy. Resolution happens in
-        // `GestureOverlay.applyConfig` directly from `cfg.theme.palette`.
         let cards = GestureOverlayCardsSpec(
-            match: cardsMatch, unmatch: cardsUnmatch,
+            fire: cardsFire, cancel: cardsCancel,
             armed: cardsArmed,
             linePets: cardsLinePets,
             fontSize: cardsFontSize)
+
+        // [cast.overlay.no-match]
+        let nm = doc.tables["cast.overlay.no-match"] ?? [:]
+        let noMatchKind: NoMatchBanner = parseEnum(
+            nm, key: "kind",
+            section: "cast.overlay.no-match", default: .off)
+        let noMatch = GestureOverlayNoMatchSpec(kind: noMatchKind)
 
         let overlay = GestureOverlaySpec(
             enabled: overlayEnabled,
             blurEnabled: overlayBlurEnabled,
             colorCycleMs: overlayColorCycleMs,
-            trail: trail, badge: badge, cards: cards)
+            trail: trail, badge: badge, cards: cards,
+            noMatch: noMatch)
 
         // [cast.fire.burst]
         let bu = doc.tables["cast.fire.burst"] ?? [:]
@@ -360,10 +312,6 @@ public struct WandConfig: Sendable {
             default: 3000, lo: 0, hi: 10000)
         let decalSize = clampInt(
             de, key: "size", default: 60, lo: 10, hi: 500)
-        // `[cast.fire.decal].color` was retired — decal always uses
-        // the Splatoon multi-team palette when enabled (#115). Any
-        // stale `color = "..."` line in a user config is silently
-        // dropped by the parser, per wand's clamp-to-default policy.
         let decal = GestureFireDecalSpec(
             kind: decalKind,
             durationMs: decalDurationMs,
@@ -371,32 +319,26 @@ public struct WandConfig: Sendable {
 
         let fire = GestureFireSpec(burst: burst, decal: decal)
 
-        // ── [launcher.*] ──────────────────────────────────────
-        // Middle-click (or other configured button) contextual
-        // menu. Tap not installed when `enabled = false` (default),
-        // so a stale `[[tome.item]]` list can't surprise anyone
-        // who hasn't opted in.
+        // ── [tome.*] ──────────────────────────────────────────
+        // Middle-click (or other configured button) contextual menu.
+        // Tap not installed when `enabled = false` (default).
         let lr = doc.tables["tome"] ?? [:]
         let launcherEnabled = lr.bool("enabled", false)
         let launcherButton = Trigger.Button(rawValue: lr.string("button").lowercased())
             ?? .middle
         let launcherMods = Set(lr.strings("modifiers")
             .compactMap { Modifier(rawValue: $0.lowercased()) })
-        // `[tome].layout` — orientation of the native-trigger
-        // launcher panel. `--show-menu` items files override this
-        // per-call via their own `[tome].layout`. Default `.list`.
+        // `[tome].layout` — orientation of the native-trigger tome
+        // panel. `--show-menu` items files override this per-call via
+        // their own `[tome].layout`. Default `.list`.
         let launcherLayout: LauncherLayout = parseEnum(
             lr, key: "layout", section: "tome", default: .list)
-        // `[tome].theme` — coordinated colour palette for the
-        // launcher panel. Independent of `[cast].theme`: the two
-        // surfaces have different visual constraints (HUD overlay
-        // vs system-styled menu blur), so a user can pair them
-        // freely or run different looks per family.
+        // `[tome].theme` — coordinated colour palette for the tome
+        // panel. Independent of `[cast].theme`.
         let launcherTheme: TomeTheme = parseEnum(
             lr, key: "theme", section: "tome", default: .default)
 
-        // [tome.row] — per-row visual cosmetics (split from the
-        // bare [tome] block so trigger identity stays clean).
+        // [tome.row] — per-row visual cosmetics.
         let lrow = doc.tables["tome.row"] ?? [:]
         let launcherRow = LauncherRowSpec(
             shortcutBadge: lrow.bool("shortcut-badge", true),
@@ -418,30 +360,12 @@ public struct WandConfig: Sendable {
         let launcherDecorBorder: LauncherBorder = parseEnum(
             ld, key: "border", section: "tome.decoration", default: .off)
         let launcherDecorCycleMs = clampInt(
-            ld, key: "cycle-ms", default: 4000, lo: 500, hi: 10000)
+            ld, key: "color-cycle-ms", default: 4000, lo: 500, hi: 10000)
         let launcherDecorBorderWidth = clampInt(
             ld, key: "border-width", default: 2, lo: 1, hi: 10)
         let launcherDecorShadow = ld.bool("shadow", false)
-        // `chomp = true` was retired in favour of the more general
-        // `line-pet = ["pac-man", "ghost", …]` array. Honour the old
-        // key for one release with a loud warning so a user who
-        // copy-pasted it from an earlier README sees what to change.
-        if ld.bool("chomp", false) {
-            Log.line("config: [tome.decoration].chomp = true was retired"
-                     + " — use line-pet = [\"pac-man\"] instead "
-                     + "(the value has been silently ignored)")
-        }
-        let launcherDecorLinePets: [LinePet] =
-            ld.strings("line-pet").compactMap { raw in
-                let v = raw.lowercased()
-                if let pet = LinePet(rawValue: v) { return pet }
-                let valid = LinePet.allCases.map(\.rawValue)
-                    .sorted().joined(separator: ", ")
-                Log.line("config: [tome.decoration].line-pet contains"
-                         + " unrecognised entry \"\(raw)\" — dropped"
-                         + " (valid: \(valid))")
-                return nil
-            }
+        let launcherDecorLinePets: [LinePet] = parseLinePets(
+            ld, section: "tome.decoration")
         let launcherDecoration = LauncherDecorationSpec(
             border: launcherDecorBorder,
             cycleMs: launcherDecorCycleMs,
@@ -513,7 +437,7 @@ public struct WandConfig: Sendable {
             decoration: launcherDecoration,
             theme: launcherTheme)
 
-        // [[cast.rule]] — gesture pattern → action mappings.
+        // [[cast.rule]] — cast pattern → action mappings.
         // Log every dropped rule with its position + reason so
         // `--validate` and the daemon log both surface them.
         let rules: [Rule] = (doc.arrays["cast.rule"] ?? []).enumerated()
@@ -538,6 +462,7 @@ public struct WandConfig: Sendable {
                 return Rule(name: name.isEmpty ? pattern : name,
                             pattern: pattern,
                             apps: apps.isEmpty ? ["*"] : apps,
+                            icon: row.string("icon"),
                             filterTitle: row.string("filter-title"),
                             filterShell: row.string("filter-shell"),
                             action: action)
@@ -578,92 +503,26 @@ public struct WandConfig: Sendable {
     /// the minimal TOML parser can read it without inline-table
     /// support:
     ///
-    ///     action-type = "key"           # key | ax | shell
+    ///     action-type = "key"           # key | ax | shell | url
     ///     action-keys = "cmd+w"         # for type=key
     ///     action-verb = "close"         # for type=ax
     ///     action-cmd  = "open ..."      # for type=shell
-    /// Scan a parsed TOML doc for retired section / array names and
-    /// log one line per occurrence with the new location. The parser
-    /// already ignored unknown sections; this just turns the silent
-    /// ignore into a loud "your config still has the old shape"
-    /// pointer.
-    ///
-    /// v7 retires the `[gesture]` / `[launcher]` block names (and
-    /// every sub-block underneath) in favour of `[cast]` / `[tome]`
-    /// — the magical-vocabulary rename that aligns the trigger
-    /// families with the rest of wand (bolt / aura / scry).
-    /// `[[gesture.rule]]` and `[[launcher.item]]` follow the same
-    /// shift to `[[cast.rule]]` / `[[tome.item]]`. Older retirements
-    /// (v3-v6) are dropped — wand has no third-party users beyond
-    /// curl-template downloaders, and chained migration warnings
-    /// just noise the log; users still on a v6 layout get the
-    /// targeted v7 hint and can re-run with the bundled template.
-    private static func logMigrationWarnings(_ doc: TOMLDocument) {
-        let tableRenames: [(old: String, new: String)] = [
-            ("gesture",                  "[cast]"),
-            ("gesture.recognition",      "[cast.recognition]"),
-            ("gesture.overlay",          "[cast.overlay]"),
-            ("gesture.overlay.trail",    "[cast.overlay.trail]"),
-            ("gesture.overlay.badge",    "[cast.overlay.badge]"),
-            ("gesture.overlay.cards",    "[cast.overlay.cards]"),
-            ("gesture.fire",             "[cast.fire]"),
-            ("gesture.fire.burst",       "[cast.fire.burst]"),
-            ("gesture.fire.decal",       "[cast.fire.decal]"),
-            ("launcher",                 "[tome]"),
-            ("launcher.row",             "[tome.row]"),
-            ("launcher.animation",       "[tome.animation]"),
-            ("launcher.decoration",      "[tome.decoration]"),
-        ]
-        for r in tableRenames where doc.tables[r.old] != nil {
-            Log.line("config: [\(r.old)] section was renamed in v7 — "
-                     + "rename to \(r.new). Until renamed, the "
-                     + "values from this section are ignored.")
-        }
+    ///     action-url  = "https://..."   # for type=url
 
-        let arrayRenames: [(old: String, new: String)] = [
-            ("gesture.rule", "[[cast.rule]]"),
-            ("launcher.item", "[[tome.item]]"),
-        ]
-        for r in arrayRenames where doc.arrays[r.old] != nil {
-            Log.line("config: [[\(r.old)]] array was renamed in v7 — "
-                     + "rename each block to \(r.new). Until renamed, "
-                     + "the rows in this array are ignored.")
-        }
-
-        // v8: `pacman` → `pac-man` across CastTheme / TomeTheme /
-        // TrailStyle (the canonical spelling, and the rename that
-        // promotes pac-man from "yet another TrailStyle" to a
-        // special CastTheme that locks the trail render shape).
-        // The string values silently clamp to defaults today; these
-        // warnings turn the silent drop into a loud pointer at the
-        // exact line to update.
-        let castVal = (doc.tables["cast"] ?? [:]).string("theme")
-            .lowercased()
-        if castVal == "pacman" {
-            Log.line("config: [cast].theme = \"pacman\" was renamed "
-                + "in v8 to \"pac-man\" — until renamed the value "
-                + "clamps to \"default\". Picking \"pac-man\" now "
-                + "also unlocks [cast.pac-man].size = "
-                + "\"s\" | \"m\" | \"l\" (replaces width / style / "
-                + "straighten-on-turn under this theme).")
-        }
-        let tomeVal = (doc.tables["tome"] ?? [:]).string("theme")
-            .lowercased()
-        if tomeVal == "pacman" {
-            Log.line("config: [tome].theme = \"pacman\" was renamed "
-                + "in v8 to \"pac-man\" — until renamed the value "
-                + "clamps to \"default\".")
-        }
-        let trailVal = (doc.tables["cast.overlay.trail"] ?? [:])
-            .string("style").lowercased()
-        if trailVal == "pacman" {
-            Log.line("config: [cast.overlay.trail].style = \"pacman\" "
-                + "was retired in v8 — pac-man is now a special "
-                + "theme. Set [cast].theme = \"pac-man\" instead, "
-                + "and use [cast.pac-man].size for scale "
-                + "(width / style / straighten-on-turn are ignored "
-                + "under that theme). Until updated the style "
-                + "clamps to \"normal\".")
+    /// Parse a `line-pet = [...]` field shared by `[cast.overlay.cards]`
+    /// and `[tome.decoration]`. Unknown entries log + drop with the
+    /// valid set; the rest survive.
+    private static func parseLinePets(_ table: [String: TOMLValue],
+                                       section: String) -> [LinePet] {
+        table.strings("line-pets").compactMap { raw in
+            let v = raw.lowercased()
+            if let pet = LinePet(rawValue: v) { return pet }
+            let valid = LinePet.allCases.map(\.rawValue)
+                .sorted().joined(separator: ", ")
+            Log.line("config: [\(section)].line-pets contains"
+                     + " unrecognised entry \"\(raw)\" — dropped"
+                     + " (valid: \(valid))")
+            return nil
         }
     }
 

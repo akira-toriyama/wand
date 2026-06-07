@@ -15,26 +15,35 @@
 
 
 # -----------------------------------------------------------------
-# Schema layout (v8.0)
+# Schema layout
 # -----------------------------------------------------------------
 # Each block has a single concern. Nested sub-blocks scope fields
 # by what they actually animate / configure, so the section path
 # alone announces the responsibility — no flat-prefix soup.
 #
+# Value conventions:
+#   * Enum fields whose "disabled" / "no animation" state is one
+#     option use `"off"` consistently (`kind`, `border`, `open`,
+#     `close`, `fire`, `cancel`, `armed`).
+#   * String fields whose empty value means "inherit from theme /
+#     default" use `""` (the colour fields under
+#     `[cast.overlay.trail]` / `[cast.fire.burst]`).
+#   * Arrays use `[]` for the empty case.
+#   * Booleans use `true` / `false`.
+#
+# Sections:
 #   [exclude]                       — global: applies to every trigger
 #
 #   [cast]                          — cast trigger (right-button + drag
-#                                     draws a shape; the wand "casts" the
-#                                     matched rule on the cursor-anchored
-#                                     target window) + cast-wide
-#                                     `intensity` multiplier (scope spans
-#                                     both [cast.overlay].cards and
-#                                     [cast.fire].burst)
+#                                     draws a shape; the wand "casts"
+#                                     the matched rule on the cursor-
+#                                     anchored target window) +
+#                                     cast-wide `intensity` multiplier
 #   [cast.recognition]              — sample → direction tuning
 #   [cast.overlay]                  — overlay enabled toggle + blur
 #   [cast.overlay.trail]            — trail line itself
 #   [cast.overlay.badge]            — origin badge
-#   [cast.overlay.cards]            — assist-card exit animations
+#   [cast.overlay.cards]            — assist-card cosmetics + effects
 #   [cast.pac-man]                  — pac-man special-theme knobs
 #                                     (only read under
 #                                      [cast].theme = "pac-man")
@@ -42,31 +51,14 @@
 #   [cast.fire.decal]               — post-fire ink decal
 #   [[cast.rule]]                   — one cast pattern → action
 #
-#   [tome]                          — tome trigger (middle-click pops a
-#                                     contextual menu — your spellbook of
-#                                     rows to pick from) + layout
+#   [tome]                          — tome trigger (middle-click pops
+#                                     a contextual menu — your
+#                                     spellbook of rows to pick from)
+#                                     + layout
 #   [tome.row]                      — per-row visual cosmetics
 #   [tome.animation]                — panel open / close animations
 #   [tome.decoration]               — static panel decoration
 #   [[tome.item]]                   — one menu row
-#
-# v7 retired (warned in /tmp/wand.log):
-#   [gesture]            → [cast]               (and every sub-block)
-#   [[gesture.rule]]     → [[cast.rule]]
-#   [launcher]           → [tome]               (and every sub-block)
-#   [[launcher.item]]    → [[tome.item]]
-#
-# v8 retired (warned in /tmp/wand.log):
-#   [cast].theme = "pacman"                → "pac-man"
-#   [tome].theme = "pacman"                → "pac-man"
-#   [cast.overlay.trail].style = "pacman"  → set [cast].theme =
-#                                            "pac-man" instead
-#                                            (the style key is no
-#                                            longer the pac-man
-#                                            switch — it's a theme
-#                                            now, with its own
-#                                            [cast.pac-man]
-#                                            block for sizing)
 
 
 # -----------------------------------------------------------------
@@ -151,42 +143,30 @@ intensity = "normal"
 #   trail   — color / color-no-match / color-outline (still
 #             overridable per-key under `[cast.overlay.trail]`)
 #   cards   — border / body / text / fires-body / fires-text
-#             (sole source — `[cast.overlay.cards]` no longer
-#              carries colour knobs; pick a theme to change them)
 #   fire    — burst.color (overridable under `[cast.fire.burst]`)
-# Pick a vibe and the colours are guaranteed to read well together.
 # (Decal is intentionally not themed — it always uses the Splatoon
-# multi-team ink palette, that's the identity of the effect.)
+# multi-team ink palette; that's the identity of the effect.)
 #
-#   "default"  — historical blue trail / red no-match / no
-#                outline; the look wand has shipped with.
-#   "terminal" — Tokyo-Night-style green-on-black with amber
-#                no-match. Mono-feel, very legible.
+#   "default"  — blue trail / red no-match / no outline
+#   "terminal" — Tokyo-Night green-on-black with amber no-match
 #   "neon"     — cycling neon palette on near-black cards;
-#                hot-pink no-match.
-#   "splatoon" — per-stroke random team colour ink, white
-#                outline, black no-match.
+#                hot-pink no-match
+#   "splatoon" — per-stroke random team colour ink, white outline,
+#                black no-match
 #   "rainbow"  — full-spectrum animated trail + cards; white
-#                outline, very dark no-match.
-#   "mono"     — white trail / black outline / red no-match
-#                only — failure stays loud, everything else
-#                is monochrome.
+#                outline, very dark no-match
+#   "mono"     — white trail / black outline / red no-match only
+#                — failure stays loud, everything else monochrome
 #   "vapor"    — synthwave: pink trail, lime no-match, slate
-#                outline, Dracula-style dark card.
+#                outline, Dracula-style dark card
 #   "pac-man"  — ★ SPECIAL THEME. Picks the full arcade Pac-Man
 #                look — yellow Pac-Man wedge chasing along a
 #                black corridor flanked by neon-blue maze walls,
 #                with red-ghost no-match. Locks the trail render
 #                shape: `style`, `width`, and `straighten-on-turn`
-#                under [cast.overlay.trail] are IGNORED (a warning
-#                is logged for each one set). Replaces `width`
-#                with `[cast.pac-man].size = "s" | "m" | "l"`
-#                (see that block below for tuning). Cards use a
-#                two-state design — directional cards are the
-#                arcade backdrop (black body + yellow text); the
-#                firing card INVERTS to a yellow pellet (yellow
-#                body + black text), so "fires on release" reads
-#                as the trail's pellet latching onto its rule.
+#                under [cast.overlay.trail] are IGNORED. Replaces
+#                `width` with `[cast.pac-man].size = "s" | "m" |
+#                "l"` (see that block below for tuning).
 #
 # Unknown names clamp to "default". Validate with `wand --validate`.
 theme = "default"
@@ -195,10 +175,6 @@ theme = "default"
 # -----------------------------------------------------------------
 # Cast recognition — sample → direction tuning
 # -----------------------------------------------------------------
-# Behaviour knobs that don't affect what wand does, only how
-# sensitive / forgiving the recognizer is. Split out of [cast]
-# in v6 so trigger identity and recognition tuning don't share a
-# section.
 [cast.recognition]
 
 # Minimum displacement (px) before a new direction is emitted.
@@ -233,9 +209,6 @@ cancel-window-ms = 500
 # -----------------------------------------------------------------
 # Cast overlay — translucent trail drawn while you draw a gesture
 # -----------------------------------------------------------------
-# Toggles and shared visuals that apply to the whole HUD (trail +
-# badge + cards). The three components themselves live in dedicated
-# sub-blocks below.
 [cast.overlay]
 
 # Show the trail / badge / cards while a stroke is in progress. The
@@ -278,98 +251,65 @@ color-cycle-ms = 2000
 # black, or "accent" for the system accent color), a hex string
 # ("#rgb" / "#rrggbb" / "#rrggbbaa"), or a reserved dynamic token:
 #
-#   "rainbow"   — smooth hue cycle (~3s period). The whole trail
-#                 shifts colour as the cursor moves; static cursors
-#                 freeze on whatever frame they're on.
-#   "neon"      — electric palette (cyan / magenta / lime / hot
-#                 pink / sky / violet) interpolated on a ~2s cycle.
+#   "rainbow"   — smooth hue cycle (~3s period)
+#   "neon"      — electric palette interpolated on a ~2s cycle
 #   "splatoon"  — pick a random hue from the Splatoon ink palette
-#                 at the start of each stroke. The whole drag stays
-#                 in one team's colour; next stroke re-rolls.
+#                 at the start of each stroke
 #
 # `color` and `color-no-match` are independent — fine to set one to
-# a dynamic token and the other to a static hex (e.g. `rainbow`
-# while matching, solid red when off-track).
-# Empty = inherit from `[cast].theme`. Non-empty value overrides
-# the theme's palette for that field.
+# a dynamic token and the other to a static hex.
+# Empty (`""`) = inherit from `[cast].theme`. Non-empty value
+# overrides the theme's palette for that field.
 color = "#3b82f6"
 color-no-match = "#ef4444"
 
 # Outline / underlay colour drawn behind or around the trail so the
 # main `color` reads against backgrounds that would otherwise
-# swallow it (e.g. `color = "black"` on a dark editor). Empty = no
-# outline. Same grammar as `color` (named / hex / `rainbow` /
-# `neon` / `splatoon`). Style-specific rendering:
+# swallow it. Empty (`""`) = no outline. Same grammar as `color`.
+# Style-specific rendering:
 #   normal/dashed/dotted — wider underlay stroke beneath the trail
 #   pixel / rainbow-road — 1pt outline-colour frame inset into each
 #                          cell (every dot looks framed)
 #   ascii                — solid backing rect under each glyph
-#                          (terminal / cmatrix feel: green letters
-#                          on black blocks)
+#                          (terminal / cmatrix feel)
 # Under `[cast].theme = "pac-man"` the outline drives the corridor's
-# flanking wall colour rather than a per-pellet halo — the theme
-# palette already supplies the neon-arcade blue, so set this only
-# to override.
+# flanking wall colour — the theme palette already supplies the
+# neon-arcade blue, so set this only to override.
 color-outline = ""
 
 # Trail width. Clamped 1..40. Meaning depends on `style`:
 #   normal / dashed / dotted — stroke width in points
 #   pixel                    — thickness in fixed-size cells
-#                              (5pt cell; `width = 3` lays down a
-#                              3-cell-wide stripe)
 #   ascii                    — thickness in fixed-size glyphs
-#                              (14pt font; `width = 3` lays down a
-#                              3-glyph-wide band)
 #   paws                     — scale multiplier on paw print size +
-#                              spacing. Always one alternating L/R
-#                              line of prints; `width` doesn't
-#                              stack rows.
-# So in pixel / ascii, raising `width` adds more small marks across
-# the path rather than scaling each mark up. paws is different —
-# always a single silhouette line, so `width` scales sizes instead
-# of stacking rows.
+#                              spacing
 #
 # IGNORED under `[cast].theme = "pac-man"` — use
-# `[cast.pac-man].size = "s" | "m" | "l"` instead. The arcade
-# aesthetic is always a single line of pellets, so a free-form
-# integer fights the visual; three named tiers cover the range
-# without misconfiguration.
+# `[cast.pac-man].size = "s" | "m" | "l"` instead.
 width = 3
 
 # Trail dash pattern preset. **Shape only — the trail's colour is
 # always sourced from `color` / `color-no-match` above**, so the
 # match-vs-no-match signal isn't lost when the style changes.
 #
-#   "normal"  — single solid stroke (default)
-#   "dashed"  — broken line (3:2 dash:gap, sized off `width`)
-#   "dotted"  — short-dash dotted line (0.6:2 dash:gap)
-#   "pixel"   — 8-bit / pixel-art: fixed 5pt cells stepped along the
-#               path; `width` = cells across the path (thickness)
-#   "ascii"   — AA-art: 14pt monospaced glyphs (`* + x o # . : = ~ ^`)
-#               picked dynamically — each slot reshuffles a few times
-#               per second so the trail flickers as it draws. `width`
-#               = glyphs across the path (thickness).
+#   "normal"       — single solid stroke (default)
+#   "dashed"       — broken line (3:2 dash:gap)
+#   "dotted"       — short-dash dotted line (0.6:2 dash:gap)
+#   "pixel"        — 8-bit / pixel-art: fixed 5pt cells stepped
+#                    along the path; `width` = cells across
+#   "ascii"        — AA-art: 14pt monospaced glyphs picked
+#                    dynamically — flickering trail
 #   "rainbow-road" — pixel cells coloured by a spectrum-ordered
-#               palette (red/orange/yellow/green/blue/indigo/purple),
-#               one colour per 4-cell unit, reading as a rainbow
-#               track. Style-specific exception: `color` is
-#               overridden by the palette; `color-no-match` still
-#               wins so the failure signal survives.
-# NOTE: "pacman" was retired in v8 — Pac-Man is now a special
-# theme. Set `[cast].theme = "pac-man"` and tune
-# `[cast.pac-man].size` for the arcade trail; the `style`
-# key below is for line-shape decoration of the other themes only.
-#   "arrow"   — continuous chevron chain along the whole path
-#               (`-->-->-->`), each `>` rotated to match the local
-#               tangent so the direction reads at every point — not
-#               just at the cursor tip. Replaces the retired
-#               `arrowhead = true` knob.
-#   "paws"    — `pawprint.fill` SF Symbol drawn along the path,
-#               rotated along the tangent and alternating
-#               left/right of the centreline. Tinted so the trail
-#               colour flows through like the other styles, so
-#               match-vs-no-match stays in colour. `width` scales
-#               paw size + spacing.
+#                    palette (red/orange/yellow/green/blue/indigo/
+#                    purple). Style-specific exception: `color`
+#                    is overridden by the palette; `color-no-match`
+#                    still wins.
+#   "arrow"        — continuous chevron chain along the whole path
+#                    (`-->-->-->`), each `>` rotated to match the
+#                    local tangent
+#   "paws"         — `pawprint.fill` SF Symbol drawn along the
+#                    path, rotated along the tangent and
+#                    alternating left/right of the centreline
 style = "normal"
 
 # How long (ms) the trail lingers after a gesture fires. The
@@ -388,9 +328,7 @@ final-hold-ms = 400
 # Recognition is unaffected either way — this is a render-only knob.
 #
 # IGNORED under `[cast].theme = "pac-man"` — that theme forces
-# straighten-on-turn = true (the arcade maze metaphor only reads
-# cleanly with axis-snapped corridors; freehand pac-man walls trace
-# hand jitter and lose the corridor read).
+# straighten-on-turn = true.
 straighten-on-turn = true
 
 
@@ -398,7 +336,7 @@ straighten-on-turn = true
 [cast.overlay.badge]
 
 # Show the target-app icon as a small "badge" at the gesture's
-# start point (where the right button went down). Confirms which
+# start point (where the trigger button went down). Confirms which
 # window the gesture will act on — useful when keyboard focus is on
 # a different window than the cursor is over.
 enabled = true
@@ -411,59 +349,53 @@ size = 56
 anim-enabled = true
 
 
-# Assist-card exit animations — the cards next to the cursor that
-# list reachable rules. These animate cards INSIDE the overlay, so
-# they require `[cast.overlay].enabled = true`.
+# Assist cards — the cards next to the cursor that list reachable
+# rules. Two single-shot exit animations plus one continuous mid-
+# stroke cue, all defaulting to `"off"`:
 #
-# Pick a kind:
-#   none           — instant disappear (default)
-#   drop           — falls down off-screen
-#   rise           — floats up off-screen
-#   slide-left     — slides out to the left
-#   slide-right    — slides out to the right
-#   explode        — scales up briefly then fades
-#   vibrate        — shakes in place, then fades
-#   fade           — pure opacity fade
-#   fireworks      — bursts upward from the card with a particle pop
-#   confetti       — rains particles down past the card
-#   random         — pick a random one each time a card disappears
+#   "off"          — instant disappear (default)
+#   "drop"         — falls down off-screen
+#   "rise"         — floats up off-screen
+#   "slide-left"   — slides out to the left
+#   "slide-right"  — slides out to the right
+#   "explode"      — scales up briefly then fades
+#   "vibrate"      — shakes in place, then fades
+#   "fade"         — pure opacity fade
+#   "fireworks"    — bursts upward from the card with a particle pop
+#   "confetti"     — rains particles down past the card
+#   "random"       — pick a random one each time a card disappears
 #
 # Particle effects (`fireworks` / `confetti`) read most naturally on
-# `match` — the moment a rule actually fires.
+# `fire` — the moment a rule actually fires.
 #
 # `armed` is a separate, *continuous* cue layered on top of the
 # rainbow firing border while the stroke is still in progress (the
 # card whose pattern would dispatch if you released right now).
-# Distinct from `match` (one-shot at button-up); designed to read at
+# Distinct from `fire` (one-shot at button-up); designed to read at
 # a glance without being distracting over a long stroke. Kinds:
-#   none      — no extra cue beyond the rainbow border (default)
-#   pulse     — gentle scale breathing (~0.6s loop); calm
-#   glow      — outer halo pulsing alpha (~0.7s loop)
-#   shake     — high-frequency ±1 px tremor; "about to fire"
-#   sparkle   — twinkles around the card's perimeter
-#   marching  — dashed border that scrolls ("marching ants")
+#   "off"      — no extra cue beyond the rainbow border (default)
+#   "pulse"    — gentle scale breathing (~0.6s loop); calm
+#   "glow"     — outer halo pulsing alpha (~0.7s loop)
+#   "shake"    — high-frequency ±1 px tremor; "about to fire"
+#   "sparkle"  — twinkles around the card's perimeter
+#   "marching" — dashed border that scrolls ("marching ants")
 #
-# `line-pet` lists pac-man "pets" walking the firing card's outline,
-# chasing each other in array order (first leads, the rest trail at
-# a fixed gap). Mirrors `[tome.decoration].line-pet` on the menu
-# side so both surfaces share a vocabulary. Theme-agnostic — each
-# pet's silhouette is its own colour signature.
+# `line-pets` lists pac-man "pets" walking the firing card's
+# outline, chasing each other in array order (first leads, the rest
+# trail at a fixed gap). Mirrors `[tome.decoration].line-pets` on
+# the menu side so both surfaces share a vocabulary. Theme-
+# agnostic — each pet's silhouette is its own colour signature.
 #
 #   "pac-man" — yellow chomping wedge
 #   "ghost"   — red Blinky-style ghost (dome + eyes + skirt)
 #
 # Pet sizes scale with `font-size` below so a larger card gets
-# proportionally larger pets — the ghost reads cleanly even on a
-# 20-pt card.
-#
-# Retired in this PR: `chomp = true`. Equivalent to
-# `line-pet = ["pac-man"]` — the old key still parses but logs a
-# warning to /tmp/wand.log and is silently ignored.
+# proportionally larger pets.
 [cast.overlay.cards]
-match = "none"        # the firing card, on button-up
-unmatch = "none"      # cards that became unreachable mid-gesture
-armed = "none"        # live cue on the firing card mid-stroke
-line-pet = []         # pac-man pets orbiting the firing card
+fire = "off"          # the firing card, on button-up
+cancel = "off"        # cards that became unreachable mid-gesture
+armed = "off"         # live cue on the firing card mid-stroke
+line-pets = []        # pac-man pets orbiting the firing card
 
 # Card-text base font size in points. The arrow column rides at
 # `font-size + 1` so directional glyphs stay a hair taller than
@@ -474,11 +406,23 @@ font-size = 13
 
 # Card colours (border / body / text / firing-card body & text)
 # live on `[cast].theme` exclusively — pick a theme to change
-# them. The per-card-colour knobs that used to live here
-# (`border-color` / `body-color` / `text-color` / `fires-color` /
-# `fires-text-color`) were retired so card colours always read
-# as a coordinated set with the trail. Stale lines are silently
-# dropped per wand's clamp-to-default policy.
+# them.
+
+
+# Banner shown at the cursor when the in-progress gesture falls off
+# every reachable rule. Independent of `[cast].theme` — works under
+# any theme (pac-man's red wall-flash on no-match is a separate,
+# theme-specific cue and stays under pac-man).
+#
+#   "off"       — no banner (default)
+#   "game-over" — arcade-style "GAME OVER" overlay anchored at the
+#                 cursor's upper-right (where the firing card would
+#                 have been). Scale-in pop on first appearance +
+#                 2 Hz blink while the stroke remains off every
+#                 rule. Pairs naturally with `[cast].theme =
+#                 "pac-man"` but works under any theme.
+[cast.overlay.no-match]
+kind = "off"
 
 
 # -----------------------------------------------------------------
@@ -494,11 +438,10 @@ font-size = 13
 [cast.pac-man]
 
 # Overall scale of the pac-man trail. Replaces `width` under this
-# theme. Tuned so each step is visibly different at a glance
-# without the large tier crowding the corridor walls.
+# theme.
 #
 #   "s" — compact arcade-pixel-art feel (scale ≈ 2.0)
-#   "m" — calibrated baseline (scale ≈ 3.0; matches the v7 default)
+#   "m" — calibrated baseline (scale ≈ 3.0)
 #   "l" — chunky / over-the-top (scale ≈ 4.5)
 #
 # Unknown values clamp to "m". Validate with `wand --validate`.
@@ -522,24 +465,18 @@ size = "m"
 #                     (~40pt over 800ms) and fades. The value is
 #                     picked at random per fire from the eight
 #                     canonical arcade scores (100 / 200 / 300 /
-#                     500 / 700 / 1000 / 2000 / 5000), so successive
-#                     fires don't repeat. Works under any theme,
-#                     but reads best paired with `[cast].theme =
-#                     "pac-man"` where the rest of the arcade
-#                     flourishes show up too.
+#                     500 / 700 / 1000 / 2000 / 5000). Works under
+#                     any theme, but pairs naturally with
+#                     `[cast].theme = "pac-man"`.
 kind = "off"
 
-# Burst particle colour. Same three-mode grammar as
-# `[cast.fire.decal].color`:
+# Burst particle colour:
 #   ""         — empty / unset: inherit `[cast.overlay.trail].color`
-#                (historical default — burst matches the trail accent
-#                so it reads as tied to the action). Also obeys
-#                `[cast].theme` palette inheritance.
-#   "trail"    — explicit form of the above.
+#                (also obeys `[cast].theme` palette inheritance)
+#   "trail"    — explicit form of the above
 #   "splatoon" — pick a random hue from the Splatoon ink palette on
-#                every fire.
+#                every fire
 #   <hex / named> — anything `[cast.overlay.trail].color` accepts
-#                   (e.g. `"#ff00ff"` / `"systemPink"`).
 color = ""
 
 
@@ -550,12 +487,10 @@ color = ""
 #   "off"           — no decal (default)
 #   "ink-splatter"  — Splatoon-style splat: 2-3 independent splat
 #                     units at random offsets. Each unit is a
-#                     classic SVG ink-splat silhouette — round body
-#                     with radial tendril spikes + a darker ink-ring
-#                     underlayer + 3-6 detached droplet specks.
-#                     Each unit picks its own team colour from a
-#                     built-in Splatoon ink palette, so one decal
-#                     lands multiple ink hits at once.
+#                     classic SVG ink-splat silhouette with a
+#                     darker ink-ring underlayer + 3-6 detached
+#                     droplet specks. Each unit picks its own team
+#                     colour from a built-in Splatoon ink palette.
 kind = "off"
 
 # How long (ms) the decal stays visible before fading out.
@@ -564,14 +499,6 @@ duration-ms = 3000
 
 # Decal footprint in points (width = height). Clamped 10..500.
 size = 60
-
-# Decal colour is not configurable — the Splatoon multi-team ink
-# palette IS the identity of this effect, so the decal always
-# picks random hues from a 10-colour Splatoon-style ink palette
-# on every fire (orange / yellow / lime / neon green / peppermint
-# / sapphire / purple / magenta / pink / coral, sourced from a
-# Turf War colour-pair compilation). One decal can land 2-3
-# different team colours at once.
 
 
 # -----------------------------------------------------------------
@@ -605,45 +532,38 @@ modifiers = []                 # e.g. ["ctrl"] to require ctrl + middle
 #   "toolbar"         — horizontal icon-only buttons (PopClip vibe)
 #   "labeled-toolbar" — horizontal icon + label "pill" buttons
 # Toolbar variants ignore `header` / `subtitle` / `separator-before`
-# / `[tome.row].shortcut-badge` (no room to render them); only
-# `.list` shows every feature.
+# / `[tome.row].shortcut-badge`; only `.list` shows every feature.
 layout = "list"
 
 # Coordinated colour palette for the tome panel — sets the hover
 # accent, idle row text, AND the panel backdrop. Themes other than
-# "default" REPLACE the system frosted blur with a solid colour
-# (the `.menu` material has no tint API, so saturated themes can't
-# ride on the blur). The panel rim is **not** a theme axis — pick
-# `[tome.decoration].border` for an outline; themes never paint a
-# static frame of their own (would overlap and swallow the animated
-# rim). Independent of `[cast].theme` (the two surfaces have
-# different visual constraints), so you can pair them freely or
-# run different looks per family.
+# "default" REPLACE the system frosted blur with a solid colour.
+# The panel rim is **not** a theme axis — pick
+# `[tome.decoration].border` for an outline. Independent of
+# `[cast].theme` — pair them freely or run different looks per
+# trigger family.
 #
 #   "default"  — frosted-glass system blur, controlAccent hover,
-#                .labelColor rows. The historical look.
+#                .labelColor rows
 #   "terminal" — Tokyo-Night green-on-black; green hover with
-#                black text. Solid black backdrop.
+#                black text. Solid black backdrop
 #   "neon"     — electric cyan hover on white rows; deep blue-black
-#                backdrop.
+#                backdrop
 #   "splatoon" — hot-pink hover with a lime outline on dark
-#                charcoal (statically picked — the panel doesn't
-#                redraw per-frame, so the per-stroke team rotation
-#                isn't a fit).
-#   "mono"     — stark white-on-black; inverted on hover.
+#                charcoal
+#   "mono"     — stark white-on-black; inverted on hover
 #   "vapor"    — synthwave pink hover on Dracula charcoal,
-#                off-white rows.
+#                off-white rows
 #   "pac-man"  — yellow accent on black with yellow rows; pairs
 #                with `[cast].theme = "pac-man"` for a coordinated
-#                arcade look across both surfaces.
-#   "rainbow"  — vivid rainbow palette inspired by facet: white
-#                rows on deep violet-black, hot-rose hover. Pair
-#                with `[tome.decoration].border = "rainbow"` to add
-#                the animated spectrum outline — that's where the
-#                "rainbow" name comes alive on this static surface.
+#                arcade look across both surfaces
+#   "rainbow"  — vivid rainbow palette: white rows on deep violet-
+#                black, hot-rose hover. Pair with
+#                `[tome.decoration].border = "rainbow"` for the
+#                animated spectrum outline
 #   "aurora"   — polar-lights variant: deep navy backdrop, pastel-
 #                mint hover, off-white rows. Calmer counterpart to
-#                "rainbow" — same colour family, softer contrast.
+#                "rainbow"
 #
 # Unknown names clamp to "default". Validate with `wand --validate`.
 theme = "default"
@@ -656,13 +576,12 @@ theme = "default"
 # Title font size (points) for every `[[tome.item]]` row. Scales the
 # row's icon size and height proportionally so a larger font gets a
 # larger panel rather than truncated text. Default 13 matches macOS'
-# menu baseline (the pre-knob hardcoded size). Clamped 11..32.
+# menu baseline. Clamped 11..32.
 #
 #   11    — compact (system menu-bar size)
 #   13    — default
 #   16    — comfortable
-#   20    — large (pairs well with `line-pet` so the ghost / pellet
-#           silhouettes read at a glance)
+#   20    — large (pairs well with `line-pets`)
 font-size = 13
 
 # Auto-display a right-aligned ⌘W-style glyph badge on `.list` rows
@@ -685,10 +604,10 @@ icon-chip = true
 # unwinds together.
 [tome.animation]
 
-# Open animation. Plays when a tome panel pops up (root panel
-# on middle-click; child panels when a folder / dynamic row is
-# hovered open). Default "off" keeps the historical instant pop.
-# Unknown values log + clamp to "off".
+# Open animation. Plays when a tome panel pops up (root panel on
+# middle-click; child panels when a folder / dynamic row is hovered
+# open). Default "off" keeps the historical instant pop. Unknown
+# values log + clamp to "off".
 #
 #   "off"   — no animation (default)
 #   "fade"  — alpha 0 → 1 ease-out (~140 ms)
@@ -704,43 +623,32 @@ close = "off"
 # from `[tome.animation]` (which moves in time).
 [tome.decoration]
 
-# Decorative panel border. Sits on the colour-decoration axis (paired
-# with the trail's shape-only `style`). Inherited by child panels for
-# visual consistency. Independent of `[tome].theme` — mix freely
-# (`theme = "rainbow"` + `border = "neon"` is fair game).
+# Decorative panel border. Sits on the colour-decoration axis.
+# Inherited by child panels for visual consistency. Independent of
+# `[tome].theme` — mix freely (`theme = "rainbow"` +
+# `border = "neon"` is fair game).
 #
 #   "off"      — no border (default)
 #   "rainbow"  — animated hue-rotating outline cycling around the
 #                panel's rounded rect (period configurable via
-#                `cycle-ms` below)
+#                `color-cycle-ms` below)
 #   "terminal" — static green rim (#22c55e)
 #   "neon"     — static electric cyan rim (#22d3ee)
 #   "splatoon" — static lime rim (#bfff00)
 #   "mono"     — static white rim
 #   "vapor"    — static synthwave pink rim (#ff79c6)
 #   "pac-man"  — static arcade yellow rim (#ffea00)
-#
-# Static kinds were lifted from each theme's old `borderColor` slot
-# (retired in PR #111 follow-up) so the same look survives but is
-# now decoupled from the colour theme — pick one rim, pick one theme.
-#
-# Retired: `border = "pac-man-tail"` (the multi-element maze-wall
-# decoration) was dropped because `border = "neon"` plus
-# `[tome.decoration].line-pet = ["pac-man", "ghost"]` reproduces the
-# same arcade look via two independent single-purpose axes. Stale
-# `"pac-man-tail"` values now log the standard "unrecognised" warning
-# and clamp to `.off`.
 border = "off"
 
 # Cycle period (ms) for any animated `border` kind — currently only
 # `"rainbow"`. Smaller = faster strobe; larger = slower drift.
-# Static border kinds (`off`) ignore this value. Clamped 500..10000.
+# Static border kinds ignore this value. Clamped 500..10000.
 #
 #   500   — strobing (very fast hue churn)
 #   1000  — flicker
 #   4000  — default; smooth visible cycle over a typical panel session
 #   8000  — slow drift, almost-solid feel
-cycle-ms = 4000
+color-cycle-ms = 4000
 
 # Border stroke width in points. Clamped 1..10. Ignored when
 # `border = "off"`.
@@ -754,9 +662,7 @@ border-width = 2
 # macOS window drop shadow under the panel. Default `false`: macOS
 # draws a thin dark halo just outside any panel with `hasShadow =
 # true`, and that halo reads as an extra fringe on the border
-# decoration (the "外側に黒い枠線" the user could see even after the
-# CALayer-native border fix). Set `true` to restore the system menu
-# shadow.
+# decoration. Set `true` to restore the system menu shadow.
 shadow = false
 
 # Pac-man "pets" that walk the panel's rounded outline. Default
@@ -771,11 +677,7 @@ shadow = false
 # Pet sizes scale with `[tome.row].font-size` so a larger panel gets
 # proportionally larger pets — the ghost stays readable at any
 # font-size. `outer-margin` is auto-managed to match.
-#
-# Retired in this PR: `chomp = true`. Equivalent to
-# `line-pet = ["pac-man"]` — the old key still parses but logs a
-# warning to /tmp/wand.log and is silently ignored.
-line-pet = []
+line-pets = []
 
 
 # -----------------------------------------------------------------
@@ -784,8 +686,9 @@ line-pet = []
 # Both `[[cast.rule]]` and `[[tome.item]]` use the same
 # action-* vocabulary and app-filter syntax. Differences:
 #
-#   [[cast.rule]]    needs `pattern` (LURD sequence)
-#   [[tome.item]]   needs `name` (menu label); supports
+#   [[cast.rule]]    needs `pattern` (LURD sequence); supports
+#                        optional `icon`
+#   [[tome.item]]    needs `name` (menu label); supports
 #                        icon / group / separator-before / state /
 #                        dynamic / template-* for richer menu UI
 #
@@ -813,8 +716,7 @@ line-pet = []
 #
 # `filter-title = "<glob>"` — optional. Extra gate on top of `apps`,
 # matched against the cursor-anchored target's window title (same
-# `*` / `?` glob). Use it to scope a rule / item to a specific page
-# or document.
+# `*` / `?` glob).
 #
 #   filter-title = "*github.com*"      # only when title contains "github.com"
 #   filter-title = "*pull/*"            # only on a PR
@@ -848,17 +750,34 @@ line-pet = []
 #                          granted). Use for translate / search /
 #                          send-to-app workflows. Untrusted — same
 #                          quoting caveat as WAND_TARGET_TITLE.
+#
+# `icon` (both `[[cast.rule]]` and `[[tome.item]]`) — optional icon
+# drawn to the left of the rule name (cast) or menu label (tome).
+# Recognised syntax:
+#
+#   icon = "🌐"                  — emoji / 1-2 character text glyph
+#   icon = "SF:globe"            — SF Symbol (macOS 11+; catalog:
+#                                  open Symbols.app)
+#   icon = "app:com.apple.Safari"— installed app icon (any app
+#                                  LaunchServices knows about)
+#   icon = "~/icons/foo.png"     — tilde-expanded path
+#   icon = "icons/foo.png"       — relative to ~/.config/wand/
+#   icon = "/abs/path.png"       — absolute path
+#
+# Unrecognised values fall back to no icon (logged to /tmp/wand.log).
 
 
 # -----------------------------------------------------------------
 # Cast rules — first match wins, applied to the cursor-anchored
 # target. `name` is shown in the overlay while drawing a shape that
 # matches this rule, so you can see what it'll do before releasing
-# — make it human-readable.
+# — make it human-readable. `icon` is optional and drawn next to
+# the name.
 # -----------------------------------------------------------------
 
 [[cast.rule]]
 name = "close tab"
+icon = "SF:xmark.square"
 pattern = "DR"
 apps = ["*chrome*", "*safari*"]
 action-type = "key"
@@ -866,6 +785,7 @@ action-keys = "cmd+w"
 
 [[cast.rule]]
 name = "reopen tab"
+icon = "SF:arrow.uturn.left.square"
 pattern = "UR"
 apps = ["*chrome*", "*safari*"]
 action-type = "key"
@@ -873,6 +793,7 @@ action-keys = "cmd+shift+t"
 
 [[cast.rule]]
 name = "close window"
+icon = "SF:xmark.circle"
 pattern = "DRU"
 apps = ["*"]
 action-type = "ax"
@@ -880,6 +801,7 @@ action-verb = "close"
 
 [[cast.rule]]
 name = "minimize"
+icon = "SF:minus.circle"
 pattern = "L"
 apps = ["*"]
 action-type = "ax"
@@ -891,18 +813,6 @@ action-verb = "minimize"
 # `[tome].enabled = true`.
 # -----------------------------------------------------------------
 
-# Each item supports an optional `icon` field (drawn to the left of
-# the menu label). Recognised syntax:
-#
-#   icon = "🌐"                  — emoji / 1-2 character text glyph
-#   icon = "SF:globe"            — SF Symbol (macOS 11+; catalog:
-#                                  open Symbols.app)
-#   icon = "~/icons/foo.png"     — tilde-expanded path
-#   icon = "icons/foo.png"       — relative to ~/.config/wand/
-#   icon = "/abs/path.png"       — absolute path
-#
-# Unrecognised values fall back to no icon (logged to /tmp/wand.log).
-#
 # # Basic row:
 # [[tome.item]]
 # name = "New Tab"
@@ -933,21 +843,16 @@ action-verb = "minimize"
 # action-cmd  = "echo $SELECTION | translate --to ja"
 #
 # # App icon — `icon = "app:<bundle-id>"` pulls the actual icon of an
-# # installed app (running OR installed-but-inactive). Works for any
-# # app LaunchServices knows about. Falls back to no icon if the
-# # bundle id isn't installed.
+# # installed app (running OR installed-but-inactive).
 # [[tome.item]]
 # name = "Open Chrome"
 # icon = "app:com.google.Chrome"
 # action-type = "shell"
 # action-cmd  = "open -na 'Google Chrome'"
 #
-# # Tint — palette-colour an SF Symbol icon so the row reads in its
-# # category at a glance (red for destructive, accent for the active
-# # toggle, etc). Same colour grammar as the trail's `color`: named
-# # ("systemRed" / "red" / "orange" / … / "accent" for the system
-# # accent), or hex ("#rgb" / "#rrggbb" / "#rrggbbaa"). File / emoji
-# # / text icons ignore this — they have no hierarchical-colour path.
+# # Tint — palette-colour an SF Symbol icon. Same colour grammar as
+# # the trail's `color`: named ("systemRed" / "red" / "orange" / …,
+# # "accent" for the system accent), or hex.
 # [[tome.item]]
 # name = "Move to Trash"
 # icon = "SF:trash"
@@ -956,9 +861,7 @@ action-verb = "minimize"
 # action-verb = "AXDelete"
 #
 # # Multi-colour palette — `tint-colors = [...]` applies SF Symbol's
-# # hierarchical / multicolor palette. Each entry uses the same
-# # grammar as `tint`. Wins over a single `tint` when both are set.
-# # File / emoji / text icons ignore this.
+# # hierarchical / multicolor palette. Wins over a single `tint`.
 # [[tome.item]]
 # name = "Battery Low"
 # icon = "SF:battery.25.fill"
@@ -967,9 +870,7 @@ action-verb = "minimize"
 # action-cmd  = "open 'x-apple.systempreferences:com.apple.preference.battery'"
 #
 # # Icon animation (macOS 14+) — `icon-anim` fires an SF Symbol effect
-# # on the icon when the row is hovered. Older macOS silently ignores
-# # the field. Supported effects: "bounce" / "pulse". Only affects
-# # SF Symbol icons.
+# # on the icon when the row is hovered. Supported: "bounce" / "pulse".
 # [[tome.item]]
 # name = "Notifications"
 # icon = "SF:bell.fill"
@@ -988,30 +889,13 @@ action-verb = "minimize"
 #
 # # Inline section header — `header = "..."` draws a small-caps band
 # # above any item whose `header` value differs from the previous
-# # one's. Items with empty `header` inherit the current section, so
-# # a run can share one label without repeating it. After filters
-# # drop every item in a section, the header is omitted automatically
-# # — no orphan band. List layout only; toolbar variants ignore it.
+# # one's. Items with empty `header` inherit the current section.
 # [[tome.item]]
 # header = "Editing"
 # name = "Copy"
 # icon = "SF:doc.on.doc"
 # action-type = "key"
 # action-keys = "cmd+c"
-#
-# [[tome.item]]
-# header = "Editing"
-# name = "Paste"
-# icon = "SF:doc.on.clipboard"
-# action-type = "key"
-# action-keys = "cmd+v"
-#
-# [[tome.item]]
-# header = "Window"
-# name = "Close"
-# icon = "SF:xmark"
-# action-type = "key"
-# action-keys = "cmd+w"
 #
 # # Dynamic items — the parent is a submenu populated at every menu
 # # open by running `dynamic` (shell) and emitting one child per
@@ -1033,8 +917,7 @@ action-verb = "minimize"
 # # Checkmark / radio state — `state` decorates a row with macOS's
 # # native ✓ / dash indicator. Static values: "on" / "off" / "mixed".
 # # Dynamic: "shell:<cmd>" → evaluated at menu-open, exit 0 → ✓.
-# # 100ms timeout (state should be a cheap check; longer probes
-# # belong in `dynamic` items).
+# # 100ms timeout (state should be a cheap check).
 # [[tome.item]]
 # name = "Dark Mode"
 # state = "shell:defaults read -g AppleInterfaceStyle 2>/dev/null | grep -q Dark"
