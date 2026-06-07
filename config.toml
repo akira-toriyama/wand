@@ -452,6 +452,10 @@ anim-enabled = true
 #   "pac-man" — yellow chomping wedge
 #   "ghost"   — red Blinky-style ghost (dome + eyes + skirt)
 #
+# Pet sizes scale with `font-size` below so a larger card gets
+# proportionally larger pets — the ghost reads cleanly even on a
+# 20-pt card.
+#
 # Retired in this PR: `chomp = true`. Equivalent to
 # `line-pet = ["pac-man"]` — the old key still parses but logs a
 # warning to /tmp/wand.log and is silently ignored.
@@ -756,6 +760,10 @@ shadow = false
 #
 #   "pac-man" — classic yellow chomping wedge
 #   "ghost"   — red Blinky-style ghost (dome + eyes + skirt)
+#
+# Pet sizes scale with `[tome.row].font-size` so a larger panel gets
+# proportionally larger pets — the ghost stays readable at any
+# font-size. `outer-margin` is auto-managed to match.
 #
 # Retired in this PR: `chomp = true`. Equivalent to
 # `line-pet = ["pac-man"]` — the old key still parses but logs a

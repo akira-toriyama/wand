@@ -2208,9 +2208,14 @@ private final class HUDContentView: NSView {
         // renders the same under any `[cast].theme`. Pets chase each
         // other in array order — first leads, the rest trail by a
         // fixed `petChaseGapPt` so the listing reads as a chase
-        // rather than evenly spaced dots.
+        // rather than evenly spaced dots. Pet sizes scale with
+        // `cardFontSize` so a larger card font gets proportionally
+        // larger pets — without this, the ghost shrinks visually as
+        // the card grows.
         if !linePets.isEmpty {
-            drawCardLinePets(linePets, on: c.rect, now: nowArmed)
+            let petScale = max(1.0, o.cardFontSize / 13.0)
+            drawCardLinePets(linePets, on: c.rect, now: nowArmed,
+                              petScale: petScale)
         }
         NSGraphicsContext.restoreGraphicsState()
     }
@@ -2314,7 +2319,8 @@ private final class HUDContentView: NSView {
     /// visible half rides on top of the card border.
     private func drawCardLinePets(_ pets: [LinePet],
                                    on rect: CGRect,
-                                   now: CFTimeInterval) {
+                                   now: CFTimeInterval,
+                                   petScale: CGFloat) {
         // Travel just outside the card edge so the pet sits ON TOP
         // of the border, not under it.
         let path = rect.insetBy(dx: -1, dy: -1)
@@ -2326,7 +2332,7 @@ private final class HUDContentView: NSView {
         let leader = CGFloat(now).truncatingRemainder(
             dividingBy: perim / speed
         ) * speed
-        let chaseGap: CGFloat = 24  // ~2× ghost width for clearance
+        let chaseGap: CGFloat = 24 * petScale  // ~2× ghost width
         for (i, pet) in pets.enumerated() {
             var pos = leader - CGFloat(i) * chaseGap
             pos = pos.truncatingRemainder(dividingBy: perim)
@@ -2339,8 +2345,8 @@ private final class HUDContentView: NSView {
             tx.rotate(byRadians: rot)
             tx.concat()
             switch pet {
-            case .pacMan: drawCardPacMan(now: now)
-            case .ghost:  drawCardGhost(now: now)
+            case .pacMan: drawCardPacMan(now: now, petScale: petScale)
+            case .ghost:  drawCardGhost(now: now, petScale: petScale)
             }
             NSGraphicsContext.restoreGraphicsState()
         }
@@ -2371,9 +2377,11 @@ private final class HUDContentView: NSView {
     /// Yellow pac-man wedge with the mouth chomp on a ~0.25 s cycle,
     /// drawn centred on the current transform origin. Matches the
     /// tome-side variant verbatim so both surfaces' pellets read as
-    /// the same character.
-    private func drawCardPacMan(now: CFTimeInterval) {
-        let r: CGFloat = 7
+    /// the same character. `petScale` keeps it proportional to the
+    /// card's font size.
+    private func drawCardPacMan(now: CFTimeInterval,
+                                 petScale: CGFloat) {
+        let r: CGFloat = 7 * petScale
         let chompPhase = 0.5 - 0.5 * cos(now * (2 * .pi / 0.25))
         let openRad = chompPhase * (35.0 * .pi / 180.0)
         let yellow = NSColor(calibratedRed: 1.0, green: 0.85,
@@ -2393,10 +2401,11 @@ private final class HUDContentView: NSView {
     /// Red Blinky-style ghost: dome + 3-wave skirt + eyes pointing
     /// along travel direction. Same geometry as `TomePetsView`'s
     /// ghost so both surfaces ship identical silhouettes.
-    private func drawCardGhost(now: CFTimeInterval) {
-        let w: CGFloat = 14
-        let h: CGFloat = 16
-        let bob = CGFloat(sin(now * (2 * .pi / 0.4))) * 0.6
+    private func drawCardGhost(now: CFTimeInterval,
+                                petScale: CGFloat) {
+        let w: CGFloat = 14 * petScale
+        let h: CGFloat = 16 * petScale
+        let bob = CGFloat(sin(now * (2 * .pi / 0.4))) * 0.6 * petScale
         let halfW = w / 2
         let halfH = h / 2
         let red = NSColor(calibratedRed: 1.0, green: 0.0,
@@ -2410,28 +2419,30 @@ private final class HUDContentView: NSView {
         body.line(to: CGPoint(x: halfW, y: -halfH + bob))
         let segments = 3
         let segW = w / CGFloat(segments)
+        let waveDepth: CGFloat = 1.5 * petScale
         for i in (0..<segments).reversed() {
             let startX = -halfW + CGFloat(i + 1) * segW
             let endX = -halfW + CGFloat(i) * segW
             let midX = (startX + endX) / 2
             body.curve(to: CGPoint(x: endX, y: -halfH + bob),
                         controlPoint1: CGPoint(x: midX,
-                                               y: -halfH - 1.5 - bob),
+                                               y: -halfH - waveDepth - bob),
                         controlPoint2: CGPoint(x: midX,
-                                               y: -halfH - 1.5 - bob))
+                                               y: -halfH - waveDepth - bob))
         }
         body.line(to: CGPoint(x: -halfW, y: 0))
         body.close()
         red.setFill(); body.fill()
         NSColor.black.withAlphaComponent(0.35).setStroke()
-        body.lineWidth = 0.5; body.stroke()
-        let eyeR: CGFloat = 2.0
-        let pupilR: CGFloat = 1.0
+        body.lineWidth = 0.5 * petScale; body.stroke()
+        let eyeR: CGFloat = 2.0 * petScale
+        let pupilR: CGFloat = 1.0 * petScale
         let eyeY: CGFloat = halfH * 0.35
-        let eyeDx: CGFloat = 2.6
-        let pupilOffset: CGFloat = 0.7
+        let eyeDx: CGFloat = 2.6 * petScale
+        let pupilOffset: CGFloat = 0.7 * petScale
+        let eyeShift: CGFloat = 1.0 * petScale
         for sign in [-1.0, 1.0] {
-            let cx = CGFloat(sign) * eyeDx + 1.0
+            let cx = CGFloat(sign) * eyeDx + eyeShift
             let sclera = NSBezierPath(ovalIn: CGRect(
                 x: cx - eyeR, y: eyeY - eyeR,
                 width: 2 * eyeR, height: 2 * eyeR))

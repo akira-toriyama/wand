@@ -151,11 +151,13 @@ public enum LauncherPanel {
             ? PanelLayout.makeHeaderSpec(for: target)
             : nil
         // Pets ride the rim and need a margin around bg so the panel
-        // window doesn't clip their outer half. 14 pt accommodates
-        // the largest pet silhouette (ghost; pac-man is smaller),
-        // and is shared across all pet kinds so the layout doesn't
-        // shift when the user reorders the array.
-        let outerMargin: CGFloat = linePets.isEmpty ? 0 : 14
+        // window doesn't clip their outer half. The base margin
+        // accommodates the largest pet silhouette (ghost; pac-man is
+        // smaller) at the baseline font; it scales with `fontSize`
+        // so a larger panel doesn't shrink the pet's relative size.
+        let petScale = max(1.0, CGFloat(fontSize) / 13.0)
+        let outerMargin: CGFloat = linePets.isEmpty
+            ? 0 : round(14 * petScale)
         let (content, rows) = PanelLayout.buildContent(
             nodes: nodes, header: header, layout: layout,
             shortcutBadge: shortcutBadge, iconChip: iconChip,
@@ -1193,7 +1195,8 @@ private final class PanelController {
             frame: content.bounds,
             bgFrameInView: bg.frame,    // bg.frame is in content coords
             cornerRadius: PanelLayout.cornerRadius,
-            pets: linePets)
+            pets: linePets,
+            petScale: max(1.0, CGFloat(fontSize) / 13.0))
         view.autoresizingMask = [.width, .height]
         content.addSubview(view)
     }
@@ -1314,11 +1317,12 @@ private final class PanelController {
         // parent's layout — a horizontal grandchild from a toolbar's
         // submenu would feel chaotic, and submenus typically benefit
         // from rows-with-labels anyway.
+        let petScale = max(1.0, CGFloat(fontSize) / 13.0)
         let (content, rows) = PanelLayout.buildContent(
             nodes: children, header: nil, layout: .list,
             fontSize: fontSize,
             colors: colors,
-            outerMargin: linePets.isEmpty ? 0 : 14)
+            outerMargin: linePets.isEmpty ? 0 : round(14 * petScale))
         let frame = PanelLayout.placeChild(
             rowFrameOnScreen: rowOnScreen,
             parentPanelFrame: panel.frame,
@@ -1395,24 +1399,28 @@ private final class TomePetsView: NSView {
     private let bgFrameInView: CGRect
     private let cornerRadius: CGFloat
     private let pets: [LinePet]
+    /// Scale factor multiplied into every pet's geometry (pellet
+    /// radius / ghost dimensions) and the chase gap. Derived from
+    /// `[tome.row].font-size` so a larger panel gets proportionally
+    /// larger pets — without this, the ghost shrinks visually as the
+    /// panel grows.
+    private let petScale: CGFloat
     private var timer: Timer?
 
-    /// Gap (pt along the perimeter) between consecutive pets in the
-    /// chase. Each successive pet's centre lags the previous one by
-    /// this amount, so the array order = chase order. ~28 pt clears
-    /// both the pac-man (14 pt across) and ghost (14 pt) silhouettes
-    /// with a sliver of breathing space.
-    private static let petChaseGapPt: CGFloat = 28
     /// Travel speed of the chase along the rim. A typical panel
     /// (~250 × 200 pt → perimeter ~900 pt) completes a lap in 5-6 s
-    /// at 160 pt/s.
+    /// at 160 pt/s. Speed stays constant across `petScale` — a
+    /// larger pet at the same pt/s reads as "the same pet, just
+    /// bigger", not as a slower one.
     private static let petSpeedPtPerSec: CGFloat = 160
 
     init(frame: NSRect, bgFrameInView: CGRect,
-         cornerRadius: CGFloat, pets: [LinePet]) {
+         cornerRadius: CGFloat, pets: [LinePet],
+         petScale: CGFloat) {
         self.bgFrameInView = bgFrameInView
         self.cornerRadius = cornerRadius
         self.pets = pets
+        self.petScale = petScale
         super.init(frame: frame)
         wantsLayer = true
         autoresizingMask = [.width, .height]
@@ -1452,10 +1460,13 @@ private final class TomePetsView: NSView {
         let leader = CGFloat(now).truncatingRemainder(
             dividingBy: perim / Self.petSpeedPtPerSec
         ) * Self.petSpeedPtPerSec
+        // Chase gap also scales with `petScale` so the trailing pet
+        // doesn't get tangled into the leader at large sizes.
+        let chaseGap: CGFloat = 28 * petScale
         for (i, pet) in pets.enumerated() {
             // Lag each follower by the chase gap (mod the perimeter
             // so a wrapped value lands cleanly on the path).
-            var pos = leader - CGFloat(i) * Self.petChaseGapPt
+            var pos = leader - CGFloat(i) * chaseGap
             pos = pos.truncatingRemainder(dividingBy: perim)
             if pos < 0 { pos += perim }
             let (px, py, rot) = positionOnPerimeter(rect: path,
@@ -1502,7 +1513,7 @@ private final class TomePetsView: NSView {
     /// ~0.25 s cycle, drawn centred on the current transform origin.
     /// Geometry mirrors the cast-overlay variant.
     private func drawPacMan(now: CFTimeInterval) {
-        let r: CGFloat = 7
+        let r: CGFloat = 7 * petScale
         let chompPhase = 0.5 - 0.5 * cos(now * (2 * .pi / 0.25))
         let openRad = chompPhase * (35.0 * .pi / 180.0)
         let yellow = NSColor(calibratedRed: 1.0, green: 0.85,
@@ -1521,15 +1532,18 @@ private final class TomePetsView: NSView {
 
     /// Red Blinky-style ghost: rounded dome over a rectangular body
     /// with a 3-wave scalloped skirt, two white eyes with blue
-    /// pupils pointing along the travel direction (= local +x). Sized
-    /// 14 × 16 pt so the silhouette stays legible at this scale.
+    /// pupils pointing along the travel direction (= local +x).
+    /// Baseline silhouette is 14 × 16 pt at `petScale = 1`; multiplied
+    /// by `petScale` so a larger panel gets a larger ghost.
     private func drawGhost(now: CFTimeInterval) {
-        let w: CGFloat = 14
-        let h: CGFloat = 16
+        let w: CGFloat = 14 * petScale
+        let h: CGFloat = 16 * petScale
         // Skirt waves bob on a ~0.4 s cycle so the ghost reads as
         // moving rather than stamped on the rim. Phase is the same
         // for every ghost on the panel (one timer / one `now`).
-        let bob = CGFloat(sin(now * (2 * .pi / 0.4))) * 0.6
+        // Amplitude scales with `petScale` so the bob stays
+        // proportional to the larger silhouette.
+        let bob = CGFloat(sin(now * (2 * .pi / 0.4))) * 0.6 * petScale
 
         let halfW = w / 2
         let halfH = h / 2
@@ -1550,31 +1564,35 @@ private final class TomePetsView: NSView {
         // 3 waves across the skirt.
         let segments = 3
         let segW = w / CGFloat(segments)
+        let waveDepth: CGFloat = 1.5 * petScale
         for i in (0..<segments).reversed() {
             let startX = -halfW + CGFloat(i + 1) * segW
             let endX = -halfW + CGFloat(i) * segW
             let midX = (startX + endX) / 2
             body.curve(to: CGPoint(x: endX, y: -halfH + bob),
                         controlPoint1: CGPoint(x: midX,
-                                               y: -halfH - 1.5 - bob),
+                                               y: -halfH - waveDepth - bob),
                         controlPoint2: CGPoint(x: midX,
-                                               y: -halfH - 1.5 - bob))
+                                               y: -halfH - waveDepth - bob))
         }
         body.line(to: CGPoint(x: -halfW, y: 0))
         body.close()
         red.setFill(); body.fill()
         NSColor.black.withAlphaComponent(0.35).setStroke()
-        body.lineWidth = 0.5; body.stroke()
+        body.lineWidth = 0.5 * petScale; body.stroke()
 
         // Two eyes — white sclera + blue pupil, both nudged toward
-        // local +x to telegraph the chase direction.
-        let eyeR: CGFloat = 2.0
-        let pupilR: CGFloat = 1.0
+        // local +x to telegraph the chase direction. All sizes /
+        // offsets scale with `petScale` so the proportions stay
+        // identical to the baseline.
+        let eyeR: CGFloat = 2.0 * petScale
+        let pupilR: CGFloat = 1.0 * petScale
         let eyeY: CGFloat = halfH * 0.35
-        let eyeDx: CGFloat = 2.6
-        let pupilOffset: CGFloat = 0.7  // shift toward +x
+        let eyeDx: CGFloat = 2.6 * petScale
+        let pupilOffset: CGFloat = 0.7 * petScale
+        let eyeShift: CGFloat = 1.0 * petScale
         for sign in [-1.0, 1.0] {
-            let cx = CGFloat(sign) * eyeDx + 1.0  // both nudged +x
+            let cx = CGFloat(sign) * eyeDx + eyeShift  // both nudged +x
             let sclera = NSBezierPath(ovalIn: CGRect(
                 x: cx - eyeR, y: eyeY - eyeR,
                 width: 2 * eyeR, height: 2 * eyeR))
