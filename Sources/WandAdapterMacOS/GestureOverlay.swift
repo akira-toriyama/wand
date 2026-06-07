@@ -1181,13 +1181,22 @@ private final class TrailView: NSView {
     /// trail rather than sitting flat on the cursor.
     private static let pacmanPelletDiameter: CGFloat = 4
     private static let pacmanPelletInterval: CGFloat = 14
-    private static let pacmanFaceRadius: CGFloat = 10
+    /// Face silhouette radius (pt). Bumped slightly above the
+    /// smooth-arc baseline because the pixel-grid rasterisation
+    /// loses a little visual mass at the corners.
+    private static let pacmanFaceRadius: CGFloat = 12
+    /// Cell size of the face's pixel grid, as a fraction of the
+    /// face radius. ~0.13 gives ~15 cells across the diameter,
+    /// landing near the arcade sprite's pixel density. Smaller
+    /// values smooth the edge back toward an arc; larger values
+    /// turn the wedge into a coarse polygon.
+    private static let pacmanPixelCellRatio: CGFloat = 0.13
     /// Mouth half-angle bounds (degrees). The face animates between
     /// these via `cos`, giving the classic open-close chomp.
     /// `min` is just above zero so the mouth doesn't fully close
     /// (a sealed circle reads as "not Pac-Man anymore").
     private static let pacmanMouthHalfAngleMinDeg: CGFloat = 5
-    private static let pacmanMouthHalfAngleMaxDeg: CGFloat = 45
+    private static let pacmanMouthHalfAngleMaxDeg: CGFloat = 60
     /// Chomp frequency (Hz). The cosine drive makes one full
     /// open→close→open cycle per period; ~4 Hz lands near the feel
     /// of the original arcade animation.
@@ -1249,42 +1258,179 @@ private final class TrailView: NSView {
         walkPath(origin: origin, interval: interval, step: plot)
 
         // 3) Draw the face only once the trail is long enough for a
-        // real lag — the face then emerges naturally `faceLag` pt
+        // real lag — the sprite then emerges naturally `faceLag` pt
         // behind the cursor instead of popping in glued to the
-        // cursor at button-down.
+        // cursor at button-down. Sprite swaps to a ghost when the
+        // in-progress gesture has fallen off every rule, matching
+        // the arcade pairing (yellow Pac-Man = on-track, red ghost
+        // = chased / failure).
         if let anchor = faceAnchor {
-            drawPacmanFace(at: anchor.point, tangent: anchor.tangent,
-                            radius: faceRadius, color: color)
+            if valid {
+                drawPacmanFace(at: anchor.point,
+                                tangent: anchor.tangent,
+                                radius: faceRadius, color: color)
+            } else {
+                drawGhostFace(at: anchor.point,
+                               tangent: anchor.tangent,
+                               radius: faceRadius, color: color)
+            }
         }
     }
 
-    /// Draw a closed pie wedge centred on `p`, with the mouth
-    /// opening (an angular slice cut out) facing along `tangent`.
-    /// The mouth half-angle oscillates between
-    /// `pacmanMouthHalfAngleMin/MaxDeg` at `pacmanChompHz` so the
-    /// face chomps as it travels. Angles are in degrees for
-    /// `NSBezierPath.appendArc`; the wedge sweeps the long way
-    /// around (counter-clockwise from `+mouthHalf` to `-mouthHalf`)
-    /// so the "closed" portion of the face fills.
+    /// Draw the pacman face as a chunky pixel-grid sprite —
+    /// rasterise a circle minus a mouth wedge onto a square grid,
+    /// then fill the kept cells. Cells are drawn in face-local
+    /// coordinates (mouth opens along local +x); the graphics
+    /// context is rotated so the whole pixel sprite turns as one
+    /// rigid block along `tangent`, matching the arcade aesthetic
+    /// where the body's pixels stay aligned to the sprite frame as
+    /// it changes direction. Mouth half-angle oscillates between
+    /// `pacmanMouthHalfAngleMin/MaxDeg` at `pacmanChompHz` for the
+    /// chomp animation.
     private func drawPacmanFace(at p: CGPoint, tangent: CGPoint,
                                  radius: CGFloat, color: NSColor) {
-        // Cosine remap to [0, 1]: 0 at min mouth, 1 at max mouth.
         let phase = (1 - cos(CACurrentMediaTime() * 2 * .pi
                               * Self.pacmanChompHz)) / 2
-        let mouthHalf = Self.pacmanMouthHalfAngleMinDeg
+        let mouthHalfRad = (Self.pacmanMouthHalfAngleMinDeg
             + (Self.pacmanMouthHalfAngleMaxDeg
-                - Self.pacmanMouthHalfAngleMinDeg) * CGFloat(phase)
-        let dirDeg = atan2(tangent.y, tangent.x) * 180 / .pi
-        let startDeg = dirDeg + mouthHalf
-        let endDeg = dirDeg - mouthHalf
-        let path = NSBezierPath()
-        path.move(to: p)
-        path.appendArc(withCenter: p, radius: radius,
-                        startAngle: startDeg, endAngle: endDeg,
-                        clockwise: false)
-        path.close()
+                - Self.pacmanMouthHalfAngleMinDeg) * CGFloat(phase))
+            * .pi / 180
+
+        NSGraphicsContext.saveGraphicsState()
+        defer { NSGraphicsContext.restoreGraphicsState() }
+        let xform = NSAffineTransform()
+        xform.translateX(by: p.x, yBy: p.y)
+        xform.rotate(byRadians: atan2(tangent.y, tangent.x))
+        xform.concat()
+
+        let cell = max(2, radius * Self.pacmanPixelCellRatio)
+        let r2 = radius * radius
+        let extent = Int(ceil(radius / cell))
         color.withAlphaComponent(0.95).setFill()
-        path.fill()
+        for iy in -extent...extent {
+            for ix in -extent...extent {
+                // Cell-centre in local space; cells live on the
+                // half-integer grid so the silhouette is symmetric.
+                let cx = (CGFloat(ix) + 0.5) * cell
+                let cy = (CGFloat(iy) + 0.5) * cell
+                if cx * cx + cy * cy > r2 { continue }
+                // Mouth opens along local +x — drop cells whose
+                // angle from the centre falls inside ±mouthHalf.
+                if abs(atan2(cy, cx)) < mouthHalfRad { continue }
+                let rect = NSRect(
+                    x: CGFloat(ix) * cell,
+                    y: CGFloat(iy) * cell,
+                    width: cell, height: cell)
+                NSBezierPath(rect: rect).fill()
+            }
+        }
+    }
+
+    /// Draw the no-match ghost sprite — arcade-style "Blinky" shape
+    /// rasterised onto the same pixel grid as the pacman face: a
+    /// dome on top, square body below, and a wavy skirt of 3 humps
+    /// along the bottom edge. Body sits upright (arcade ghosts
+    /// don't rotate); only the eyes look along `tangent` so the
+    /// sprite still feels like it's tracking the cursor. Body
+    /// colour flows from `color` (= `trailColorNoMatch`, typically
+    /// red) so the failure signal pairs with the pellet trail's
+    /// no-match tint.
+    private func drawGhostFace(at p: CGPoint, tangent: CGPoint,
+                                radius: CGFloat, color: NSColor) {
+        let cell = max(2, radius * Self.pacmanPixelCellRatio)
+        // Body is slightly taller than wide so the dome + skirt
+        // both have room — matches the arcade ghost's vertical
+        // proportions.
+        let bodyHeight = radius                 // square body below dome
+        let skirtAmp = radius * 0.18            // hump depth below body
+        let totalBottom = -bodyHeight - skirtAmp
+        let r2 = radius * radius
+
+        NSGraphicsContext.saveGraphicsState()
+        defer { NSGraphicsContext.restoreGraphicsState() }
+        let xform = NSAffineTransform()
+        xform.translateX(by: p.x, yBy: p.y)
+        xform.concat()
+
+        // Body fill.
+        color.withAlphaComponent(0.95).setFill()
+        let extentX = Int(ceil(radius / cell))
+        let extentYTop = Int(ceil(radius / cell))
+        let extentYBot = Int(ceil(-totalBottom / cell))
+        for iy in -extentYBot...extentYTop {
+            for ix in -extentX...extentX {
+                let cx = (CGFloat(ix) + 0.5) * cell
+                let cy = (CGFloat(iy) + 0.5) * cell
+                if !ghostBodyFilled(cx: cx, cy: cy,
+                                     radius: radius, r2: r2,
+                                     bodyHeight: bodyHeight,
+                                     skirtAmp: skirtAmp) { continue }
+                let rect = NSRect(
+                    x: CGFloat(ix) * cell,
+                    y: CGFloat(iy) * cell,
+                    width: cell, height: cell)
+                NSBezierPath(rect: rect).fill()
+            }
+        }
+
+        // Eyes — two 2×3 white blocks set into the upper body, with
+        // a 1×1 dark pupil whose offset within the eye tracks the
+        // tangent direction (snapped to a single-cell shift so the
+        // pupil never sits between cells). At rest (no tangent), the
+        // pupil centres so the ghost stares straight ahead.
+        let eyeOffsetX = radius * 0.42     // outward from centre
+        let eyeY = radius * 0.20           // upper body band
+        let eyeHalfW = cell * 1.0          // 2-cell wide
+        let eyeHalfH = cell * 1.5          // 3-cell tall
+        let pupilSize = cell
+        let len = max(hypot(tangent.x, tangent.y), 0.0001)
+        let pupilShift = cell  // 1-cell shift in tangent direction
+        let pupilDx = (tangent.x / len) * pupilShift
+        let pupilDy = (tangent.y / len) * pupilShift
+
+        for side: CGFloat in [-1, 1] {
+            let ex = side * eyeOffsetX
+            let eyeRect = NSRect(x: ex - eyeHalfW,
+                                 y: eyeY - eyeHalfH,
+                                 width: eyeHalfW * 2,
+                                 height: eyeHalfH * 2)
+            NSColor.white.setFill()
+            NSBezierPath(rect: eyeRect).fill()
+            let pupilRect = NSRect(
+                x: ex - pupilSize / 2 + pupilDx,
+                y: eyeY - pupilSize / 2 + pupilDy,
+                width: pupilSize, height: pupilSize)
+            NSColor.black.setFill()
+            NSBezierPath(rect: pupilRect).fill()
+        }
+    }
+
+    /// Predicate: is the cell at local (cx, cy) inside the ghost
+    /// silhouette? Top half is a circle (dome); middle is a
+    /// rectangle (body); bottom is a 3-hump skirt — each hump is a
+    /// triangle wedge extending below the body baseline at three
+    /// evenly-spaced x positions across the width.
+    private func ghostBodyFilled(cx: CGFloat, cy: CGFloat,
+                                  radius: CGFloat, r2: CGFloat,
+                                  bodyHeight: CGFloat,
+                                  skirtAmp: CGFloat) -> Bool {
+        if abs(cx) > radius { return false }
+        // Dome: cy >= 0, inside circle.
+        if cy >= 0 { return cx * cx + cy * cy <= r2 }
+        // Body rectangle: -bodyHeight <= cy <= 0.
+        if cy >= -bodyHeight { return true }
+        // Skirt: 3 evenly-spaced humps. Compute distance to nearest
+        // hump centre as a fraction of the hump's half-width; cell
+        // is filled when its depth below the body baseline stays
+        // above the triangle slope at this x.
+        let humpWidth = (2 * radius) / 3
+        let humpHalf = humpWidth / 2
+        let segIdx = min(2, max(0,
+            Int(floor((cx + radius) / humpWidth))))
+        let humpCentre = -radius + (CGFloat(segIdx) + 0.5) * humpWidth
+        let distFromCentre = abs(cx - humpCentre) / humpHalf
+        let depthAllowed = (1 - distFromCentre) * skirtAmp
+        return cy >= -bodyHeight - depthAllowed
     }
 
     /// Snap `p` onto the axis defined by `dir` and the point `from` —
