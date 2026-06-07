@@ -383,6 +383,15 @@ private final class TrailView: NSView {
     /// flashes again on the second drop.
     fileprivate var noMatchFlashStartedAt: TimeInterval?
     fileprivate static let noMatchFlashDurationMs: Double = 200
+    /// Wall-time of the most recent `true` → `false` transition that
+    /// HASN'T been cleared yet. Drives the pac-man "GAME OVER" arcade
+    /// overlay rendered above the stroke's origin point. Distinct
+    /// from `noMatchFlashStartedAt` (a brief 200 ms wall flash):
+    /// `gameOverStartedAt` lingers for the rest of the stroke (or
+    /// until the gesture re-matches a rule) so the "you're off-track
+    /// → no rule will fire on release" message stays visible. `nil`
+    /// when no GAME OVER is currently shown.
+    fileprivate var gameOverStartedAt: TimeInterval?
     fileprivate var hint: GestureHint?      // shape + reachable rules
     /// Icon of the target app the gesture is acting on, drawn as a
     /// small badge at `origin`. Tells the user "you're operating
@@ -526,9 +535,17 @@ private final class TrailView: NSView {
         }
         // Detect the true → false transition for the pac-man wall
         // flash. Re-armed each time so a re-match → no-match
-        // sequence flashes again on the second drop.
+        // sequence flashes again on the second drop. GAME OVER
+        // arcade overlay piggybacks on the same transition but
+        // lingers (cleared on re-match below or on stroke end) so
+        // the user keeps seeing "you're off-track" until they
+        // recover or release.
         if self.valid && !valid {
             noMatchFlashStartedAt = CACurrentMediaTime()
+            gameOverStartedAt = CACurrentMediaTime()
+        } else if !self.valid && valid {
+            // Recovered onto a matching shape — pull the overlay.
+            gameOverStartedAt = nil
         }
         self.valid = valid
         self.hint = hint
@@ -691,6 +708,7 @@ private final class TrailView: NSView {
         cardLayouts.removeAll()
         badgeLayout = nil
         noMatchFlashStartedAt = nil
+        gameOverStartedAt = nil
         // Re-roll the stroke seed so the NEXT stroke's `splatoon`-
         // mode trail picks a different team colour. The seed is also
         // ignored by static / rainbow / neon modes (they read time
@@ -802,6 +820,16 @@ private final class TrailView: NSView {
                     valid: valid,
                     isFinalHold: holdingFinal),
                 color: color, outline: pacManOutline)
+            // Arcade "GAME OVER" overlay — shown only when the stroke
+            // is currently off every rule (`gameOverStartedAt != nil`
+            // ⇒ valid went true→false at some point and hasn't
+            // recovered). Anchored above the stroke's origin point so
+            // the message stays put even as the cursor wanders. A
+            // brief scale-in pop on first appearance + 2 Hz blink
+            // sells the arcade respawn moment.
+            if let gameOverAt = gameOverStartedAt {
+                drawGameOverOverlay(origin: origin, startedAt: gameOverAt)
+            }
             NSGraphicsContext.restoreGraphicsState()
             return
         }
@@ -897,6 +925,86 @@ private final class TrailView: NSView {
             path.line(to: fp)
         }
         return path
+    }
+
+    /// Arcade "GAME OVER" banner anchored above the stroke's origin
+    /// point. Pac-man theme only — called from the pac-man branch of
+    /// `draw`, gated on `gameOverStartedAt != nil`.
+    ///
+    /// First ~140 ms after appearance: scale-in pop (0.7 → 1.0
+    /// ease-out cubic) so the message lands with arcade impact. After
+    /// the pop, a 2 Hz alpha blink (1.0 ↔ 0.5) sells the classic
+    /// arcade "respawn screen" feel. Colour is hot arcade-red on a
+    /// black backdrop with a yellow outline, matching pac-man's
+    /// danger palette.
+    private func drawGameOverOverlay(origin: CGPoint,
+                                      startedAt: TimeInterval) {
+        let now = CACurrentMediaTime()
+        let elapsed = now - startedAt
+        // Scale-in pop over the first 140 ms.
+        let popDuration: Double = 0.14
+        let scale: CGFloat
+        if elapsed < popDuration {
+            let p = elapsed / popDuration
+            let eased = 1 - pow(1 - p, 3)  // ease-out cubic
+            scale = 0.7 + 0.3 * CGFloat(eased)
+        } else {
+            scale = 1.0
+        }
+        // 2 Hz blink after the pop settles.
+        let blinkAlpha: CGFloat = elapsed >= popDuration
+            ? (sin(elapsed * 2 * .pi * 2) > 0 ? 1.0 : 0.55)
+            : 1.0
+
+        let text = "GAME OVER" as NSString
+        let font = NSFont.monospacedSystemFont(ofSize: 22, weight: .bold)
+        let red = NSColor(srgbRed: 1.00, green: 0.10,
+                          blue: 0.10, alpha: 1.0)
+        let yellow = NSColor(srgbRed: 1.00, green: 0.92,
+                             blue: 0.0, alpha: 1.0)
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .foregroundColor: red,
+            .strokeColor: yellow,
+            // Negative stroke width fills + strokes; positive would
+            // hollow the glyph. Yellow halo around the red letters
+            // pops them off the dark backdrop.
+            .strokeWidth: -3.0,
+        ]
+        let textSize = text.size(withAttributes: attrs)
+
+        // Background card: rounded black rect inset around the text.
+        let padX: CGFloat = 14
+        let padY: CGFloat = 8
+        let cardSize = CGSize(width: textSize.width + 2 * padX,
+                               height: textSize.height + 2 * padY)
+        // Anchor 36 pt above origin (above the trail/face).
+        let cx = origin.x
+        let cy = origin.y + 36 + cardSize.height / 2
+
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current?.cgContext.setAlpha(blinkAlpha)
+        let tx = NSAffineTransform()
+        tx.translateX(by: cx, yBy: cy)
+        tx.scaleX(by: scale, yBy: scale)
+        tx.concat()
+
+        let cardRect = CGRect(x: -cardSize.width / 2,
+                               y: -cardSize.height / 2,
+                               width: cardSize.width,
+                               height: cardSize.height)
+        let card = NSBezierPath(roundedRect: cardRect,
+                                 xRadius: 6, yRadius: 6)
+        NSColor.black.withAlphaComponent(0.92).setFill()
+        card.fill()
+        yellow.setStroke()
+        card.lineWidth = 2
+        card.stroke()
+
+        let textOrigin = CGPoint(x: -textSize.width / 2,
+                                  y: -textSize.height / 2)
+        text.draw(at: textOrigin, withAttributes: attrs)
+        NSGraphicsContext.restoreGraphicsState()
     }
 
     /// Render a single-color trail. `normal` / `thin` / `thick` / `glow`
