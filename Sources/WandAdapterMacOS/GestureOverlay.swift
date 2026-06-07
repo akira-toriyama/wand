@@ -2066,8 +2066,15 @@ private final class HUDContentView: NSView {
                           in o: TrailView,
                           alpha: CGFloat,
                           dx: CGFloat, dy: CGFloat, scale: CGFloat) {
-        let bg = NSBezierPath(roundedRect: c.rect,
-                              xRadius: 10, yRadius: 10)
+        // Firing card under `style = "pacman"` gets the PAC-MAN-logo
+        // treatment: angular corners, thicker black border, and a
+        // hard red drop-shadow rectangle behind it so the card reads
+        // as the arcade marquee's 3D-extruded letters.
+        let arcadeMarquee = c.kind == .fires
+            && o.trailStyle == .pacman
+        let cornerR: CGFloat = arcadeMarquee ? 2 : 10
+        let borderW: CGFloat = arcadeMarquee ? 2.5 : 1
+
         NSGraphicsContext.saveGraphicsState()
         if alpha < 1 {
             NSGraphicsContext.current?.cgContext.setAlpha(alpha)
@@ -2080,6 +2087,23 @@ private final class HUDContentView: NSView {
             tx.translateX(by: -cx, yBy: -cy)
             tx.concat()
         }
+        if arcadeMarquee {
+            // 3D shadow rectangle, drawn first so the card body
+            // covers it on the top-left. Offset toward screen
+            // bottom-right by `shadowOffset` pt — matches the
+            // PAC-MAN logo's extruded look.
+            let shadowOffset: CGFloat = 4
+            let shadowRect = c.rect.offsetBy(dx: shadowOffset,
+                                              dy: -shadowOffset)
+            let shadowPath = NSBezierPath(roundedRect: shadowRect,
+                                           xRadius: cornerR,
+                                           yRadius: cornerR)
+            NSColor(srgbRed: 0.85, green: 0.05,
+                     blue: 0.10, alpha: 1.0).setFill()
+            shadowPath.fill()
+        }
+        let bg = NSBezierPath(roundedRect: c.rect,
+                              xRadius: cornerR, yRadius: cornerR)
         // Resolve cycle-driven colours once per card draw. Trail's
         // strobe period + stroke seed feed cards too, so trail and
         // borders cycle in lockstep (and splatoon picks the same
@@ -2101,7 +2125,7 @@ private final class HUDContentView: NSView {
             at: now, strokeSeed: o.strokeSeed,
             cyclePeriod: o.colorCyclePeriod)
         border.setStroke()
-        bg.lineWidth = 1
+        bg.lineWidth = borderW
         bg.stroke()
         c.text.draw(with: c.rect.insetBy(dx: o.cardPadX, dy: o.cardPadY),
                     options: TrailView.textOpts)
