@@ -722,6 +722,14 @@ cycle-ms = 4000
 #   8+    — chunky / arcade-pixel feel; pairs well with pac-man / mono
 border-width = 2
 
+# macOS window drop shadow under the panel. Default `false`: macOS
+# draws a thin dark halo just outside any panel with `hasShadow =
+# true`, and that halo reads as an extra fringe on the border
+# decoration (the "外側に黒い枠線" the user could see even after the
+# CALayer-native border fix). Set `true` to restore the system menu
+# shadow.
+shadow = false
+
 
 # -----------------------------------------------------------------
 # Items (tome) and rules (cast) — shared field reference

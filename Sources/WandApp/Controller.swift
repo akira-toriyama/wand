@@ -214,6 +214,7 @@ public final class Controller: @unchecked Sendable {
             border: cfg.launcher.decoration.border,
             borderCycleMs: cfg.launcher.decoration.cycleMs,
             borderWidth: cfg.launcher.decoration.borderWidth,
+            shadow: cfg.launcher.decoration.shadow,
             palette: cfg.launcher.theme.palette
         ) { [weak self] item, target in
             self?.counterLauncherDispatched += 1
@@ -295,6 +296,7 @@ public final class Controller: @unchecked Sendable {
             border: cfg.launcher.decoration.border,
             borderCycleMs: cfg.launcher.decoration.cycleMs,
             borderWidth: cfg.launcher.decoration.borderWidth,
+            shadow: cfg.launcher.decoration.shadow,
             palette: cfg.launcher.theme.palette
         ) { [weak self] item, target in
             self?.counterShowMenuDispatched += 1

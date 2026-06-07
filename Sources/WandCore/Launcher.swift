@@ -439,13 +439,20 @@ public struct LauncherDecorationSpec: Sendable, Equatable {
     /// Ignored when `border = "off"`. Default 2 matches the pre-knob
     /// hardcoded value, so existing configs stay visually identical.
     public let borderWidth: Int
+    /// macOS window drop shadow under the panel. Default `false`:
+    /// avoids a thin dark halo just outside the rim that some users
+    /// read as a fringe on the border decoration. Set `true` to
+    /// restore the system menu shadow look.
+    public let shadow: Bool
 
     public init(border: LauncherBorder = .off,
                 cycleMs: Int = 4000,
-                borderWidth: Int = 2) {
+                borderWidth: Int = 2,
+                shadow: Bool = false) {
         self.border = border
         self.cycleMs = cycleMs
         self.borderWidth = borderWidth
+        self.shadow = shadow
     }
 
     public static let `default` = LauncherDecorationSpec()

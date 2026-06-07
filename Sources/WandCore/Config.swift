@@ -401,10 +401,12 @@ public struct WandConfig: Sendable {
             ld, key: "cycle-ms", default: 4000, lo: 500, hi: 10000)
         let launcherDecorBorderWidth = clampInt(
             ld, key: "border-width", default: 2, lo: 1, hi: 10)
+        let launcherDecorShadow = ld.bool("shadow", false)
         let launcherDecoration = LauncherDecorationSpec(
             border: launcherDecorBorder,
             cycleMs: launcherDecorCycleMs,
-            borderWidth: launcherDecorBorderWidth)
+            borderWidth: launcherDecorBorderWidth,
+            shadow: launcherDecorShadow)
 
         // Warn when the user opted out of the launcher but still
         // configured non-default panel cosmetics — those only fire

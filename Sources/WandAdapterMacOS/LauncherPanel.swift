@@ -131,6 +131,7 @@ public enum LauncherPanel {
                                 border: LauncherBorder = .off,
                                 borderCycleMs: Int = 4000,
                                 borderWidth: Int = 2,
+                                shadow: Bool = false,
                                 palette: TomeThemePalette = TomeThemePalette(),
                                 onSelect: @escaping (LauncherItem, Target) -> Void) {
         current?.dismiss()
@@ -163,6 +164,7 @@ public enum LauncherPanel {
             border: border,
             borderCycleMs: borderCycleMs,
             borderWidth: borderWidth,
+            shadow: shadow,
             colors: colors,
             onDismissRoot: { current = nil })
         current = controller
@@ -923,6 +925,11 @@ private final class PanelController {
     /// in `installBorderDecoration`. Ignored when `border = .off`.
     /// Child panels inherit from the root.
     private let borderWidth: Int
+    /// Whether to draw the macOS window drop shadow under the panel.
+    /// Default `false`: a thin halo just outside the rim reads as a
+    /// fringe on the border decoration, so the project default is
+    /// no shadow. Child panels inherit from the root.
+    private let shadow: Bool
     /// Re-entry guard: a fade-out can dispatch async, and a global
     /// click or follow-up `dismiss()` could land mid-fade. Once `true`
     /// the panel is committed to its current teardown path and any
@@ -959,6 +966,7 @@ private final class PanelController {
          border: LauncherBorder = .off,
          borderCycleMs: Int = 4000,
          borderWidth: Int = 2,
+         shadow: Bool = false,
          colors: TomeColors = .none,
          onDismissRoot: (() -> Void)? = nil) {
         self.layout = layout
@@ -970,6 +978,7 @@ private final class PanelController {
         self.border = border
         self.borderCycleMs = borderCycleMs
         self.borderWidth = borderWidth
+        self.shadow = shadow
         self.colors = colors
         self.onDismissRoot = isRoot ? onDismissRoot : nil
 
@@ -985,7 +994,7 @@ private final class PanelController {
                                     .fullScreenAuxiliary, .transient]
         panel.becomesKeyOnlyIfNeeded = true
         panel.hidesOnDeactivate = false
-        panel.hasShadow = true
+        panel.hasShadow = shadow
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.appearance = NSAppearance(named: .darkAqua)
@@ -1233,6 +1242,7 @@ private final class PanelController {
             border: border,
             borderCycleMs: borderCycleMs,
             borderWidth: borderWidth,
+            shadow: shadow,
             colors: colors)
         c.parent = self
         child = c
