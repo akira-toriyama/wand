@@ -1067,8 +1067,19 @@ private final class PanelController {
     /// places the stroke inside bg's mask, so the entire rounded rim
     /// renders cleanly.
     private func installBorderDecoration() {
-        guard border != .off,
-              let bg = panel.contentView?.subviews.first,
+        guard border != .off else { return }
+        // Force Auto Layout to resolve bg's constraints NOW (`bg` is
+        // pinned to all four edges of contentView via constraints).
+        // Without this, bg.bounds is still `.zero` at install time —
+        // the panel hasn't been ordered front yet, so layout hasn't
+        // run, and the stroke ends up at a degenerate (0, 0, 0, 0)
+        // path that paints nothing. The previously visible "four
+        // corners only" rainbow rim was actually drawn against
+        // contentView.bounds (which buildContent sets explicitly)
+        // and only the bits poking outside bg's rounded mask showed
+        // through.
+        panel.contentView?.layoutSubtreeIfNeeded()
+        guard let bg = panel.contentView?.subviews.first,
               let host = bg.layer else { return }
         let stroke = CAShapeLayer()
         // Inset by half the line width so the centerline of the stroke
@@ -1077,9 +1088,9 @@ private final class PanelController {
         let lw = CGFloat(borderWidth)
         let inset = lw / 2
         let corner: CGFloat = PanelLayout.cornerRadius
-        // `bg.bounds` is locked at panel `frame.size` once the panel is
-        // shown — bg pins to all four edges of contentView and the
-        // panel doesn't resize, so a static path is safe.
+        // `bg.bounds` is now resolved (layoutSubtreeIfNeeded above)
+        // and locked at panel `frame.size`. The panel doesn't resize
+        // after show, so a static path is safe.
         let rect = bg.bounds.insetBy(dx: inset, dy: inset)
         stroke.path = CGPath(roundedRect: rect,
                               cornerWidth: max(0, corner - inset),
