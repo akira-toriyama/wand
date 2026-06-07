@@ -1203,11 +1203,11 @@ private final class TrailView: NSView {
     /// leave room for the eyes / mouth detail without crowding.
     private static let pacmanFaceRadius: CGFloat = 16
     /// Cell size of the face's pixel grid, as a fraction of the
-    /// face radius. ~0.14 gives ~14 cells across the diameter,
-    /// landing on the chunky side of the arcade sprite range.
-    /// Smaller values smooth the edge back toward an arc; larger
-    /// values turn the wedge into a coarse polygon.
-    private static let pacmanPixelCellRatio: CGFloat = 0.14
+    /// face radius. ~0.155 gives ~13 cells across the diameter,
+    /// matching the canonical arcade Pac-Man sprite's 12×13 cell
+    /// silhouette. Smaller values smooth the edge back toward an
+    /// arc; larger values turn the wedge into a coarse polygon.
+    private static let pacmanPixelCellRatio: CGFloat = 0.155
     /// Mouth half-angle bounds (degrees). The face animates between
     /// these via `cos`, giving the classic open-close chomp.
     /// `min` is just above zero so the mouth doesn't fully close
@@ -1596,7 +1596,7 @@ private final class TrailView: NSView {
 
     /// Predicate: is the cell at local (cx, cy) inside the ghost
     /// silhouette? Top half is a circle (dome); middle is a
-    /// rectangle (body); bottom is a 3-hump skirt — each hump is a
+    /// rectangle (body); bottom is a 4-hump skirt — each hump is a
     /// triangle wedge extending below the body baseline. `legFrame`
     /// (0 or 1) shifts the hump pattern by half a hump-width so
     /// alternating frames give the classic arcade "leg shuffle".
@@ -1610,10 +1610,13 @@ private final class TrailView: NSView {
         if cy >= 0 { return cx * cx + cy * cy <= r2 }
         // Body rectangle: -bodyHeight <= cy <= 0.
         if cy >= -bodyHeight { return true }
-        // Skirt humps. Frame 0 places hump centres at the segment
-        // midpoints; frame 1 shifts them by half a hump-width so
-        // the gaps and humps swap and the sprite reads as walking.
-        let humpWidth = (2 * radius) / 3
+        // Skirt humps. 4 humps across — matches the canonical
+        // 14-wide arcade ghost sprite's 4-toothed bottom. Frame 0
+        // places hump centres at the segment midpoints; frame 1
+        // shifts them by half a hump-width so the gaps and humps
+        // swap and the sprite reads as walking.
+        let humpCount: CGFloat = 4
+        let humpWidth = (2 * radius) / humpCount
         let humpHalf = humpWidth / 2
         let phaseShift: CGFloat = (legFrame == 0) ? 0 : humpHalf
         // Wrap into the [-radius, radius) band so a shifted hump
@@ -1621,7 +1624,7 @@ private final class TrailView: NSView {
         let shifted = cx + phaseShift
         let wrapped = shifted - 2 * radius
             * floor((shifted + radius) / (2 * radius))
-        let segIdx = min(2, max(0,
+        let segIdx = min(Int(humpCount) - 1, max(0,
             Int(floor((wrapped + radius) / humpWidth))))
         let humpCentre = -radius + (CGFloat(segIdx) + 0.5) * humpWidth
         let distFromCentre = abs(wrapped - humpCentre) / humpHalf
