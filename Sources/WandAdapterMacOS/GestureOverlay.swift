@@ -866,15 +866,22 @@ private final class TrailView: NSView {
     /// invoke `step` once per `interval`-pt advance along the path.
     /// Used by the pixel and ascii renderers to place discrete marks
     /// at a fixed spacing regardless of original sample density.
+    /// Pass `points:` to override the default sequence — the pacman
+    /// renderer feeds in its own snapped polyline so pellets / face
+    /// anchor walk the same axis-locked geometry as the walls.
     private func walkPath(origin: CGPoint,
                            interval: CGFloat,
                            trimTail: CGFloat = 0,
+                           points: [CGPoint]? = nil,
                            step: (CGPoint, CGPoint) -> Void) {
         // Freehand mode walks the raw sample stream; straightened
         // mode walks the snapped corner polyline + active freehand.
-        let pts: [CGPoint] = straightenOnTurn
-            ? ([origin] + corners + Array(freehandPoints.dropFirst()))
-            : rawTrail
+        // An explicit `points` override wins over both.
+        let pts: [CGPoint] = points ?? (
+            straightenOnTurn
+                ? ([origin] + corners + Array(freehandPoints.dropFirst()))
+                : rawTrail
+        )
         guard !pts.isEmpty, interval > 0 else { return }
         // `trimTail` (pt) trims that much distance off the end of the
         // path before emitting — used by the Pac-Man style to leave a
@@ -1245,40 +1252,76 @@ private final class TrailView: NSView {
         let faceLag = Self.pacmanFaceLag * scale
         let faceRadius = Self.pacmanFaceRadius * scale
         let pelletFill = color.withAlphaComponent(0.9)
-        let outlineFill = outline?.withAlphaComponent(0.9)
-        let outlinePad = max(1, scale)
 
-        // 1) Locate where Pac-Man's face sits this frame: walk the
-        // path with the lag as `trimTail` — the final step the walker
-        // emits is exactly the cutoff point. Skip drawing in this
-        // pass; we only need the coordinate + tangent.
+        // Single shared point sequence — corridor, pellets, and the
+        // face-anchor walk all consume the same axis-snapped
+        // polyline. Computing it once here keeps the three layers
+        // locked together: when the live cursor is mid-diagonal
+        // between two committed corners, the snap keeps every
+        // visual on the same line instead of splitting dots off
+        // the walls.
+        let snappedPts = pacmanSnappedPoints(origin: origin)
+
+        // 1) Black corridor + neon walls — one geometry pass on the
+        // pacman-specific centerline. `buildPacmanCenterline`
+        // bezier-smooths every interior corner so single-corner
+        // gestures (e.g. "DR") still soften, and the offsets from
+        // `copy(strokingWithWidth:)` then paint road (fill) + walls
+        // (stroke) in one path each.
+        if let outline,
+           let ctx = NSGraphicsContext.current?.cgContext {
+            let corridorWidth = Self.pacmanWallOffset * 2 * scale
+            let wallStroke = max(1, scale * Self.pacmanWallStroke)
+            let cornerRadius = Self.pacmanWallOffset * scale
+            let center = buildPacmanCenterline(
+                points: snappedPts, cornerRadius: cornerRadius)
+            let centerCG = Self.toCGPath(center)
+            let boundary = centerCG.copy(
+                strokingWithWidth: corridorWidth,
+                lineCap: .round,
+                lineJoin: .round,
+                miterLimit: 10)
+            // Road (fill).
+            ctx.addPath(boundary)
+            ctx.setFillColor(
+                NSColor.black.withAlphaComponent(0.95).cgColor)
+            ctx.fillPath()
+            // Walls (stroke).
+            ctx.addPath(boundary)
+            ctx.setStrokeColor(
+                outline.withAlphaComponent(0.95).cgColor)
+            ctx.setLineWidth(wallStroke)
+            ctx.setLineJoin(.round)
+            ctx.strokePath()
+        }
+
+        // 2) Locate where Pac-Man's face sits this frame: walk the
+        // snapped polyline with the lag as `trimTail` — the final
+        // step the walker emits is exactly the cutoff point. Skip
+        // drawing in this pass; we only need the coordinate +
+        // tangent.
         var faceAnchor: (point: CGPoint, tangent: CGPoint)?
         walkPath(origin: origin,
                  interval: interval,
-                 trimTail: faceLag) { p, tangent in
+                 trimTail: faceLag,
+                 points: snappedPts) { p, tangent in
             faceAnchor = (p, tangent)
         }
 
-        // 2) Draw the pellets across the full path (no trim) so the
-        // dot trail extends from origin all the way to the cursor.
-        // Single line — no thickness stacking.
+        // 3) Pellets across the full snapped polyline. The arcade
+        // dot is unhaloed — the walls drawn above carry the
+        // outline-for-legibility treatment; doubling that with a
+        // per-pellet halo would muddy the corridor read.
         let plot: (CGPoint, CGPoint) -> Void = { p, _ in
-            if let outlineFill {
-                outlineFill.setFill()
-                let outer = NSRect(x: p.x - dot / 2 - outlinePad,
-                                   y: p.y - dot / 2 - outlinePad,
-                                   width: dot + outlinePad * 2,
-                                   height: dot + outlinePad * 2)
-                NSBezierPath(ovalIn: outer).fill()
-            }
             pelletFill.setFill()
             let rect = NSRect(x: p.x - dot / 2, y: p.y - dot / 2,
                               width: dot, height: dot)
             NSBezierPath(ovalIn: rect).fill()
         }
-        walkPath(origin: origin, interval: interval, step: plot)
+        walkPath(origin: origin, interval: interval,
+                 points: snappedPts, step: plot)
 
-        // 3) Draw the face only once the trail is long enough for a
+        // 4) Draw the face only once the trail is long enough for a
         // real lag — the sprite then emerges naturally `faceLag` pt
         // behind the cursor instead of popping in glued to the
         // cursor at button-down. Sprite swaps to a ghost when the
@@ -1296,6 +1339,114 @@ private final class TrailView: NSView {
                                radius: faceRadius, color: color)
             }
         }
+    }
+
+    /// Half-width of the corridor between the two maze walls
+    /// (pt at scale=1). 16pt centre-to-wall gives a ~32pt wide
+    /// corridor — enough air around the 4pt arcade pellets that the
+    /// walls don't crowd them, matching the arcade's spacious feel.
+    private static let pacmanWallOffset: CGFloat = 16
+    /// Stroke width of each wall (pt at scale=1). Thin so the read
+    /// is "neon line", not "filled bar".
+    private static let pacmanWallStroke: CGFloat = 2.5
+
+    /// Shared point sequence for every pacman-style geometry pass:
+    /// corridor centerline, wall offsets, pellet steps, and the
+    /// face-anchor walk all use this exact list so the visuals
+    /// stay locked together. With `straightenOnTurn = true` it's
+    /// `origin → corners → axis-snapped cursor`; with `false` it
+    /// falls back to raw freehand. The cursor snap projects the
+    /// live mouse position onto `lastDir` so mid-diagonal hand
+    /// motion doesn't split the dots from the walls.
+    private func pacmanSnappedPoints(origin: CGPoint) -> [CGPoint] {
+        if !straightenOnTurn {
+            return rawTrail
+        }
+        var pts: [CGPoint] = [origin] + corners
+        if let liveCursor = cursor {
+            let snappedTail: CGPoint
+            if let dir = lastDir, let from = pts.last {
+                snappedTail = Self.snap(liveCursor, to: dir, from: from)
+            } else {
+                snappedTail = liveCursor
+            }
+            if snappedTail != pts.last {
+                pts.append(snappedTail)
+            }
+        }
+        return pts
+    }
+
+    /// Pacman-specific smoothed centerline. Bezier-smooths every
+    /// interior corner of the supplied `points` sequence with a
+    /// `cornerRadius`-sized arc — so single-corner gestures (e.g.
+    /// "DR") get a rounded turn that the wall offsets can follow
+    /// without notches. Callers feed the result of
+    /// `pacmanSnappedPoints(...)` so corridor + pellets +
+    /// face-anchor share their geometry exactly.
+    private func buildPacmanCenterline(points pts: [CGPoint],
+                                         cornerRadius: CGFloat)
+        -> NSBezierPath {
+        let path = NSBezierPath()
+        guard pts.count >= 2 else { return path }
+        path.move(to: pts[0])
+        if pts.count == 2 {
+            path.line(to: pts[1])
+            return path
+        }
+        for i in 1..<pts.count - 1 {
+            let A = pts[i - 1]
+            let B = pts[i]
+            let C = pts[i + 1]
+            let inLen = hypot(B.x - A.x, B.y - A.y)
+            let outLen = hypot(C.x - B.x, C.y - B.y)
+            // Radius capped to half each adjacent segment so the
+            // curve never overshoots into the neighbouring corner.
+            let r = min(cornerRadius, inLen / 2, outLen / 2)
+            let inU = CGPoint(x: (B.x - A.x) / max(inLen, 1),
+                              y: (B.y - A.y) / max(inLen, 1))
+            let outU = CGPoint(x: (C.x - B.x) / max(outLen, 1),
+                               y: (C.y - B.y) / max(outLen, 1))
+            let P = CGPoint(x: B.x - inU.x * r, y: B.y - inU.y * r)
+            let Q = CGPoint(x: B.x + outU.x * r, y: B.y + outU.y * r)
+            path.line(to: P)
+            // Cubic with both control points at B: a smooth arc
+            // from P through ~B to Q (matches buildHybridPath's
+            // corner-smoothing geometry).
+            path.curve(to: Q, controlPoint1: B, controlPoint2: B)
+        }
+        path.line(to: pts.last!)
+        return path
+    }
+
+    /// Convert an `NSBezierPath` made of move/line/curve segments
+    /// into a `CGPath`. Used by the pacman corridor renderer to
+    /// hand the smoothed centerline off to `CGPath.copy(stroking
+    /// WithWidth:)`, which produces clean parallel offsets at
+    /// corners. macOS 14 added an `NSBezierPath.cgPath` accessor
+    /// directly but we still target 13+, so the conversion is
+    /// inlined here.
+    private static func toCGPath(_ ns: NSBezierPath) -> CGPath {
+        let path = CGMutablePath()
+        var points = [NSPoint](repeating: .zero, count: 3)
+        for i in 0..<ns.elementCount {
+            switch ns.element(at: i, associatedPoints: &points) {
+            case .moveTo:    path.move(to: points[0])
+            case .lineTo:    path.addLine(to: points[0])
+            case .curveTo:   path.addCurve(to: points[2],
+                                            control1: points[0],
+                                            control2: points[1])
+            case .closePath: path.closeSubpath()
+            default:
+                // macOS 14 added `.cubicCurveTo` / `.quadraticCurveTo`
+                // as distinct cases. `buildHybridPath` only ever
+                // emits the four cases above, so the catch-all is
+                // safe; if a new emitter starts producing the newer
+                // elements, this needs explicit handling.
+                break
+            }
+        }
+        return path
     }
 
     /// Draw the pacman face as a chunky pixel-grid sprite —

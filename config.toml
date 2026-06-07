@@ -334,7 +334,14 @@ width = 3
 #               chases behind the cursor, mouth chomping along the
 #               current direction. Always a single line of pellets
 #               (the arcade look); `width` scales pellet / face size
-#               + spacing.
+#               + spacing. When `color-outline` is set, the corridor
+#               renders as a black road bounded by two neon walls in
+#               the outline colour (matches the arcade maze layout).
+#               **Recommended pairing: `straighten-on-turn = true`**
+#               below — the arcade metaphor is fundamentally
+#               orthogonal corridors, so axis-snapped segments give
+#               clean 90° walls. With `false` the walls trace raw
+#               freehand samples and wobble with hand jitter.
 #   "arrow"   — continuous chevron chain along the whole path
 #               (`-->-->-->`), each `>` rotated to match the local
 #               tangent so the direction reads at every point — not
@@ -360,9 +367,12 @@ final-hold-ms = 400
 #   true   — snap the just-completed segment onto its axis so the
 #            trail reads as a clean orthogonal polyline.
 #   false  — keep every sample as raw freehand; the trail follows
-#            the literal hand path, jitter included (default).
+#            the literal hand path, jitter included.
 # Recognition is unaffected either way — this is a render-only knob.
-straighten-on-turn = false
+# **Required for `style = "pacman"`** — the arcade maze metaphor
+# only reads cleanly with axis-snapped corridors; freehand pacman
+# walls trace hand jitter and lose the corridor read.
+straighten-on-turn = true
 
 
 # Origin badge — small app-icon chip at the gesture's start point.

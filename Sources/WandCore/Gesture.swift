@@ -181,10 +181,14 @@ public enum CastTheme: String, Sendable, CaseIterable {
             //                       release" moment reads as the
             //                       trail's yellow pellet finally
             //                       latching onto its rule.
+            // Outline = arcade-maze neon blue (#2121ff). Under
+            // `style = "pacman"` this becomes the corridor's flanking
+            // wall colour rather than a per-pellet halo; for the
+            // other styles it still rides as the usual trail outline.
             return CastThemePalette(
                 trailColor: "#ffea00",
                 trailColorNoMatch: "#ff0000",
-                trailColorOutline: "#000000",
+                trailColorOutline: "#2121ff",
                 cardsBorderColor: "#ffea00",
                 cardsBodyColor: "#000000",
                 cardsTextColor: "#ffea00",
