@@ -600,13 +600,15 @@ modifiers = []                 # e.g. ["ctrl"] to require ctrl + middle
 layout = "list"
 
 # Coordinated colour palette for the tome panel — sets the hover
-# accent, idle row text, a static outline, AND the panel backdrop.
-# Themes other than "default" REPLACE the system frosted blur with
-# a solid colour (the `.menu` material has no tint API, so
-# saturated themes can't ride on the blur). Independent of
-# `[cast].theme` (the two surfaces have different visual
-# constraints), so you can pair them freely or run different looks
-# per family.
+# accent, idle row text, AND the panel backdrop. Themes other than
+# "default" REPLACE the system frosted blur with a solid colour
+# (the `.menu` material has no tint API, so saturated themes can't
+# ride on the blur). The panel rim is **not** a theme axis — pick
+# `[tome.decoration].border` for an outline; themes never paint a
+# static frame of their own (would overlap and swallow the animated
+# rim). Independent of `[cast].theme` (the two surfaces have
+# different visual constraints), so you can pair them freely or
+# run different looks per family.
 #
 #   "default"  — frosted-glass system blur, controlAccent hover,
 #                .labelColor rows. The historical look.
@@ -621,9 +623,17 @@ layout = "list"
 #   "mono"     — stark white-on-black; inverted on hover.
 #   "vapor"    — synthwave pink hover on Dracula charcoal,
 #                off-white rows.
-#   "pacman"   — yellow accent on black with yellow rows; pairs
-#                with `[cast].theme = "pacman"` for a coordinated
+#   "pac-man"  — yellow accent on black with yellow rows; pairs
+#                with `[cast].theme = "pac-man"` for a coordinated
 #                arcade look across both surfaces.
+#   "rainbow"  — vivid rainbow palette inspired by facet: white
+#                rows on deep violet-black, hot-rose hover. Pair
+#                with `[tome.decoration].border = "rainbow"` to add
+#                the animated spectrum outline — that's where the
+#                "rainbow" name comes alive on this static surface.
+#   "aurora"   — polar-lights variant: deep navy backdrop, pastel-
+#                mint hover, off-white rows. Calmer counterpart to
+#                "rainbow" — same colour family, softer contrast.
 #
 # Unknown names clamp to "default". Validate with `wand --validate`.
 theme = "default"
@@ -674,15 +684,51 @@ close = "off"
 
 # Decorative panel border. Sits on the colour-decoration axis (paired
 # with the trail's shape-only `style`). Inherited by child panels for
-# visual consistency.
+# visual consistency. Independent of `[tome].theme` — mix freely
+# (`theme = "rainbow"` + `border = "neon"` is fair game).
 #
-#   "off"     — no border (default)
-#   "rainbow" — animated hue-rotating outline cycling around the
-#               panel's rounded rect (~4s loop)
+#   "off"      — no border (default)
+#   "rainbow"  — animated hue-rotating outline cycling around the
+#                panel's rounded rect (period configurable via
+#                `cycle-ms` below)
+#   "terminal" — static green rim (#22c55e)
+#   "neon"     — static electric cyan rim (#22d3ee)
+#   "splatoon" — static lime rim (#bfff00)
+#   "mono"     — static white rim
+#   "vapor"    — static synthwave pink rim (#ff79c6)
+#   "pac-man"  — static arcade yellow rim (#ffea00)
 #
-# Future palette variants (vapor / pencil / solid hues) will land in
-# follow-ups under this same block.
+# Static kinds were lifted from each theme's old `borderColor` slot
+# (retired in PR #111 follow-up) so the same look survives but is
+# now decoupled from the colour theme — pick one rim, pick one theme.
 border = "off"
+
+# Cycle period (ms) for any animated `border` kind — currently only
+# `"rainbow"`. Smaller = faster strobe; larger = slower drift.
+# Static border kinds (`off`) ignore this value. Clamped 500..10000.
+#
+#   500   — strobing (very fast hue churn)
+#   1000  — flicker
+#   4000  — default; smooth visible cycle over a typical panel session
+#   8000  — slow drift, almost-solid feel
+cycle-ms = 4000
+
+# Border stroke width in points. Clamped 1..10. Ignored when
+# `border = "off"`.
+#
+#   1     — hairline (thin rim, very subtle)
+#   2     — default; reads as a clean panel edge
+#   4     — bold ribbon
+#   8+    — chunky / arcade-pixel feel; pairs well with pac-man / mono
+border-width = 2
+
+# macOS window drop shadow under the panel. Default `false`: macOS
+# draws a thin dark halo just outside any panel with `hasShadow =
+# true`, and that halo reads as an extra fringe on the border
+# decoration (the "外側に黒い枠線" the user could see even after the
+# CALayer-native border fix). Set `true` to restore the system menu
+# shadow.
+shadow = false
 
 
 # -----------------------------------------------------------------

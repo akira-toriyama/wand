@@ -247,11 +247,6 @@ public struct TomeThemePalette: Sendable, Equatable {
     /// semantic). Terminal-style themes use this to keep every row
     /// in the theme's signature hue.
     public let textColor: String
-    /// Static panel outline colour. Empty = no extra outline; the
-    /// system blur's edge is used. The animated `[tome.decoration]
-    /// .border` is independent — that's a moving rim, this is a
-    /// static frame.
-    public let borderColor: String
     /// Panel background fill. Empty (the default) keeps the system
     /// `NSVisualEffectView .menu` frosted blur (vibrancy). Non-empty
     /// **replaces** the blur with a solid colour — required for
@@ -261,15 +256,19 @@ public struct TomeThemePalette: Sendable, Equatable {
     /// "tinted blur" rather than "themed surface".
     public let backgroundColor: String
 
+    // Note: a `borderColor` field lived here through PR #111 to draw a
+    // 1pt static frame in the theme's signature hue. Retired because
+    // it overlapped (and visually swallowed) the animated rim drawn
+    // by `[tome.decoration].border`. Panel outlines are now solely a
+    // `[tome.decoration]` axis concern.
+
     public init(accentColor: String = "",
                 accentTextColor: String = "",
                 textColor: String = "",
-                borderColor: String = "",
                 backgroundColor: String = "") {
         self.accentColor = accentColor
         self.accentTextColor = accentTextColor
         self.textColor = textColor
-        self.borderColor = borderColor
         self.backgroundColor = backgroundColor
     }
 }
@@ -289,12 +288,26 @@ public enum TomeTheme: String, Sendable, CaseIterable {
     /// Pairs with `[cast].theme = "pac-man"` for a coordinated arcade
     /// look across both surfaces. Renamed from `pacman` in v8.
     case pacMan = "pac-man"
+    /// Vivid rainbow palette inspired by facet's namesake — white
+    /// text on a deep violet-black backdrop, hot-rose hover accent,
+    /// electric-cyan static outline. Static palette: per-pixel hue
+    /// cycling isn't a fit (the panel doesn't redraw per-frame).
+    /// Pair with `[tome.decoration].border = "rainbow"` for an
+    /// animated cycling outline that brings the "rainbow" name to
+    /// life across the panel rim.
+    case rainbow
+    /// Polar-lights variant of `rainbow` — calmer pastel palette
+    /// (deep-navy backdrop, pastel-mint accent, gold rim, soft off-
+    /// white rows). Reads as the static cousin of `rainbow` for
+    /// users who want the same colour family without the high-
+    /// contrast vivid edge.
+    case aurora
 
-    // Note: `rainbow` / dynamic colour cycling isn't a tome theme
-    // case — the launcher panel isn't redrawn frame-by-frame, so a
-    // cycling palette would lock to whatever colour the panel
-    // happens to be opened on. Re-introduce only with a real tick
-    // path for the panel surface.
+    // Dynamic per-frame colour cycling isn't a tome theme axis (the
+    // panel doesn't redraw frame-by-frame). The animated "rainbow"
+    // expression on this surface is `[tome.decoration].border =
+    // "rainbow"` — a `CAKeyframeAnimation` on the panel outline that
+    // pairs with the `.rainbow` theme above.
 
     public var palette: TomeThemePalette {
         switch self {
@@ -308,14 +321,12 @@ public enum TomeTheme: String, Sendable, CaseIterable {
                 accentColor: "#22c55e",
                 accentTextColor: "#000000",
                 textColor: "#22c55e",
-                borderColor: "#22c55e",
                 backgroundColor: "#000000")
         case .neon:
             return TomeThemePalette(
                 accentColor: "#22d3ee",
                 accentTextColor: "#0f0a1f",
                 textColor: "#ffffff",
-                borderColor: "#22d3ee",
                 backgroundColor: "#0f0a1f")
         case .splatoon:
             // Splatoon's per-stroke team-colour rotation isn't a fit
@@ -326,21 +337,18 @@ public enum TomeTheme: String, Sendable, CaseIterable {
                 accentColor: "#ff3399",
                 accentTextColor: "#ffffff",
                 textColor: "#ffffff",
-                borderColor: "#bfff00",
                 backgroundColor: "#1a1a1a")
         case .mono:
             return TomeThemePalette(
                 accentColor: "#ffffff",
                 accentTextColor: "#000000",
                 textColor: "#ffffff",
-                borderColor: "#ffffff",
                 backgroundColor: "#000000")
         case .vapor:
             return TomeThemePalette(
                 accentColor: "#ff79c6",
                 accentTextColor: "#282a36",
                 textColor: "#f8f8f2",
-                borderColor: "#ff79c6",
                 backgroundColor: "#282a36")
         case .pacMan:
             // Yellow PAC-MAN accent with black hover text on the
@@ -351,8 +359,28 @@ public enum TomeTheme: String, Sendable, CaseIterable {
                 accentColor: "#ffea00",
                 accentTextColor: "#000000",
                 textColor: "#ffea00",
-                borderColor: "#ffea00",
                 backgroundColor: "#000000")
+        case .rainbow:
+            // facet's `rainbow` shape: deep violet-black backdrop,
+            // white rows, hot-rose hover (so the selection reads
+            // unambiguously even against the saturated bg). Pairs
+            // with `[tome.decoration].border = "rainbow"` for the
+            // animated outline that supplies the spectrum cycle —
+            // the panel rim is now solely a decoration concern.
+            return TomeThemePalette(
+                accentColor: "#ff3b6e",
+                accentTextColor: "#ffffff",
+                textColor: "#ffffff",
+                backgroundColor: "#1a0a2e")
+        case .aurora:
+            // Polar-lights variant: deep navy backdrop, pastel-mint
+            // hover, off-white rows. Calmer counterpart to `rainbow`
+            // — same colour family, softer contrast.
+            return TomeThemePalette(
+                accentColor: "#88e1c9",
+                accentTextColor: "#0a0e27",
+                textColor: "#f0f0f5",
+                backgroundColor: "#0a0e27")
         }
     }
 }
@@ -403,9 +431,28 @@ public struct LauncherAnimationSpec: Sendable, Equatable {
 /// vapor / pencil variants that paint once and don't animate.
 public struct LauncherDecorationSpec: Sendable, Equatable {
     public let border: LauncherBorder
+    /// Cycle period (ms) for animated decorations — currently only the
+    /// `border = "rainbow"` outline. Clamped 500..10000. Static border
+    /// kinds (`off`) ignore it.
+    public let cycleMs: Int
+    /// Stroke width (points) for the panel border. Clamped 1..10.
+    /// Ignored when `border = "off"`. Default 2 matches the pre-knob
+    /// hardcoded value, so existing configs stay visually identical.
+    public let borderWidth: Int
+    /// macOS window drop shadow under the panel. Default `false`:
+    /// avoids a thin dark halo just outside the rim that some users
+    /// read as a fringe on the border decoration. Set `true` to
+    /// restore the system menu shadow look.
+    public let shadow: Bool
 
-    public init(border: LauncherBorder = .off) {
+    public init(border: LauncherBorder = .off,
+                cycleMs: Int = 4000,
+                borderWidth: Int = 2,
+                shadow: Bool = false) {
         self.border = border
+        self.cycleMs = cycleMs
+        self.borderWidth = borderWidth
+        self.shadow = shadow
     }
 
     public static let `default` = LauncherDecorationSpec()

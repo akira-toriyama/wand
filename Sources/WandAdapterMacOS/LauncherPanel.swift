@@ -37,6 +37,47 @@ import AppKit
 import Foundation
 import WandCore
 
+// MARK: - Static border colour
+
+/// Per-kind stroke colour for non-animated `LauncherBorder` cases.
+/// Lives in the adapter (Core stays AppKit-free) and mirrors the
+/// signature hex each themed rim used to carry on `TomeThemePalette`
+/// (retired in the PR #111 follow-up that decoupled rim from theme).
+/// `.off` and `.rainbow` are handled by their own code paths and never
+/// query this — they trap with a clear message if the switch is ever
+/// reached out-of-context.
+extension LauncherBorder {
+    @MainActor
+    var staticColor: NSColor {
+        switch self {
+        case .terminal:  return NSColor(srgbRed: 0x22 / 255.0,
+                                         green: 0xc5 / 255.0,
+                                         blue:  0x5e / 255.0, alpha: 1)
+        case .neon:      return NSColor(srgbRed: 0x22 / 255.0,
+                                         green: 0xd3 / 255.0,
+                                         blue:  0xee / 255.0, alpha: 1)
+        case .splatoon:  return NSColor(srgbRed: 0xbf / 255.0,
+                                         green: 0xff / 255.0,
+                                         blue:  0x00 / 255.0, alpha: 1)
+        case .mono:      return .white
+        case .vapor:     return NSColor(srgbRed: 0xff / 255.0,
+                                         green: 0x79 / 255.0,
+                                         blue:  0xc6 / 255.0, alpha: 1)
+        case .pacMan:    return NSColor(srgbRed: 0xff / 255.0,
+                                         green: 0xea / 255.0,
+                                         blue:  0x00 / 255.0, alpha: 1)
+        case .off, .rainbow:
+            // Animated / no-border kinds carry their colour another
+            // way; reaching here means the caller used the wrong
+            // accessor. Fall back loudly rather than render a silent
+            // mystery colour.
+            assertionFailure(
+                "LauncherBorder.staticColor accessed for \(self)")
+            return .controlAccentColor
+        }
+    }
+}
+
 // MARK: - Theme
 
 /// Resolved theme colours for the panel. Each field is `nil` when the
@@ -49,7 +90,6 @@ struct TomeColors {
     let accent: NSColor?        // hover background fill
     let accentText: NSColor?    // text colour while hovered
     let text: NSColor?          // idle row text colour
-    let border: NSColor?        // static panel outline
     /// Solid panel backdrop. When non-nil the system frosted blur is
     /// **replaced** with a solid colour view — required for themes
     /// that need a saturated backdrop the blur can't deliver
@@ -64,13 +104,11 @@ struct TomeColors {
             accent: pick(palette.accentColor),
             accentText: pick(palette.accentTextColor),
             text: pick(palette.textColor),
-            border: pick(palette.borderColor),
             background: pick(palette.backgroundColor))
     }
 
     static let none = TomeColors(accent: nil, accentText: nil,
-                                  text: nil, border: nil,
-                                  background: nil)
+                                  text: nil, background: nil)
 }
 
 // MARK: - Public entry
@@ -91,6 +129,9 @@ public enum LauncherPanel {
                                 openAnim: LauncherOpenAnim = .off,
                                 closeAnim: LauncherCloseAnim = .off,
                                 border: LauncherBorder = .off,
+                                borderCycleMs: Int = 4000,
+                                borderWidth: Int = 2,
+                                shadow: Bool = false,
                                 palette: TomeThemePalette = TomeThemePalette(),
                                 onSelect: @escaping (LauncherItem, Target) -> Void) {
         current?.dismiss()
@@ -121,6 +162,9 @@ public enum LauncherPanel {
             openAnim: openAnim,
             closeAnim: closeAnim,
             border: border,
+            borderCycleMs: borderCycleMs,
+            borderWidth: borderWidth,
+            shadow: shadow,
             colors: colors,
             onDismissRoot: { current = nil })
         current = controller
@@ -258,16 +302,12 @@ private enum PanelLayout {
         bg.layer?.cornerRadius = cornerRadius
         bg.layer?.masksToBounds = true
         bg.translatesAutoresizingMaskIntoConstraints = false
-        // Static theme outline. Independent of the animated
-        // [tome.decoration].border — that's a moving rim drawn by
-        // PanelController.installBorderDecoration. This static one
-        // just paints a single hairline frame around the panel
-        // surface so themes like terminal/pac-man get their signature
-        // edge.
-        if let borderColor = colors.border {
-            bg.layer?.borderColor = borderColor.cgColor
-            bg.layer?.borderWidth = 1
-        }
+        // Panel rim is solely a `[tome.decoration].border` concern now
+        // — a theme-supplied static frame at this layer overlapped
+        // (and visually swallowed) the animated rim drawn by
+        // `PanelController.installBorderDecoration`, so the
+        // `borderColor` palette key was retired in PR #111's follow-
+        // up.
 
         let stack = NSStackView()
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -876,6 +916,20 @@ private final class PanelController {
     /// blur, with a hue-rotating CAKeyframeAnimation. Child panels
     /// inherit the root's value.
     private let border: LauncherBorder
+    /// Cycle period (ms) for any animated `border` kind — feeds the
+    /// CAKeyframeAnimation `duration` in `installBorderDecoration`.
+    /// Static border kinds ignore this value. Child panels inherit
+    /// from the root for visual consistency.
+    private let borderCycleMs: Int
+    /// Border stroke width (points). Feeds `CAShapeLayer.lineWidth`
+    /// in `installBorderDecoration`. Ignored when `border = .off`.
+    /// Child panels inherit from the root.
+    private let borderWidth: Int
+    /// Whether to draw the macOS window drop shadow under the panel.
+    /// Default `false`: a thin halo just outside the rim reads as a
+    /// fringe on the border decoration, so the project default is
+    /// no shadow. Child panels inherit from the root.
+    private let shadow: Bool
     /// Re-entry guard: a fade-out can dispatch async, and a global
     /// click or follow-up `dismiss()` could land mid-fade. Once `true`
     /// the panel is committed to its current teardown path and any
@@ -910,6 +964,9 @@ private final class PanelController {
          openAnim: LauncherOpenAnim = .off,
          closeAnim: LauncherCloseAnim = .off,
          border: LauncherBorder = .off,
+         borderCycleMs: Int = 4000,
+         borderWidth: Int = 2,
+         shadow: Bool = false,
          colors: TomeColors = .none,
          onDismissRoot: (() -> Void)? = nil) {
         self.layout = layout
@@ -919,6 +976,9 @@ private final class PanelController {
         self.openAnim = openAnim
         self.closeAnim = closeAnim
         self.border = border
+        self.borderCycleMs = borderCycleMs
+        self.borderWidth = borderWidth
+        self.shadow = shadow
         self.colors = colors
         self.onDismissRoot = isRoot ? onDismissRoot : nil
 
@@ -934,7 +994,7 @@ private final class PanelController {
                                     .fullScreenAuxiliary, .transient]
         panel.becomesKeyOnlyIfNeeded = true
         panel.hidesOnDeactivate = false
-        panel.hasShadow = true
+        panel.hasShadow = shadow
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.appearance = NSAppearance(named: .darkAqua)
@@ -1002,40 +1062,50 @@ private final class PanelController {
         if isRoot { installDismissMonitors() }
     }
 
-    /// Lay a `CAShapeLayer` over the panel's contentView that strokes
-    /// the rounded outline with the configured `border` decoration.
-    /// No-op for `.off`.
+    /// Paint the configured `border` decoration as bg's CALayer-native
+    /// border (`borderColor` + `borderWidth`). No-op for `.off`.
+    ///
+    /// Hosting note: earlier iterations tried a separate CAShapeLayer
+    /// (on contentView, on bg.layer, then on a dedicated overlay
+    /// view) and every one of them suffered from anti-aliasing
+    /// mismatch at bg's rounded mask edge — a faint dark fringe
+    /// outside the rim, the "黒い枠" issue. CALayer's native border
+    /// is drawn by the compositor as a single operation with the
+    /// layer's `cornerRadius`, so the rounded curve and the rim are
+    /// anti-aliased together with no seam between them.
     private func installBorderDecoration() {
-        guard border == .rainbow,
-              let host = panel.contentView else { return }
-        host.wantsLayer = true
-        let stroke = CAShapeLayer()
-        let inset: CGFloat = 1.0
-        let corner: CGFloat = PanelLayout.cornerRadius
-        // `host.bounds` is locked at `frame.size` here — the panel
-        // doesn't resize after show, so a static path is safe.
-        let rect = host.bounds.insetBy(dx: inset, dy: inset)
-        stroke.path = CGPath(roundedRect: rect,
-                              cornerWidth: corner - inset,
-                              cornerHeight: corner - inset,
-                              transform: nil)
-        stroke.fillColor = nil
-        stroke.lineWidth = 2
-        stroke.strokeColor = NSColor.systemBlue.cgColor   // starting hue
-        // Hue rotation: 8 keyframes around the wheel over 4s, looped.
-        // CAKeyframeAnimation interpolates across CGColors smoothly
-        // — gives the panel an animated rainbow outline.
-        let anim = CAKeyframeAnimation(keyPath: "strokeColor")
-        anim.values = (0..<9).map { i in
-            NSColor(hue: CGFloat(i) / 8.0,
-                    saturation: 0.85, brightness: 1.0,
-                    alpha: 0.95).cgColor
+        guard border != .off,
+              let bg = panel.contentView?.subviews.first,
+              let layer = bg.layer else { return }
+        layer.borderWidth = CGFloat(borderWidth)
+        switch border {
+        case .off:
+            return  // unreachable; guarded above
+        case .rainbow:
+            // Hue rotation around the wheel over `borderCycleMs`.
+            // CAKeyframeAnimation on the layer's own `borderColor`
+            // composes with `cornerRadius` natively — no separate
+            // stroke layer, no clipping fringe.
+            let stops = (0..<9).map { i in
+                NSColor(hue: CGFloat(i) / 8.0,
+                        saturation: 0.85, brightness: 1.0,
+                        alpha: 0.95).cgColor
+            }
+            // Seed the model-layer colour so a paused window doesn't
+            // flash transparent before the animation kicks in.
+            layer.borderColor = stops.first
+            let anim = CAKeyframeAnimation(keyPath: "borderColor")
+            anim.values = stops
+            anim.duration = Double(borderCycleMs) / 1000.0
+            anim.repeatCount = .infinity
+            anim.calculationMode = .linear
+            layer.add(anim, forKey: "rainbow")
+        case .terminal, .neon, .splatoon, .mono, .vapor, .pacMan:
+            // Static signature-colour rim — ports the per-theme
+            // `borderColor` that lived on `TomeThemePalette` through
+            // PR #111. Pair freely with any `[tome].theme`.
+            layer.borderColor = border.staticColor.cgColor
         }
-        anim.duration = 4.0
-        anim.repeatCount = .infinity
-        anim.calculationMode = .linear
-        stroke.add(anim, forKey: "rainbow")
-        host.layer?.addSublayer(stroke)
     }
 
     /// Dismiss the entire tree from any level. Walks up to root, then
@@ -1170,6 +1240,9 @@ private final class PanelController {
             openAnim: openAnim,
             closeAnim: closeAnim,
             border: border,
+            borderCycleMs: borderCycleMs,
+            borderWidth: borderWidth,
+            shadow: shadow,
             colors: colors)
         c.parent = self
         child = c
