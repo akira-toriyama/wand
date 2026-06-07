@@ -132,36 +132,83 @@ enum PacManRenderer {
         // the walls.
         let snappedPts = snappedPoints(state: state)
 
-        // 1) Black corridor + neon walls — one geometry pass on a
-        // pac-man-specific centerline. `buildCenterline` bezier-
-        // smooths every interior corner so single-corner gestures
-        // (e.g. "DR") still soften, and the offsets from
-        // `copy(strokingWithWidth:)` then paint road (fill) +
-        // walls (stroke) in one path each.
+        // 1) Black corridor + neon walls — two concentric strokes
+        // of the snapped polyline:
+        //   - first pass: thicker stroke in the outline colour
+        //     (corridorWidth + 2 × wallThickness)
+        //   - second pass: thinner stroke in black, drawn on top
+        //     (corridorWidth)
+        // The visible wall is the difference band between them.
+        // Both passes use `.round` lineCap + lineJoin, so the
+        // outer convex corner of an L turn rounds smoothly and the
+        // inner concave corner stays a clean 90° (no lineJoin
+        // applies on the inner side of a stroke).
+        //
+        // Earlier revisions built a boundary path via
+        // `copy(strokingWithWidth:)` and then fill+stroked it. That
+        // path has a sharp 90° vertex at the inner-corner
+        // intersection; stroking it for the walls then ran the
+        // wall's `.round` lineJoin through that vertex and
+        // protruded a small arc into the corridor (the "blue
+        // wedge poking the inside of the elbow" artifact). The
+        // two-stroke approach has no boundary path → no vertex to
+        // run a join through → no protrusion.
         if let outline,
            let ctx = NSGraphicsContext.current?.cgContext {
             let corridorWidth = wallOffset * 2 * scale
-            let strokeWidth = max(1, scale * wallStroke)
-            let cornerRadius = wallOffset * scale
-            let center = buildCenterline(
-                points: snappedPts, cornerRadius: cornerRadius)
-            let boundary = toCGPath(center).copy(
-                strokingWithWidth: corridorWidth,
-                lineCap: .round,
-                lineJoin: .round,
-                miterLimit: 10)
-            // Road (fill).
-            ctx.addPath(boundary)
-            ctx.setFillColor(
-                NSColor.black.withAlphaComponent(0.95).cgColor)
-            ctx.fillPath()
-            // Walls (stroke).
-            ctx.addPath(boundary)
+            let wallThickness = max(1, scale * wallStroke)
+            let outerWidth = corridorWidth + wallThickness * 2
+            let centerCGPath = toCGPath(
+                buildCenterline(points: snappedPts))
+
+            // Walls (thicker, drawn first).
+            ctx.addPath(centerCGPath)
             ctx.setStrokeColor(
                 outline.withAlphaComponent(0.95).cgColor)
-            ctx.setLineWidth(strokeWidth)
+            ctx.setLineWidth(outerWidth)
+            ctx.setLineCap(.round)
             ctx.setLineJoin(.round)
             ctx.strokePath()
+
+            // Road (thinner, drawn on top — covers the inner band
+            // of the wall stroke so only the `wallThickness`-wide
+            // outer band remains visible as neon).
+            ctx.addPath(centerCGPath)
+            ctx.setStrokeColor(
+                NSColor.black.withAlphaComponent(0.95).cgColor)
+            ctx.setLineWidth(corridorWidth)
+            ctx.setLineCap(.round)
+            ctx.setLineJoin(.round)
+            ctx.strokePath()
+
+            // Inner-corner fillets — at each interior turn vertex,
+            // paint a tiny black circle at the road's inside-of-L
+            // corner. This extends the road `filletRadius` into the
+            // wall on the concave side, replacing the wall's sharp
+            // inner edge with a small circular cut.
+            //
+            // Why only the inner edge (wall ↔ road), not the outer
+            // edge (wall ↔ background): the wand overlay is a
+            // click-through transparent NSWindow, so we can't paint
+            // background colour over the wall's outer corner. The
+            // road-side fillet is the half we CAN draw — and it's
+            // enough to break the otherwise-stark sharp inside of
+            // an arcade-maze L. `filletRadius` is kept smaller than
+            // `wallThickness` so the eroded patch never reaches the
+            // wall's outer edge against the background.
+            let filletRadius = wallThickness * 0.5
+            ctx.setFillColor(
+                NSColor.black.withAlphaComponent(0.95).cgColor)
+            for cornerPoint in innerCornerPoints(
+                snappedPts: snappedPts,
+                wallOffset: wallOffset * scale)
+            {
+                ctx.fillEllipse(in: CGRect(
+                    x: cornerPoint.x - filletRadius,
+                    y: cornerPoint.y - filletRadius,
+                    width: filletRadius * 2,
+                    height: filletRadius * 2))
+            }
         }
 
         // 2) Locate where Pac-Man's face sits this frame: walk the
@@ -236,44 +283,85 @@ enum PacManRenderer {
         return pts
     }
 
-    /// Pac-man-specific smoothed centerline. Bezier-smooths every
-    /// interior corner of the supplied `pts` sequence with a
-    /// `cornerRadius`-sized arc — so single-corner gestures (e.g.
-    /// "DR") get a rounded turn that the wall offsets can follow
-    /// without notches.
-    private static func buildCenterline(points pts: [CGPoint],
-                                          cornerRadius: CGFloat)
+    /// Pac-man centerline = straight polyline through `pts`. No
+    /// per-corner smoothing — `copy(strokingWithWidth:lineCap:.round
+    /// ,lineJoin:.round,...)` in `draw(...)` then turns each 90°
+    /// vertex into a rounded outer arc + sharp inner point, which
+    /// is exactly the arcade-maze elbow we want. Kept as its own
+    /// function (rather than inlined) so that future fillet /
+    /// chamfer experiments can plug in here without disturbing the
+    /// `draw(...)` pipeline.
+    private static func buildCenterline(points pts: [CGPoint])
         -> NSBezierPath {
         let path = NSBezierPath()
-        guard pts.count >= 2 else { return path }
-        path.move(to: pts[0])
-        if pts.count == 2 {
-            path.line(to: pts[1])
-            return path
-        }
-        for i in 1..<pts.count - 1 {
-            let A = pts[i - 1]
-            let B = pts[i]
-            let C = pts[i + 1]
-            let inLen = hypot(B.x - A.x, B.y - A.y)
-            let outLen = hypot(C.x - B.x, C.y - B.y)
-            // Radius capped to half each adjacent segment so the
-            // curve never overshoots into the neighbouring corner.
-            let r = min(cornerRadius, inLen / 2, outLen / 2)
-            let inU = CGPoint(x: (B.x - A.x) / max(inLen, 1),
-                              y: (B.y - A.y) / max(inLen, 1))
-            let outU = CGPoint(x: (C.x - B.x) / max(outLen, 1),
-                               y: (C.y - B.y) / max(outLen, 1))
-            let P = CGPoint(x: B.x - inU.x * r, y: B.y - inU.y * r)
-            let Q = CGPoint(x: B.x + outU.x * r, y: B.y + outU.y * r)
-            path.line(to: P)
-            // Cubic with both control points at B: a smooth arc
-            // from P through ~B to Q (matches buildHybridPath's
-            // corner-smoothing geometry).
-            path.curve(to: Q, controlPoint1: B, controlPoint2: B)
-        }
-        path.line(to: pts.last!)
+        guard let first = pts.first else { return path }
+        path.move(to: first)
+        for p in pts.dropFirst() { path.line(to: p) }
         return path
+    }
+
+    /// Compute the road's inside-of-L corner point at each interior
+    /// turn vertex of the snapped polyline. For a 90° turn at `B`,
+    /// the two inner road edges (each at perpendicular distance
+    /// `wallOffset` from the centerline, on the concave side) meet
+    /// at exactly one point — that's the sharp tip that the
+    /// inner-corner fillet erodes.
+    ///
+    /// Returns an empty array when there are no interior vertices
+    /// (single segment) or when every interior vertex sits on a
+    /// straight run (the snapped polyline already collapsed
+    /// adjacent collinear points elsewhere, so this is rare but
+    /// still guarded against).
+    private static func innerCornerPoints(
+        snappedPts: [CGPoint],
+        wallOffset: CGFloat
+    ) -> [CGPoint] {
+        guard snappedPts.count >= 3 else { return [] }
+        var result: [CGPoint] = []
+        for i in 1..<(snappedPts.count - 1) {
+            let A = snappedPts[i - 1]
+            let B = snappedPts[i]
+            let C = snappedPts[i + 1]
+            let inDx = B.x - A.x, inDy = B.y - A.y
+            let outDx = C.x - B.x, outDy = C.y - B.y
+            let inLen = hypot(inDx, inDy)
+            let outLen = hypot(outDx, outDy)
+            guard inLen > 0.001, outLen > 0.001 else { continue }
+            let inUx = inDx / inLen, inUy = inDy / inLen
+            let outUx = outDx / outLen, outUy = outDy / outLen
+            // Skip straight runs (cross ≈ 0). For wand's snapped
+            // polylines this only triggers when `straightenOnTurn`
+            // failed to collapse a duplicate, but the guard keeps
+            // pathological inputs from emitting a useless fillet.
+            let cross = inUx * outUy - inUy * outUx
+            guard abs(cross) > 0.01 else { continue }
+            // Inside-of-L bisector. The "left-perpendicular" of a
+            // direction vector `(dx, dy)` is `(-dy, dx)`. Summing
+            // the left-perpendiculars of `inU` and `outU` gives a
+            // bisector that points to the LEFT of the path
+            // direction (i.e., the inside of a left turn). If the
+            // turn is actually a RIGHT turn (`cross < 0`), the
+            // inside-of-L is the opposite side and we negate.
+            let perpSumX = -inUy + -outUy
+            let perpSumY = inUx + outUx
+            let perpLen = hypot(perpSumX, perpSumY)
+            guard perpLen > 0.001 else { continue }
+            let sign: CGFloat = cross > 0 ? 1 : -1
+            let bisX = sign * perpSumX / perpLen
+            let bisY = sign * perpSumY / perpLen
+            // For 90° turns the two perpendicular inner edges meet
+            // at distance `wallOffset × √2` from `B` along the
+            // bisector. wand forces 90° turns under pac-man
+            // (`straightenOnTurn = true` is mandatory), so the √2
+            // is exact; supporting other angles would need
+            // `wallOffset / sin(θ/2)`, but there's no path to a
+            // non-90° turn here today.
+            let cornerDistance = wallOffset * CGFloat(sqrt(2.0))
+            result.append(CGPoint(
+                x: B.x + bisX * cornerDistance,
+                y: B.y + bisY * cornerDistance))
+        }
+        return result
     }
 
     /// Walk a polyline at fixed intervals, invoking `step` once per
