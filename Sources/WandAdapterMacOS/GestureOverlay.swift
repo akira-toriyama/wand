@@ -146,6 +146,9 @@ public final class GestureOverlay {
             ? nil
             : TrailColorMode.parse(palette.cardsFiresTextColor,
                                     fallback: .white)
+        view.badgeBackgroundColor = palette.badgeBackgroundColor.isEmpty
+            ? nil
+            : NSColorParse.nsColor(palette.badgeBackgroundColor)
         view.effectIntensity = cfg.intensity.multiplier
         view.minStrokePx = CGFloat(cfg.recognition.minStrokePx)
         view.finalHoldDuration = TimeInterval(ov.trail.finalHoldMs) / 1000.0
@@ -274,6 +277,13 @@ private final class TrailView: NSView {
     /// cards run yellow-on-black and the firing card flips to
     /// black-on-yellow.
     var cardFiresTextMode: TrailColorMode? = nil
+    /// Solid backdrop for the app-icon badge. `nil` (the default)
+    /// keeps the historical frosted-blur behind the badge — the
+    /// icon rides on whatever vibrancy the `[cast.overlay].blur-
+    /// enabled` knob delivers. Non-nil draws this colour as a
+    /// rounded fill underneath the badge icon instead, used by
+    /// non-default cast themes that need an opaque themed surface.
+    var badgeBackgroundColor: NSColor? = nil
     /// Pre-resolved multiplier from `Intensity.multiplier` — scales
     /// translation distance, scale deltas, vibration amplitude, and
     /// particle birth-rate / velocity.
@@ -2042,10 +2052,21 @@ private final class HUDContentView: NSView {
             tx.concat()
             let bgPath = NSBezierPath(roundedRect: b.rect,
                                       xRadius: 10, yRadius: 10)
-            // Without blur the badge needs its own dark backdrop
-            // for icon contrast (otherwise the icon sits on whatever
-            // page content is behind the transparent overlay).
-            if !o.blurEnabled {
+            // Badge backdrop priority:
+            //   1. Themed solid (palette.badgeBackgroundColor) —
+            //      drawn even when blur is on, so it sits between
+            //      the vibrancy and the icon (the theme colour
+            //      wins over the frost).
+            //   2. Else, when blur is off, fall back to a dark
+            //      rounded fill so the icon still has contrast on
+            //      the transparent overlay window.
+            //   3. Default (blur on, no theme) — no fill; the
+            //      blurView under the masked badge rect carries
+            //      the historical frosted look.
+            if let themed = o.badgeBackgroundColor {
+                themed.withAlphaComponent(0.95).setFill()
+                bgPath.fill()
+            } else if !o.blurEnabled {
                 NSColor.black.withAlphaComponent(0.8).setFill()
                 bgPath.fill()
             }
