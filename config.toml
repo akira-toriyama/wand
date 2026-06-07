@@ -621,9 +621,19 @@ layout = "list"
 #   "mono"     — stark white-on-black; inverted on hover.
 #   "vapor"    — synthwave pink hover on Dracula charcoal,
 #                off-white rows.
-#   "pacman"   — yellow accent on black with yellow rows; pairs
-#                with `[cast].theme = "pacman"` for a coordinated
+#   "pac-man"  — yellow accent on black with yellow rows; pairs
+#                with `[cast].theme = "pac-man"` for a coordinated
 #                arcade look across both surfaces.
+#   "rainbow"  — vivid rainbow palette inspired by facet: white
+#                rows on deep violet-black, hot-rose hover, electric
+#                cyan static rim. Pair with
+#                `[tome.decoration].border = "rainbow"` to add the
+#                animated spectrum outline — that's where the
+#                "rainbow" name comes alive on this static surface.
+#   "aurora"   — polar-lights variant: deep navy backdrop, pastel-
+#                mint hover, gold rim, off-white rows. Calmer
+#                counterpart to "rainbow" — same colour family,
+#                softer contrast.
 #
 # Unknown names clamp to "default". Validate with `wand --validate`.
 theme = "default"

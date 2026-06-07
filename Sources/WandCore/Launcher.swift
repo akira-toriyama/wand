@@ -289,12 +289,26 @@ public enum TomeTheme: String, Sendable, CaseIterable {
     /// Pairs with `[cast].theme = "pac-man"` for a coordinated arcade
     /// look across both surfaces. Renamed from `pacman` in v8.
     case pacMan = "pac-man"
+    /// Vivid rainbow palette inspired by facet's namesake — white
+    /// text on a deep violet-black backdrop, hot-rose hover accent,
+    /// electric-cyan static outline. Static palette: per-pixel hue
+    /// cycling isn't a fit (the panel doesn't redraw per-frame).
+    /// Pair with `[tome.decoration].border = "rainbow"` for an
+    /// animated cycling outline that brings the "rainbow" name to
+    /// life across the panel rim.
+    case rainbow
+    /// Polar-lights variant of `rainbow` — calmer pastel palette
+    /// (deep-navy backdrop, pastel-mint accent, gold rim, soft off-
+    /// white rows). Reads as the static cousin of `rainbow` for
+    /// users who want the same colour family without the high-
+    /// contrast vivid edge.
+    case aurora
 
-    // Note: `rainbow` / dynamic colour cycling isn't a tome theme
-    // case — the launcher panel isn't redrawn frame-by-frame, so a
-    // cycling palette would lock to whatever colour the panel
-    // happens to be opened on. Re-introduce only with a real tick
-    // path for the panel surface.
+    // Dynamic per-frame colour cycling isn't a tome theme axis (the
+    // panel doesn't redraw frame-by-frame). The animated "rainbow"
+    // expression on this surface is `[tome.decoration].border =
+    // "rainbow"` — a `CAKeyframeAnimation` on the panel outline that
+    // pairs with the `.rainbow` theme above.
 
     public var palette: TomeThemePalette {
         switch self {
@@ -353,6 +367,29 @@ public enum TomeTheme: String, Sendable, CaseIterable {
                 textColor: "#ffea00",
                 borderColor: "#ffea00",
                 backgroundColor: "#000000")
+        case .rainbow:
+            // facet's `rainbow` shape: deep violet-black backdrop,
+            // white rows, hot-rose hover (so the selection reads
+            // unambiguously even against the saturated bg),
+            // electric-cyan static rim. Pairs with
+            // `[tome.decoration].border = "rainbow"` for the animated
+            // outline that supplies the spectrum cycle.
+            return TomeThemePalette(
+                accentColor: "#ff3b6e",
+                accentTextColor: "#ffffff",
+                textColor: "#ffffff",
+                borderColor: "#22d3ee",
+                backgroundColor: "#1a0a2e")
+        case .aurora:
+            // Polar-lights variant: deep navy backdrop, pastel-mint
+            // hover, gold rim, off-white rows. Calmer counterpart to
+            // `rainbow` — same colour family, softer contrast.
+            return TomeThemePalette(
+                accentColor: "#88e1c9",
+                accentTextColor: "#0a0e27",
+                textColor: "#f0f0f5",
+                borderColor: "#d4af37",
+                backgroundColor: "#0a0e27")
         }
     }
 }
