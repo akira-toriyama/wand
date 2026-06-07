@@ -1053,88 +1053,50 @@ private final class PanelController {
         if isRoot { installDismissMonitors() }
     }
 
-    /// Lay a `CAShapeLayer` on a dedicated unmasked overlay view that
-    /// strokes the configured `border` decoration. No-op for `.off`.
+    /// Paint the configured `border` decoration as bg's CALayer-native
+    /// border (`borderColor` + `borderWidth`). No-op for `.off`.
     ///
-    /// Hosting note: previous attempts placed the stroke either on
-    /// `contentView.layer` (bg's subview layer painted OVER the stroke
-    /// along straight edges — the "4 corners only" bug) or on
-    /// `bg.layer` (bg's rounded `masksToBounds` clipped the stroke,
-    /// leaving a ~1 px anti-aliased dark fringe between bg's rounded
-    /// edge and the stroke's outer side — the "黒い枠" issue). The
-    /// fix is a dedicated `rim` NSView added as a sibling of `bg` in
-    /// `contentView` *after* bg, so its implicit subview layer ends
-    /// up above bg in z-order. `rim` has no mask, so the stroke draws
-    /// without any clipping fringe; its geometry (path centerline at
-    /// `inset = lw / 2`, path corner radius = `cornerRadius - inset`)
-    /// makes the stroke's outer edge align with bg's rounded outer
-    /// edge by construction.
+    /// Hosting note: earlier iterations tried a separate CAShapeLayer
+    /// (on contentView, on bg.layer, then on a dedicated overlay
+    /// view) and every one of them suffered from anti-aliasing
+    /// mismatch at bg's rounded mask edge — a faint dark fringe
+    /// outside the rim, the "黒い枠" issue. CALayer's native border
+    /// is drawn by the compositor as a single operation with the
+    /// layer's `cornerRadius`, so the rounded curve and the rim are
+    /// anti-aliased together with no seam between them.
     private func installBorderDecoration() {
-        guard border != .off else { return }
-        // Force Auto Layout to resolve bg's constraints NOW (`bg` is
-        // pinned to all four edges of contentView via constraints).
-        // Without this, bg.bounds is still `.zero` at install time —
-        // the panel hasn't been ordered front yet, so layout hasn't
-        // run, and the stroke would end up at a degenerate path that
-        // paints nothing.
-        panel.contentView?.layoutSubtreeIfNeeded()
-        guard let content = panel.contentView,
-              let bg = content.subviews.first else { return }
-        // Dedicated unmasked overlay sitting on top of bg. Auto-resize
-        // covers any later panel resizing (we don't currently resize
-        // post-show, but the autoresizing mask keeps it correct if
-        // that ever changes). `wantsLayer` builds a CALayer we can
-        // hang the CAShapeLayer on.
-        let rim = NSView(frame: bg.frame)
-        rim.wantsLayer = true
-        rim.autoresizingMask = [.width, .height]
-        rim.translatesAutoresizingMaskIntoConstraints = true
-        content.addSubview(rim)
-        guard let host = rim.layer else { return }
-        let stroke = CAShapeLayer()
-        // Path centerline at lw/2 from rim edge. Stroke half-width
-        // outward then aligns the stroke's outer edge with rim's
-        // (= bg's) outer edge; matching the corner radius by
-        // `corner - inset` keeps the outer curve concentric with bg's
-        // rounded mask, so the rim reads as one continuous edge.
-        let lw = CGFloat(borderWidth)
-        let inset = lw / 2
-        let corner: CGFloat = PanelLayout.cornerRadius
-        let rect = rim.bounds.insetBy(dx: inset, dy: inset)
-        stroke.path = CGPath(roundedRect: rect,
-                              cornerWidth: max(0, corner - inset),
-                              cornerHeight: max(0, corner - inset),
-                              transform: nil)
-        stroke.fillColor = nil
-        stroke.lineWidth = lw
-
+        guard border != .off,
+              let bg = panel.contentView?.subviews.first,
+              let layer = bg.layer else { return }
+        layer.borderWidth = CGFloat(borderWidth)
         switch border {
         case .off:
             return  // unreachable; guarded above
         case .rainbow:
             // Hue rotation around the wheel over `borderCycleMs`.
-            // CAKeyframeAnimation interpolates across CGColors so the
-            // outline cycles smoothly through the spectrum.
-            stroke.strokeColor = NSColor.systemBlue.cgColor  // starting hue
-            let anim = CAKeyframeAnimation(keyPath: "strokeColor")
-            anim.values = (0..<9).map { i in
+            // CAKeyframeAnimation on the layer's own `borderColor`
+            // composes with `cornerRadius` natively — no separate
+            // stroke layer, no clipping fringe.
+            let stops = (0..<9).map { i in
                 NSColor(hue: CGFloat(i) / 8.0,
                         saturation: 0.85, brightness: 1.0,
                         alpha: 0.95).cgColor
             }
+            // Seed the model-layer colour so a paused window doesn't
+            // flash transparent before the animation kicks in.
+            layer.borderColor = stops.first
+            let anim = CAKeyframeAnimation(keyPath: "borderColor")
+            anim.values = stops
             anim.duration = Double(borderCycleMs) / 1000.0
             anim.repeatCount = .infinity
             anim.calculationMode = .linear
-            stroke.add(anim, forKey: "rainbow")
+            layer.add(anim, forKey: "rainbow")
         case .terminal, .neon, .splatoon, .mono, .vapor, .pacMan:
             // Static signature-colour rim — ports the per-theme
             // `borderColor` that lived on `TomeThemePalette` through
-            // PR #111 before the rim was decoupled from the theme.
-            // Users opt in via `[tome.decoration].border = "<theme>"`
-            // and pair freely with any `[tome].theme`.
-            stroke.strokeColor = border.staticColor.cgColor
+            // PR #111. Pair freely with any `[tome].theme`.
+            layer.borderColor = border.staticColor.cgColor
         }
-        host.addSublayer(stroke)
     }
 
     /// Dismiss the entire tree from any level. Walks up to root, then
