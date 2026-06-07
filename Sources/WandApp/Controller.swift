@@ -211,7 +211,8 @@ public final class Controller: @unchecked Sendable {
             iconChip: cfg.launcher.row.iconChip,
             openAnim: cfg.launcher.animation.open,
             closeAnim: cfg.launcher.animation.close,
-            border: cfg.launcher.decoration.border
+            border: cfg.launcher.decoration.border,
+            palette: cfg.launcher.theme.palette
         ) { [weak self] item, target in
             self?.counterLauncherDispatched += 1
             Log.line("controller: → tome entry \"\(item.name)\"")
@@ -289,7 +290,8 @@ public final class Controller: @unchecked Sendable {
             iconChip: cfg.launcher.row.iconChip,
             openAnim: cfg.launcher.animation.open,
             closeAnim: cfg.launcher.animation.close,
-            border: cfg.launcher.decoration.border
+            border: cfg.launcher.decoration.border,
+            palette: cfg.launcher.theme.palette
         ) { [weak self] item, target in
             self?.counterShowMenuDispatched += 1
             Log.line("controller: → show-menu item \"\(item.name)\"")

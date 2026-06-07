@@ -224,6 +224,137 @@ public enum LauncherLayout: String, Sendable, Hashable, CaseIterable {
     }
 }
 
+// MARK: - Theme
+
+/// Coordinated colour palette for the tome panel. Fields are paths
+/// the colour-parser understands (named `"systemRed"` / `"accent"`,
+/// hex `"#rrggbb"`, …) or empty string to fall back to the system
+/// default. The palette only nudges a handful of surfaces — the
+/// panel still rides on the system `NSVisualEffectView .menu`
+/// material, so themes layer onto vibrancy instead of replacing it.
+public struct TomeThemePalette: Sendable, Equatable {
+    /// Hover-row background fill. Empty = `NSColor.controlAccentColor`
+    /// (the macOS default). When a theme overrides this, the row's
+    /// hover state reads in the theme's accent instead of the
+    /// generic system blue.
+    public let accentColor: String
+    /// Text colour while a row is hovered. Empty = white (the
+    /// historical default that paired with the system blue accent).
+    /// Themes whose accent isn't dark-enough for white text override
+    /// this — e.g. yellow accent → black hover text.
+    public let accentTextColor: String
+    /// Default idle row text colour. Empty = `.labelColor` (system
+    /// semantic). Terminal-style themes use this to keep every row
+    /// in the theme's signature hue.
+    public let textColor: String
+    /// Static panel outline colour. Empty = no extra outline; the
+    /// system blur's edge is used. The animated `[tome.decoration]
+    /// .border` is independent — that's a moving rim, this is a
+    /// static frame.
+    public let borderColor: String
+    /// Panel background fill. Empty (the default) keeps the system
+    /// `NSVisualEffectView .menu` frosted blur (vibrancy). Non-empty
+    /// **replaces** the blur with a solid colour — required for
+    /// themes that need a saturated backdrop the blur can't deliver
+    /// (e.g. pacman's pure black, terminal's editor-black). Use a
+    /// fully-opaque hex; alpha-channel suffixes work but read as
+    /// "tinted blur" rather than "themed surface".
+    public let backgroundColor: String
+
+    public init(accentColor: String = "",
+                accentTextColor: String = "",
+                textColor: String = "",
+                borderColor: String = "",
+                backgroundColor: String = "") {
+        self.accentColor = accentColor
+        self.accentTextColor = accentTextColor
+        self.textColor = textColor
+        self.borderColor = borderColor
+        self.backgroundColor = backgroundColor
+    }
+}
+
+/// `[tome].theme` — coordinated colour palette for the launcher
+/// panel. Mirrors `[cast].theme`'s shape (same enum cases) so a
+/// user can pick the same look for both surfaces, but the per-case
+/// palette is tuned for a menu UI rather than a trail/HUD. Unknown
+/// names clamp to `.default`.
+public enum TomeTheme: String, Sendable, CaseIterable {
+    case `default`
+    case terminal
+    case neon
+    case splatoon
+    case mono
+    case vapor
+    case pacman
+
+    // Note: `rainbow` / dynamic colour cycling isn't a tome theme
+    // case — the launcher panel isn't redrawn frame-by-frame, so a
+    // cycling palette would lock to whatever colour the panel
+    // happens to be opened on. Re-introduce only with a real tick
+    // path for the panel surface.
+
+    public var palette: TomeThemePalette {
+        switch self {
+        case .default:
+            return TomeThemePalette()
+        case .terminal:
+            // Tokyo-Night green text + green hover on a solid black
+            // editor backdrop. Hover text inverts to black so the
+            // row reads as a flat green chip when selected.
+            return TomeThemePalette(
+                accentColor: "#22c55e",
+                accentTextColor: "#000000",
+                textColor: "#22c55e",
+                borderColor: "#22c55e",
+                backgroundColor: "#000000")
+        case .neon:
+            return TomeThemePalette(
+                accentColor: "#22d3ee",
+                accentTextColor: "#0f0a1f",
+                textColor: "#ffffff",
+                borderColor: "#22d3ee",
+                backgroundColor: "#0f0a1f")
+        case .splatoon:
+            // Splatoon's per-stroke team-colour rotation isn't a fit
+            // for the menu (which lives across many panel-opens, not
+            // one stroke). Picks the hot-pink/lime canonical pair
+            // statically — same vibe, no flicker.
+            return TomeThemePalette(
+                accentColor: "#ff3399",
+                accentTextColor: "#ffffff",
+                textColor: "#ffffff",
+                borderColor: "#bfff00",
+                backgroundColor: "#1a1a1a")
+        case .mono:
+            return TomeThemePalette(
+                accentColor: "#ffffff",
+                accentTextColor: "#000000",
+                textColor: "#ffffff",
+                borderColor: "#ffffff",
+                backgroundColor: "#000000")
+        case .vapor:
+            return TomeThemePalette(
+                accentColor: "#ff79c6",
+                accentTextColor: "#282a36",
+                textColor: "#f8f8f2",
+                borderColor: "#ff79c6",
+                backgroundColor: "#282a36")
+        case .pacman:
+            // Yellow PAC-MAN accent with black hover text on the
+            // canonical arcade black backdrop — pairs with
+            // `[cast].theme = "pacman"` for a coordinated look
+            // across both surfaces.
+            return TomeThemePalette(
+                accentColor: "#ffea00",
+                accentTextColor: "#000000",
+                textColor: "#ffea00",
+                borderColor: "#ffea00",
+                backgroundColor: "#000000")
+        }
+    }
+}
+
 /// `[launcher.row]` — per-row visual conventions that affect every
 /// `[[launcher.item]]` uniformly. Split out of the bare `[launcher]`
 /// block in v6 so the trigger-identity fields (button / modifiers /
@@ -295,13 +426,15 @@ public struct LauncherSpec: Sendable, Equatable {
     public let row: LauncherRowSpec
     public let animation: LauncherAnimationSpec
     public let decoration: LauncherDecorationSpec
+    public let theme: TomeTheme
 
     public init(enabled: Bool, trigger: Trigger,
                 layout: LauncherLayout = .list,
                 items: [LauncherItem],
                 row: LauncherRowSpec = .default,
                 animation: LauncherAnimationSpec = .default,
-                decoration: LauncherDecorationSpec = .default) {
+                decoration: LauncherDecorationSpec = .default,
+                theme: TomeTheme = .default) {
         self.enabled = enabled
         self.trigger = trigger
         self.layout = layout
@@ -309,6 +442,7 @@ public struct LauncherSpec: Sendable, Equatable {
         self.row = row
         self.animation = animation
         self.decoration = decoration
+        self.theme = theme
     }
 
     public static let `default` = LauncherSpec(
@@ -318,7 +452,8 @@ public struct LauncherSpec: Sendable, Equatable {
         items: [],
         row: .default,
         animation: .default,
-        decoration: .default
+        decoration: .default,
+        theme: .default
     )
 }
 

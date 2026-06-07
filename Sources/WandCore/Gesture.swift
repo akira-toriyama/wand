@@ -42,6 +42,13 @@ public struct CastThemePalette: Sendable, Equatable {
     /// Burst particle colour. Empty = inherit `trail.color`. Same
     /// grammar as the trail colour fields.
     public let burstColor: String
+    /// Solid backdrop colour for the app-icon badge. Empty = keep the
+    /// system frosted blur behind the badge (the historical look).
+    /// Non-empty draws a solid theme colour underneath the badge
+    /// icon — pairs with the matching tome `[tome].theme` so the
+    /// app icon doesn't visually float on a frosted patch while the
+    /// rest of the HUD reads as themed.
+    public let badgeBackgroundColor: String
 
     // Note: a `decalColor` entry lived here through #114 but was
     // retired alongside `[cast.fire.decal].color` — decal is always
@@ -53,7 +60,8 @@ public struct CastThemePalette: Sendable, Equatable {
                 cardsTextColor: String,
                 cardsFiresColor: String = "",
                 cardsFiresTextColor: String = "",
-                burstColor: String = "") {
+                burstColor: String = "",
+                badgeBackgroundColor: String = "") {
         self.trailColor = trailColor
         self.trailColorNoMatch = trailColorNoMatch
         self.trailColorOutline = trailColorOutline
@@ -63,6 +71,7 @@ public struct CastThemePalette: Sendable, Equatable {
         self.cardsFiresColor = cardsFiresColor
         self.cardsFiresTextColor = cardsFiresTextColor
         self.burstColor = burstColor
+        self.badgeBackgroundColor = badgeBackgroundColor
     }
 }
 
@@ -106,7 +115,8 @@ public enum CastTheme: String, Sendable, CaseIterable {
                 trailColorOutline: "#000000",
                 cardsBorderColor: "#22c55e",
                 cardsBodyColor: "#000000",
-                cardsTextColor: "#22c55e")
+                cardsTextColor: "#22c55e",
+                badgeBackgroundColor: "#000000")
         case .neon:
             return CastThemePalette(
                 trailColor: "neon",
@@ -114,7 +124,8 @@ public enum CastTheme: String, Sendable, CaseIterable {
                 trailColorOutline: "#000000",
                 cardsBorderColor: "neon",
                 cardsBodyColor: "#0f0a1f",
-                cardsTextColor: "#ffffff")
+                cardsTextColor: "#ffffff",
+                badgeBackgroundColor: "#0f0a1f")
         case .splatoon:
             return CastThemePalette(
                 trailColor: "splatoon",
@@ -126,7 +137,8 @@ public enum CastTheme: String, Sendable, CaseIterable {
                 // Burst inherits trail (one team's colour per stroke,
                 // matching the line). Decal is always Splatoon
                 // multi-team regardless of theme.
-                burstColor: "")
+                burstColor: "",
+                badgeBackgroundColor: "#1a1a1a")
         case .rainbow:
             return CastThemePalette(
                 trailColor: "rainbow",
@@ -134,7 +146,8 @@ public enum CastTheme: String, Sendable, CaseIterable {
                 trailColorOutline: "#ffffff",
                 cardsBorderColor: "rainbow",
                 cardsBodyColor: "#000000",
-                cardsTextColor: "#ffffff")
+                cardsTextColor: "#ffffff",
+                badgeBackgroundColor: "#000000")
         case .mono:
             return CastThemePalette(
                 trailColor: "#ffffff",
@@ -142,7 +155,8 @@ public enum CastTheme: String, Sendable, CaseIterable {
                 trailColorOutline: "#000000",
                 cardsBorderColor: "#ffffff",
                 cardsBodyColor: "#000000",
-                cardsTextColor: "#ffffff")
+                cardsTextColor: "#ffffff",
+                badgeBackgroundColor: "#000000")
         case .vapor:
             return CastThemePalette(
                 trailColor: "#ff79c6",
@@ -150,7 +164,8 @@ public enum CastTheme: String, Sendable, CaseIterable {
                 trailColorOutline: "#6272a4",
                 cardsBorderColor: "#ff79c6",
                 cardsBodyColor: "#282a36",
-                cardsTextColor: "#f8f8f2")
+                cardsTextColor: "#f8f8f2",
+                badgeBackgroundColor: "#282a36")
         case .pacman:
             // Pac-Man arcade palette: yellow Pac-Man on a black
             // backdrop, red-ghost no-match. The yellow accent pairs
@@ -166,15 +181,20 @@ public enum CastTheme: String, Sendable, CaseIterable {
             //                       release" moment reads as the
             //                       trail's yellow pellet finally
             //                       latching onto its rule.
+            // Outline = arcade-maze neon blue (#2121ff). Under
+            // `style = "pacman"` this becomes the corridor's flanking
+            // wall colour rather than a per-pellet halo; for the
+            // other styles it still rides as the usual trail outline.
             return CastThemePalette(
                 trailColor: "#ffea00",
                 trailColorNoMatch: "#ff0000",
-                trailColorOutline: "#000000",
+                trailColorOutline: "#2121ff",
                 cardsBorderColor: "#ffea00",
                 cardsBodyColor: "#000000",
                 cardsTextColor: "#ffea00",
                 cardsFiresColor: "#ffea00",
-                cardsFiresTextColor: "#000000")
+                cardsFiresTextColor: "#000000",
+                badgeBackgroundColor: "#000000")
         }
     }
 }

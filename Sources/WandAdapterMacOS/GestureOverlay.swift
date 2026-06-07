@@ -146,6 +146,9 @@ public final class GestureOverlay {
             ? nil
             : TrailColorMode.parse(palette.cardsFiresTextColor,
                                     fallback: .white)
+        view.badgeBackgroundColor = palette.badgeBackgroundColor.isEmpty
+            ? nil
+            : NSColorParse.nsColor(palette.badgeBackgroundColor)
         view.effectIntensity = cfg.intensity.multiplier
         view.minStrokePx = CGFloat(cfg.recognition.minStrokePx)
         view.finalHoldDuration = TimeInterval(ov.trail.finalHoldMs) / 1000.0
@@ -274,6 +277,13 @@ private final class TrailView: NSView {
     /// cards run yellow-on-black and the firing card flips to
     /// black-on-yellow.
     var cardFiresTextMode: TrailColorMode? = nil
+    /// Solid backdrop for the app-icon badge. `nil` (the default)
+    /// keeps the historical frosted-blur behind the badge — the
+    /// icon rides on whatever vibrancy the `[cast.overlay].blur-
+    /// enabled` knob delivers. Non-nil draws this colour as a
+    /// rounded fill underneath the badge icon instead, used by
+    /// non-default cast themes that need an opaque themed surface.
+    var badgeBackgroundColor: NSColor? = nil
     /// Pre-resolved multiplier from `Intensity.multiplier` — scales
     /// translation distance, scale deltas, vibration amplitude, and
     /// particle birth-rate / velocity.
@@ -711,8 +721,21 @@ private final class TrailView: NSView {
             drawRainbowRoadPath(origin: origin, cursor: cursor,
                                  color: color, outline: outlineColor)
         case .pacman:
-            drawPacmanPath(origin: origin, cursor: cursor,
-                            color: color, outline: outlineColor)
+            // Pacman rendering lives in PacmanRenderer.swift —
+            // ~450 lines of style-specific code that doesn't need
+            // to share state with the rest of TrailView. Package
+            // the state and hand off.
+            PacmanRenderer.draw(
+                state: PacmanRenderer.State(
+                    origin: origin,
+                    cursor: cursor,
+                    corners: corners,
+                    rawTrail: rawTrail,
+                    lastDir: lastDir,
+                    straightenOnTurn: straightenOnTurn,
+                    strokeWidth: strokeWidth,
+                    valid: valid),
+                color: color, outline: outlineColor)
         case .arrow:
             drawArrowChainPath(origin: origin, cursor: cursor,
                                 color: color, outline: outlineColor)
@@ -1175,298 +1198,11 @@ private final class TrailView: NSView {
         walkPath(origin: origin, interval: cell * 0.5, step: plot)
     }
 
-    /// Fixed sizes for the Pac-Man trail. Pellet = small dot lining
-    /// the path; face = larger wedge that lags behind the cursor by
-    /// `pacmanFaceLag` pt so it reads as Pac-Man running along the
-    /// trail rather than sitting flat on the cursor.
-    private static let pacmanPelletDiameter: CGFloat = 4
-    private static let pacmanPelletInterval: CGFloat = 14
-    /// Face silhouette radius (pt). Tuned for the pixel sprite —
-    /// large enough that 14-ish cells across the diameter still
-    /// leave room for the eyes / mouth detail without crowding.
-    private static let pacmanFaceRadius: CGFloat = 16
-    /// Cell size of the face's pixel grid, as a fraction of the
-    /// face radius. ~0.14 gives ~14 cells across the diameter,
-    /// landing on the chunky side of the arcade sprite range.
-    /// Smaller values smooth the edge back toward an arc; larger
-    /// values turn the wedge into a coarse polygon.
-    private static let pacmanPixelCellRatio: CGFloat = 0.14
-    /// Mouth half-angle bounds (degrees). The face animates between
-    /// these via `cos`, giving the classic open-close chomp.
-    /// `min` is just above zero so the mouth doesn't fully close
-    /// (a sealed circle reads as "not Pac-Man anymore").
-    private static let pacmanMouthHalfAngleMinDeg: CGFloat = 5
-    private static let pacmanMouthHalfAngleMaxDeg: CGFloat = 60
-    /// Chomp frequency (Hz). One stepped 4-frame cycle per period
-    /// (closed → half → open → half → …); ~5 Hz lands ~50 ms per
-    /// frame, matching the original arcade's snappy sprite cadence.
-    private static let pacmanChompHz: Double = 5
-    /// Discrete mouth phases that the chomp animation cycles
-    /// through, one per stepped frame. Triangle pattern (closed →
-    /// mid → open → mid) so the open/close motion is symmetric
-    /// without doubling the frame count.
-    private static let pacmanChompFrames: [CGFloat] = [0, 0.5, 1, 0.5]
-    /// How far back along the path Pac-Man's face sits behind the
-    /// live cursor (pt). Tuned by feel — too small reads as
-    /// "Pac-Man sitting on the cursor" (no chase), too large feels
-    /// like Pac-Man can never catch up. 60pt ≈ 2 face widths of
-    /// gap, which lands as "actively chasing" without hiding the
-    /// sprite off the live cursor end.
-    private static let pacmanFaceLag: CGFloat = 60
-    /// Toggle rate of the ghost-skirt 2-frame leg animation (Hz).
-    /// Slower than the chomp because the leg shuffle is meant to
-    /// pulse in the background rather than draw attention; 2.5 Hz
-    /// gives ~200 ms per leg pose.
-    private static let ghostSkirtHz: Double = 2.5
+    // Pac-Man trail rendering — every pacman/ghost-specific
+    // constant + helper now lives in `PacmanRenderer.swift`. The
+    // `draw(_:)` dispatch hands the relevant TrailView state over
+    // via `PacmanRenderer.State`.
 
-    /// Pac-Man-themed trail: the cursor lays a single line of pellet
-    /// dots along the path (origin → cursor), and the Pac-Man face
-    /// chases along that same path `pacmanFaceLag` pt behind the
-    /// cursor. `strokeWidth` is interpreted as a **scale multiplier**
-    /// here — `width = 1` gives the default pellet / face size and
-    /// spacing, higher values scale everything up proportionally.
-    /// The arcade aesthetic is always a single line of pellets, so
-    /// thickness rows would fight the visual.
-    private func drawPacmanPath(origin: CGPoint, cursor: CGPoint,
-                                 color: NSColor, outline: NSColor?) {
-        let scale = max(1, strokeWidth)
-        let dot = Self.pacmanPelletDiameter * scale
-        let interval = Self.pacmanPelletInterval * scale
-        let faceLag = Self.pacmanFaceLag * scale
-        let faceRadius = Self.pacmanFaceRadius * scale
-        let pelletFill = color.withAlphaComponent(0.9)
-        let outlineFill = outline?.withAlphaComponent(0.9)
-        let outlinePad = max(1, scale)
-
-        // 1) Locate where Pac-Man's face sits this frame: walk the
-        // path with the lag as `trimTail` — the final step the walker
-        // emits is exactly the cutoff point. Skip drawing in this
-        // pass; we only need the coordinate + tangent.
-        var faceAnchor: (point: CGPoint, tangent: CGPoint)?
-        walkPath(origin: origin,
-                 interval: interval,
-                 trimTail: faceLag) { p, tangent in
-            faceAnchor = (p, tangent)
-        }
-
-        // 2) Draw the pellets across the full path (no trim) so the
-        // dot trail extends from origin all the way to the cursor.
-        // Single line — no thickness stacking.
-        let plot: (CGPoint, CGPoint) -> Void = { p, _ in
-            if let outlineFill {
-                outlineFill.setFill()
-                let outer = NSRect(x: p.x - dot / 2 - outlinePad,
-                                   y: p.y - dot / 2 - outlinePad,
-                                   width: dot + outlinePad * 2,
-                                   height: dot + outlinePad * 2)
-                NSBezierPath(ovalIn: outer).fill()
-            }
-            pelletFill.setFill()
-            let rect = NSRect(x: p.x - dot / 2, y: p.y - dot / 2,
-                              width: dot, height: dot)
-            NSBezierPath(ovalIn: rect).fill()
-        }
-        walkPath(origin: origin, interval: interval, step: plot)
-
-        // 3) Draw the face only once the trail is long enough for a
-        // real lag — the sprite then emerges naturally `faceLag` pt
-        // behind the cursor instead of popping in glued to the
-        // cursor at button-down. Sprite swaps to a ghost when the
-        // in-progress gesture has fallen off every rule, matching
-        // the arcade pairing (yellow Pac-Man = on-track, red ghost
-        // = chased / failure).
-        if let anchor = faceAnchor {
-            if valid {
-                drawPacmanFace(at: anchor.point,
-                                tangent: anchor.tangent,
-                                radius: faceRadius, color: color)
-            } else {
-                drawGhostFace(at: anchor.point,
-                               tangent: anchor.tangent,
-                               radius: faceRadius, color: color)
-            }
-        }
-    }
-
-    /// Draw the pacman face as a chunky pixel-grid sprite —
-    /// rasterise a circle minus a mouth wedge onto a square grid,
-    /// then fill the kept cells. Cells are drawn in face-local
-    /// coordinates (mouth opens along local +x); the graphics
-    /// context is rotated so the whole pixel sprite turns as one
-    /// rigid block along `tangent`, matching the arcade aesthetic
-    /// where the body's pixels stay aligned to the sprite frame as
-    /// it changes direction. The chomp **snaps** between the
-    /// discrete `pacmanChompFrames` at `pacmanChompHz` instead of
-    /// being smoothly interpolated, so the open/close cadence reads
-    /// as arcade sprite-swapping rather than analog easing.
-    private func drawPacmanFace(at p: CGPoint, tangent: CGPoint,
-                                 radius: CGFloat, color: NSColor) {
-        let frames = Self.pacmanChompFrames
-        let cyclePos = (CACurrentMediaTime() * Self.pacmanChompHz)
-            .truncatingRemainder(dividingBy: 1)
-        let frameIdx = min(frames.count - 1,
-                            Int(cyclePos * Double(frames.count)))
-        let phase = frames[frameIdx]
-        let mouthHalfRad = (Self.pacmanMouthHalfAngleMinDeg
-            + (Self.pacmanMouthHalfAngleMaxDeg
-                - Self.pacmanMouthHalfAngleMinDeg) * phase)
-            * .pi / 180
-
-        NSGraphicsContext.saveGraphicsState()
-        defer { NSGraphicsContext.restoreGraphicsState() }
-        let xform = NSAffineTransform()
-        xform.translateX(by: p.x, yBy: p.y)
-        xform.rotate(byRadians: atan2(tangent.y, tangent.x))
-        xform.concat()
-
-        let cell = max(2, radius * Self.pacmanPixelCellRatio)
-        let r2 = radius * radius
-        let extent = Int(ceil(radius / cell))
-        color.withAlphaComponent(0.95).setFill()
-        for iy in -extent...extent {
-            for ix in -extent...extent {
-                // Cell-centre in local space; cells live on the
-                // half-integer grid so the silhouette is symmetric.
-                let cx = (CGFloat(ix) + 0.5) * cell
-                let cy = (CGFloat(iy) + 0.5) * cell
-                if cx * cx + cy * cy > r2 { continue }
-                // Mouth opens along local +x — drop cells whose
-                // angle from the centre falls inside ±mouthHalf.
-                if abs(atan2(cy, cx)) < mouthHalfRad { continue }
-                let rect = NSRect(
-                    x: CGFloat(ix) * cell,
-                    y: CGFloat(iy) * cell,
-                    width: cell, height: cell)
-                NSBezierPath(rect: rect).fill()
-            }
-        }
-    }
-
-    /// Draw the no-match ghost sprite — arcade-style "Blinky" shape
-    /// rasterised onto the same pixel grid as the pacman face: a
-    /// dome on top, square body below, and a wavy skirt of 3 humps
-    /// along the bottom edge that **alternates between two leg
-    /// poses** at `ghostSkirtHz` (humps on the outside vs humps on
-    /// the inside) so the sprite reads as walking. Body sits
-    /// upright (arcade ghosts don't rotate); only the eyes look
-    /// along `tangent`. Body colour flows from `color`
-    /// (= `trailColorNoMatch`, typically red) so the failure signal
-    /// pairs with the pellet trail's no-match tint.
-    private func drawGhostFace(at p: CGPoint, tangent: CGPoint,
-                                radius: CGFloat, color: NSColor) {
-        let cell = max(2, radius * Self.pacmanPixelCellRatio)
-        // Body below the dome is shorter than the dome's radius —
-        // the arcade ghost is a chunky/squat silhouette, not a tall
-        // one. Bumping bodyHeight up will stretch the area below
-        // the eyes and the ghost reads as elongated.
-        let bodyHeight = radius * 0.82
-        let skirtAmp = radius * 0.34            // hump depth below body
-        let totalBottom = -bodyHeight - skirtAmp
-        let r2 = radius * radius
-        // Skirt frame: 0 = humps centred at hump-A positions, 1 =
-        // humps shifted by half a hump-width (the A-frame's valleys
-        // become humps and vice versa). Synced off wall time so
-        // every ghost on screen pulses together.
-        let legFrame = Int(CACurrentMediaTime() * Self.ghostSkirtHz) & 1
-
-        NSGraphicsContext.saveGraphicsState()
-        defer { NSGraphicsContext.restoreGraphicsState() }
-        let xform = NSAffineTransform()
-        xform.translateX(by: p.x, yBy: p.y)
-        xform.concat()
-
-        color.withAlphaComponent(0.95).setFill()
-        let extentX = Int(ceil(radius / cell))
-        let extentYTop = Int(ceil(radius / cell))
-        let extentYBot = Int(ceil(-totalBottom / cell))
-        for iy in -extentYBot...extentYTop {
-            for ix in -extentX...extentX {
-                let cx = (CGFloat(ix) + 0.5) * cell
-                let cy = (CGFloat(iy) + 0.5) * cell
-                if !ghostBodyFilled(cx: cx, cy: cy,
-                                     radius: radius, r2: r2,
-                                     bodyHeight: bodyHeight,
-                                     skirtAmp: skirtAmp,
-                                     legFrame: legFrame) { continue }
-                let rect = NSRect(
-                    x: CGFloat(ix) * cell,
-                    y: CGFloat(iy) * cell,
-                    width: cell, height: cell)
-                NSBezierPath(rect: rect).fill()
-            }
-        }
-
-        // Eyes — two 4×4 white blocks set into the upper body, each
-        // with a 2×2 blue pupil whose offset within the eye tracks
-        // the tangent direction. Eye / pupil sizing matches the
-        // arcade ghost sprite where the eyes dominate the visual
-        // mass. Pupil shift is symmetric in both axes so diagonal
-        // travel reads as a true diagonal gaze.
-        let eyeOffsetX = radius * 0.42
-        let eyeY = radius * 0.10           // closer to dome/body line
-        let eyeHalfW = cell * 2.0          // 4 cells wide
-        let eyeHalfH = cell * 2.0          // 4 cells tall
-        let pupilSize = cell * 2
-        let len = max(hypot(tangent.x, tangent.y), 0.0001)
-        let pupilShift = cell              // 1 cell — pupil rides
-                                            // flush against the eye
-                                            // edge at full tangent.
-        let pupilDx = (tangent.x / len) * pupilShift
-        let pupilDy = (tangent.y / len) * pupilShift
-        let pupilColor = NSColor(srgbRed: 0.13, green: 0.13,
-                                  blue: 1.0, alpha: 1.0)
-
-        for side: CGFloat in [-1, 1] {
-            let ex = side * eyeOffsetX
-            let eyeRect = NSRect(x: ex - eyeHalfW,
-                                 y: eyeY - eyeHalfH,
-                                 width: eyeHalfW * 2,
-                                 height: eyeHalfH * 2)
-            NSColor.white.setFill()
-            NSBezierPath(rect: eyeRect).fill()
-            let pupilRect = NSRect(
-                x: ex - pupilSize / 2 + pupilDx,
-                y: eyeY - pupilSize / 2 + pupilDy,
-                width: pupilSize, height: pupilSize)
-            pupilColor.setFill()
-            NSBezierPath(rect: pupilRect).fill()
-        }
-    }
-
-    /// Predicate: is the cell at local (cx, cy) inside the ghost
-    /// silhouette? Top half is a circle (dome); middle is a
-    /// rectangle (body); bottom is a 3-hump skirt — each hump is a
-    /// triangle wedge extending below the body baseline. `legFrame`
-    /// (0 or 1) shifts the hump pattern by half a hump-width so
-    /// alternating frames give the classic arcade "leg shuffle".
-    private func ghostBodyFilled(cx: CGFloat, cy: CGFloat,
-                                  radius: CGFloat, r2: CGFloat,
-                                  bodyHeight: CGFloat,
-                                  skirtAmp: CGFloat,
-                                  legFrame: Int) -> Bool {
-        if abs(cx) > radius { return false }
-        // Dome: cy >= 0, inside circle.
-        if cy >= 0 { return cx * cx + cy * cy <= r2 }
-        // Body rectangle: -bodyHeight <= cy <= 0.
-        if cy >= -bodyHeight { return true }
-        // Skirt humps. Frame 0 places hump centres at the segment
-        // midpoints; frame 1 shifts them by half a hump-width so
-        // the gaps and humps swap and the sprite reads as walking.
-        let humpWidth = (2 * radius) / 3
-        let humpHalf = humpWidth / 2
-        let phaseShift: CGFloat = (legFrame == 0) ? 0 : humpHalf
-        // Wrap into the [-radius, radius) band so a shifted hump
-        // that pokes off one side is folded back onto the other.
-        let shifted = cx + phaseShift
-        let wrapped = shifted - 2 * radius
-            * floor((shifted + radius) / (2 * radius))
-        let segIdx = min(2, max(0,
-            Int(floor((wrapped + radius) / humpWidth))))
-        let humpCentre = -radius + (CGFloat(segIdx) + 0.5) * humpWidth
-        let distFromCentre = abs(wrapped - humpCentre) / humpHalf
-        let depthAllowed = (1 - distFromCentre) * skirtAmp
-        return cy >= -bodyHeight - depthAllowed
-    }
 
     /// Snap `p` onto the axis defined by `dir` and the point `from` —
     /// horizontal directions preserve `from.y`, vertical preserve
@@ -2042,10 +1778,21 @@ private final class HUDContentView: NSView {
             tx.concat()
             let bgPath = NSBezierPath(roundedRect: b.rect,
                                       xRadius: 10, yRadius: 10)
-            // Without blur the badge needs its own dark backdrop
-            // for icon contrast (otherwise the icon sits on whatever
-            // page content is behind the transparent overlay).
-            if !o.blurEnabled {
+            // Badge backdrop priority:
+            //   1. Themed solid (palette.badgeBackgroundColor) —
+            //      drawn even when blur is on, so it sits between
+            //      the vibrancy and the icon (the theme colour
+            //      wins over the frost).
+            //   2. Else, when blur is off, fall back to a dark
+            //      rounded fill so the icon still has contrast on
+            //      the transparent overlay window.
+            //   3. Default (blur on, no theme) — no fill; the
+            //      blurView under the masked badge rect carries
+            //      the historical frosted look.
+            if let themed = o.badgeBackgroundColor {
+                themed.withAlphaComponent(0.95).setFill()
+                bgPath.fill()
+            } else if !o.blurEnabled {
                 NSColor.black.withAlphaComponent(0.8).setFill()
                 bgPath.fill()
             }

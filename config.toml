@@ -334,7 +334,14 @@ width = 3
 #               chases behind the cursor, mouth chomping along the
 #               current direction. Always a single line of pellets
 #               (the arcade look); `width` scales pellet / face size
-#               + spacing.
+#               + spacing. When `color-outline` is set, the corridor
+#               renders as a black road bounded by two neon walls in
+#               the outline colour (matches the arcade maze layout).
+#               **Recommended pairing: `straighten-on-turn = true`**
+#               below — the arcade metaphor is fundamentally
+#               orthogonal corridors, so axis-snapped segments give
+#               clean 90° walls. With `false` the walls trace raw
+#               freehand samples and wobble with hand jitter.
 #   "arrow"   — continuous chevron chain along the whole path
 #               (`-->-->-->`), each `>` rotated to match the local
 #               tangent so the direction reads at every point — not
@@ -360,9 +367,12 @@ final-hold-ms = 400
 #   true   — snap the just-completed segment onto its axis so the
 #            trail reads as a clean orthogonal polyline.
 #   false  — keep every sample as raw freehand; the trail follows
-#            the literal hand path, jitter included (default).
+#            the literal hand path, jitter included.
 # Recognition is unaffected either way — this is a render-only knob.
-straighten-on-turn = false
+# **Required for `style = "pacman"`** — the arcade maze metaphor
+# only reads cleanly with axis-snapped corridors; freehand pacman
+# walls trace hand jitter and lose the corridor read.
+straighten-on-turn = true
 
 
 # Origin badge — small app-icon chip at the gesture's start point.
@@ -514,6 +524,35 @@ modifiers = []                 # e.g. ["ctrl"] to require ctrl + middle
 # / `[tome.row].shortcut-badge` (no room to render them); only
 # `.list` shows every feature.
 layout = "list"
+
+# Coordinated colour palette for the tome panel — sets the hover
+# accent, idle row text, a static outline, AND the panel backdrop.
+# Themes other than "default" REPLACE the system frosted blur with
+# a solid colour (the `.menu` material has no tint API, so
+# saturated themes can't ride on the blur). Independent of
+# `[cast].theme` (the two surfaces have different visual
+# constraints), so you can pair them freely or run different looks
+# per family.
+#
+#   "default"  — frosted-glass system blur, controlAccent hover,
+#                .labelColor rows. The historical look.
+#   "terminal" — Tokyo-Night green-on-black; green hover with
+#                black text. Solid black backdrop.
+#   "neon"     — electric cyan hover on white rows; deep blue-black
+#                backdrop.
+#   "splatoon" — hot-pink hover with a lime outline on dark
+#                charcoal (statically picked — the panel doesn't
+#                redraw per-frame, so the per-stroke team rotation
+#                isn't a fit).
+#   "mono"     — stark white-on-black; inverted on hover.
+#   "vapor"    — synthwave pink hover on Dracula charcoal,
+#                off-white rows.
+#   "pacman"   — yellow accent on black with yellow rows; pairs
+#                with `[cast].theme = "pacman"` for a coordinated
+#                arcade look across both surfaces.
+#
+# Unknown names clamp to "default". Validate with `wand --validate`.
+theme = "default"
 
 
 # Per-row visual conventions that apply uniformly to every
