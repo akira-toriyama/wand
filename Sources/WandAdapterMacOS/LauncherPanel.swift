@@ -66,13 +66,11 @@ extension LauncherBorder {
         case .pacMan:    return NSColor(srgbRed: 0xff / 255.0,
                                          green: 0xea / 255.0,
                                          blue:  0x00 / 255.0, alpha: 1)
-        case .off, .rainbow, .pacManTail:
-            // Animated kinds (`.rainbow`) + multi-element kinds
-            // (`.pacManTail` paints its own layers in
-            // `installBorderDecoration`) and the off case all carry
-            // their colour another way. Reaching here means the
-            // caller used the wrong accessor — fall back loudly
-            // rather than render a silent mystery colour.
+        case .off, .rainbow:
+            // Animated kinds (`.rainbow`) + the off case carry their
+            // colour another way. Reaching here means the caller
+            // used the wrong accessor — fall back loudly rather than
+            // render a silent mystery colour.
             assertionFailure(
                 "LauncherBorder.staticColor accessed for \(self)")
             return .controlAccentColor
@@ -154,22 +152,12 @@ public enum LauncherPanel {
             : nil
         // Outer margin around bg — needed by any decoration that sits
         // OUTSIDE the panel content rather than inside it. Two sources
-        // contribute; take the max so different surfaces don't fight
-        // over the same margin budget:
-        //   1. line-pets ride the rim and need ~14 pt (scaled) so
-        //      the panel window doesn't clip their outer half.
-        //   2. pac-man-tail draws a wide maze-wall frame in the
-        //      margin so bg's interior stays untouched. The width
-        //      is anchored to `borderWidth` (the outer wall thickness
-        //      knob) and sized to fit a pac-man pet at that scale —
-        //      `outer + gap + inner ≈ 2.5× borderWidth`, with a
-        //      floor that keeps the wall readable at small widths.
+        // contribute. `line-pets` ride the rim and need ~14 pt
+        // (scaled by `fontSize`) so the panel window doesn't clip
+        // their outer half.
         let petScale = max(1.0, CGFloat(fontSize) / 13.0)
-        let petMargin: CGFloat = linePets.isEmpty
+        let outerMargin: CGFloat = linePets.isEmpty
             ? 0 : round(14 * petScale)
-        let borderMargin: CGFloat = (border == .pacManTail)
-            ? max(20, round(CGFloat(borderWidth) * 2.5)) : 0
-        let outerMargin = max(petMargin, borderMargin)
         let (content, rows) = PanelLayout.buildContent(
             nodes: nodes, header: header, layout: layout,
             shortcutBadge: shortcutBadge, iconChip: iconChip,
@@ -1188,34 +1176,7 @@ private final class PanelController {
             // `borderColor` that lived on `TomeThemePalette` through
             // PR #111. Pair freely with any `[tome].theme`.
             layer.borderColor = border.staticColor.cgColor
-        case .pacManTail:
-            installPacManTailBorder(on: bg)
         }
-    }
-
-    /// Arcade pac-man maze-wall border: a thick outer neon-blue
-    /// rounded frame + a thin inner blue line at bg's edge (with
-    /// black showing through the gap between) + small yellow pellet
-    /// dots along the gap. The whole structure lives in the panel's
-    /// OUTER MARGIN — bg's interior is untouched, so rows / icons
-    /// keep their full footprint regardless of border-width.
-    ///
-    /// Hosting: a dedicated `TomeMazeView` mounted above bg as a
-    /// sibling in `content`. `outerMargin` (set in `present` /
-    /// `openChild`) reserves the margin space; this view paints
-    /// across it. Living on a sibling NSView gives the layer a
-    /// home outside bg's mask, so the outer wall can sit at content's
-    /// edge without bg's rounded mask clipping it.
-    private func installPacManTailBorder(on bg: NSView) {
-        guard let content = panel.contentView else { return }
-        panel.contentView?.layoutSubtreeIfNeeded()
-        let view = TomeMazeView(
-            frame: content.bounds,
-            bgFrameInView: bg.frame,
-            cornerRadius: PanelLayout.cornerRadius,
-            outerWidth: CGFloat(borderWidth))
-        view.autoresizingMask = [.width, .height]
-        content.addSubview(view)
     }
 
     /// Install the line-pet overlay above `bg` when at least one pet
@@ -1357,15 +1318,13 @@ private final class PanelController {
         // submenu would feel chaotic, and submenus typically benefit
         // from rows-with-labels anyway.
         let petScale = max(1.0, CGFloat(fontSize) / 13.0)
-        let petMargin: CGFloat = linePets.isEmpty
+        let outerMargin: CGFloat = linePets.isEmpty
             ? 0 : round(14 * petScale)
-        let borderMargin: CGFloat = (border == .pacManTail)
-            ? max(20, round(CGFloat(borderWidth) * 2.5)) : 0
         let (content, rows) = PanelLayout.buildContent(
             nodes: children, header: nil, layout: .list,
             fontSize: fontSize,
             colors: colors,
-            outerMargin: max(petMargin, borderMargin))
+            outerMargin: outerMargin)
         let frame = PanelLayout.placeChild(
             rowFrameOnScreen: rowOnScreen,
             parentPanelFrame: panel.frame,
@@ -1426,137 +1385,6 @@ private final class PanelController {
     }
 }
 
-// MARK: - Pac-man maze-wall border overlay
-
-/// Click-through view that paints the arcade pac-man maze-wall
-/// border in the panel's outer margin. Three elements:
-///   1. Outer thick neon-blue rounded stroke at the view's edge.
-///   2. Inner thin neon-blue rounded stroke at bg's edge.
-///   3. Small yellow pellet dots along the centre-line of the gap.
-///
-/// Bg's interior is untouched — the margin reserved by
-/// `present` / `openChild` (via `outerMargin`) hosts the maze, and
-/// bg sits inside it. No timer is needed because the whole frame is
-/// static.
-@MainActor
-private final class TomeMazeView: NSView {
-    private let bgFrameInView: CGRect
-    private let outerCornerRadius: CGFloat
-    private let outerWidth: CGFloat
-
-    init(frame: NSRect, bgFrameInView: CGRect,
-         cornerRadius: CGFloat, outerWidth: CGFloat) {
-        self.bgFrameInView = bgFrameInView
-        self.outerCornerRadius = cornerRadius
-        self.outerWidth = outerWidth
-        super.init(frame: frame)
-        wantsLayer = true
-        autoresizingMask = [.width, .height]
-        translatesAutoresizingMaskIntoConstraints = true
-        installMazeLayers()
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) { fatalError() }
-
-    override var isFlipped: Bool { false }
-    override func hitTest(_ point: NSPoint) -> NSView? { nil }
-
-    private func installMazeLayers() {
-        guard let host = layer else { return }
-        let blue = NSColor(srgbRed: 0x21 / 255.0,
-                            green: 0x21 / 255.0,
-                            blue: 0xde / 255.0, alpha: 1)
-        let pellet = NSColor(srgbRed: 0xff / 255.0,
-                              green: 0xd9 / 255.0,
-                              blue: 0x00 / 255.0, alpha: 1)
-        // Outer wall: rounded stroke aligned to the view's edge.
-        // Path centerline inset by `outerWidth / 2` so the outer
-        // edge of the stroke sits flush with the view (and panel)
-        // boundary, mirroring how `CALayer.borderColor` would have
-        // composed if we still owned bg's mask.
-        let outerInset = outerWidth / 2
-        let outerRect = bounds.insetBy(dx: outerInset, dy: outerInset)
-        let outerStroke = CAShapeLayer()
-        outerStroke.path = CGPath(
-            roundedRect: outerRect,
-            cornerWidth: max(0, outerCornerRadius - outerInset),
-            cornerHeight: max(0, outerCornerRadius - outerInset),
-            transform: nil)
-        outerStroke.strokeColor = blue.cgColor
-        outerStroke.fillColor = nil
-        outerStroke.lineWidth = outerWidth
-        host.addSublayer(outerStroke)
-
-        // Inner wall: thin stroke at bg's outer edge. bg has its
-        // own cornerRadius (`PanelLayout.cornerRadius`), so the
-        // inner curve uses that radius directly.
-        let innerLineWidth = max(1, outerWidth * 0.45)
-        let innerRect = bgFrameInView.insetBy(
-            dx: -innerLineWidth / 2,
-            dy: -innerLineWidth / 2)
-        let innerStroke = CAShapeLayer()
-        innerStroke.path = CGPath(
-            roundedRect: innerRect,
-            cornerWidth: outerCornerRadius + innerLineWidth / 2,
-            cornerHeight: outerCornerRadius + innerLineWidth / 2,
-            transform: nil)
-        innerStroke.strokeColor = blue.cgColor
-        innerStroke.fillColor = nil
-        innerStroke.lineWidth = innerLineWidth
-        host.addSublayer(innerStroke)
-
-        // Pellet pass: dots along the gap centre between the two
-        // walls. In this view's coords, the outer wall's inner edge
-        // sits at `outerWidth` from each side, and bg's outer edge
-        // sits at `bgFrameInView.minX` / `.minY` from the matching
-        // side. The gap centre is the midpoint of those.
-        let gapInset = (outerWidth + bgFrameInView.minX) / 2
-        let dotPathRect = CGRect(
-            x: gapInset, y: gapInset,
-            width: bounds.width - 2 * gapInset,
-            height: bounds.height - 2 * gapInset)
-        let perim = 2 * (dotPathRect.width + dotPathRect.height)
-        guard perim > 0 else { return }
-        let dotR: CGFloat = max(1.0, outerWidth * 0.35)
-        let dotSpacing: CGFloat = max(20, outerWidth * 5)
-        let dotCount = max(8, Int((perim / dotSpacing).rounded()))
-        let step = perim / CGFloat(dotCount)
-        let dotsPath = CGMutablePath()
-        for i in 0..<dotCount {
-            let t = CGFloat(i) * step
-            let (x, y) = perimeterPoint(rect: dotPathRect, distance: t)
-            dotsPath.addEllipse(in: CGRect(
-                x: x - dotR, y: y - dotR,
-                width: 2 * dotR, height: 2 * dotR))
-        }
-        let dotsLayer = CAShapeLayer()
-        dotsLayer.path = dotsPath
-        dotsLayer.fillColor = pellet.cgColor
-        host.addSublayer(dotsLayer)
-    }
-
-    /// Walk `rect`'s perimeter linearly (top → right → bottom →
-    /// left) and return the point at the given distance from the
-    /// top-left corner. Used to lay out pellets evenly along the
-    /// maze's gap-centre rectangle.
-    private func perimeterPoint(rect r: CGRect, distance t: CGFloat)
-        -> (x: CGFloat, y: CGFloat) {
-        let topLen = r.width
-        let rightLen = r.height
-        let bottomLen = r.width
-        if t < topLen {
-            return (r.minX + t, r.maxY)
-        } else if t < topLen + rightLen {
-            return (r.maxX, r.maxY - (t - topLen))
-        } else if t < topLen + rightLen + bottomLen {
-            return (r.maxX - (t - topLen - rightLen), r.minY)
-        } else {
-            return (r.minX,
-                    r.minY + (t - topLen - rightLen - bottomLen))
-        }
-    }
-}
 
 // MARK: - Pac-man line-pet overlay
 
