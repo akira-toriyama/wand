@@ -149,6 +149,33 @@ public enum Effect: String, Sendable, Hashable, CaseIterable {
         Effect.allCases.filter { $0 != .none && $0 != .random }
 }
 
+/// Live "armed" decoration on the firing assist card while a stroke is
+/// in progress (the card whose pattern would dispatch if the user
+/// released the mouse right now). Distinct from `Effect`, which fires
+/// once at button-up — `ArmedEffect` is a continuous, looping cue. The
+/// rainbow border from PR #117 keeps carrying the baseline "fires on
+/// release" read; these kinds layer on top.
+///
+/// The pac-man chomp pellet is **not** in this enum — it lives on its
+/// own `chomp: Bool` flag so users can layer it on top of any `armed`
+/// kind (e.g. `armed = "pulse"` + `chomp = true`).
+public enum ArmedEffect: String, Sendable, Hashable, CaseIterable {
+    case none
+    /// Sine scale 1.0 ↔ 1.06 (~600 ms loop). Quiet — comfortable for
+    /// long strokes.
+    case pulse
+    /// Outer halo whose alpha pulses (~700 ms loop). Reads as the
+    /// card "glowing" without moving.
+    case glow
+    /// Continuous ±1 px tremor. Higher-frequency than `pulse` —
+    /// reads as "armed / about to fire".
+    case shake
+    /// Twinkle particles around the card's edges (cheap dot field).
+    case sparkle
+    /// Marching-ants dashed border that scrolls around the rect.
+    case marching
+}
+
 /// Overall size of the chosen `Effect`s. Multiplier is read by the
 /// adapter to scale translation distance, scale delta, vibration
 /// amplitude, and particle birth-rate / velocity. Lives in Core so the

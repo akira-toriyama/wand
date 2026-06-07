@@ -301,6 +301,9 @@ public struct WandConfig: Sendable {
             cd, key: "match", section: "cast.overlay.cards", default: .none)
         let cardsUnmatch: Effect = parseEnum(
             cd, key: "unmatch", section: "cast.overlay.cards", default: .none)
+        let cardsArmed: ArmedEffect = parseEnum(
+            cd, key: "armed", section: "cast.overlay.cards", default: .none)
+        let cardsChomp = cd.bool("chomp", false)
         let cardsFontSize = clampInt(
             cd, key: "font-size", default: 13, lo: 8, hi: 32)
         // Card colours retired from `[cast.overlay.cards]` (#116) —
@@ -311,6 +314,8 @@ public struct WandConfig: Sendable {
         // `GestureOverlay.applyConfig` directly from `cfg.theme.palette`.
         let cards = GestureOverlayCardsSpec(
             match: cardsMatch, unmatch: cardsUnmatch,
+            armed: cardsArmed,
+            chomp: cardsChomp,
             fontSize: cardsFontSize)
 
         let overlay = GestureOverlaySpec(
