@@ -1355,7 +1355,11 @@ private final class TrailView: NSView {
     private func drawGhostFace(at p: CGPoint, tangent: CGPoint,
                                 radius: CGFloat, color: NSColor) {
         let cell = max(2, radius * Self.pacmanPixelCellRatio)
-        let bodyHeight = radius                 // square body below dome
+        // Body below the dome is shorter than the dome's radius —
+        // the arcade ghost is a chunky/squat silhouette, not a tall
+        // one. Bumping bodyHeight up will stretch the area below
+        // the eyes and the ghost reads as elongated.
+        let bodyHeight = radius * 0.82
         let skirtAmp = radius * 0.34            // hump depth below body
         let totalBottom = -bodyHeight - skirtAmp
         let r2 = radius * radius
@@ -1399,7 +1403,7 @@ private final class TrailView: NSView {
         // mass. Pupil shift is symmetric in both axes so diagonal
         // travel reads as a true diagonal gaze.
         let eyeOffsetX = radius * 0.42
-        let eyeY = radius * 0.22
+        let eyeY = radius * 0.10           // closer to dome/body line
         let eyeHalfW = cell * 2.0          // 4 cells wide
         let eyeHalfH = cell * 2.0          // 4 cells tall
         let pupilSize = cell * 2
