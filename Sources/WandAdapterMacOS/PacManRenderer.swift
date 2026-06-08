@@ -84,12 +84,60 @@ enum PacManRenderer {
     private static let pelletDiameter: CGFloat = 4
     /// Spacing between pellets along the path (pt at scale=1).
     private static let pelletInterval: CGFloat = 14
-    /// Cherry-emoji size relative to the dot diameter. The cherry
-    /// is the arcade bonus token — it pops in place of a regular
-    /// pellet, so it reads bigger than the surrounding dots on
-    /// purpose. 5× lands it at roughly the historical bonus-tile
-    /// scale relative to the corridor's pellets.
-    private static let cherryGlyphMultiplier: CGFloat = 5.0
+    /// Cherry pixel-sprite cell size relative to the dot diameter.
+    /// 0.5 with a 12×13 sprite lands at ~6×6.5 dot-diameters,
+    /// putting the bonus token in the face's size class
+    /// (≈ 24×26pt at scale=1 vs face's 32pt) so it reads as the
+    /// arcade bonus tile, not a giant pellet.
+    private static let cherryCellMultiplier: CGFloat = 0.5
+    /// 12×13 pixel sprite, traced cell-by-cell from
+    /// `/Users/tommy/Desktop/x/222.png` at 8 px / cell. Two
+    /// cherries with a brown stem reaching up to the right; each
+    /// cherry has a 2-cell stepped `W` highlight on its upper-
+    /// left (so the light source reads as upper-left). The `.`
+    /// gap in the middle is the dark wedge between the two
+    /// cherries — on the click-through overlay it falls through
+    /// to whatever's underneath, exactly like the source image's
+    /// black background showed.
+    ///
+    /// Rendered without rotation — like Pac-Man's pellets and
+    /// the cherry's reference sprite, the cherry orientation
+    /// stays fixed regardless of the stroke direction.
+    ///
+    ///   `R` red body, `W` white specular highlight,
+    ///   `K` black outline / overlap silhouette,
+    ///   `B` brown stem, `.` transparent.
+    private static let cherrySprite: [String] = [
+        "..........BB",
+        "........BBBB",
+        "......BBKB..",
+        ".....BKKKB..",
+        ".RRRBKKKB...",
+        "RRRBRRKB....",
+        "RRRRRKRBRR..",
+        "RWRR.RRBRRR.",
+        "RRWR.RRRRRR.",
+        ".RRR.RWRRRR.",
+        ".....RRWRRR.",
+        "......RRRR..",
+        "......KKKK..",
+    ]
+    /// Cherry sprite palette. Sampled directly from
+    /// `/Users/tommy/Desktop/x/222.png`: red ≈ 248,0,7;
+    /// brown ≈ 217,125,64; outline pure black; highlight
+    /// near-white. The brown is the same single tone used for
+    /// the stem AND the stem's "shading-into-body" overlap
+    /// cells (the source sprite is flat-shaded — no second
+    /// brown tone).
+    private static let cherryRed = NSColor(srgbRed: 0.97,
+                                            green: 0.0,
+                                            blue: 0.03, alpha: 1.0)
+    private static let cherryOutline = NSColor.black
+    private static let cherryHighlight = NSColor.white
+    private static let cherryStem = NSColor(srgbRed: 0.85,
+                                             green: 0.49,
+                                             blue: 0.25,
+                                             alpha: 1.0)
     /// Probability (0..1) that a yellow pellet gets swapped for the
     /// arcade cherry bonus token, decided per-pellet from a stable
     /// hash of its position. ~8% gives 1-3 cherries on a typical
@@ -174,12 +222,12 @@ enum PacManRenderer {
         // as a reward as they draw past it.
         let pelletFill = color.withAlphaComponent(state.valid ? 0.9 : 0.3)
 
-        // Cherry bonus token — rendered as an emoji glyph in place
-        // of a regular pellet at ~5% probability. Only fires while
-        // the gesture is on-track; the no-match crumb trail stays
-        // pure dimmed dots.
-        let cherryGlyphSize = max(12, dot * cherryGlyphMultiplier)
-        let cherryFont = NSFont.systemFont(ofSize: cherryGlyphSize)
+        // Cherry bonus token — rendered as a 12×13 pixel sprite in
+        // place of a regular pellet at ~`cherryProbability`. Only
+        // fires while the gesture is on-track; the no-match crumb
+        // trail stays pure dimmed dots. Cell size scales with the
+        // pellet so the sprite grows / shrinks with `strokeWidth`.
+        let cherryCell = max(1, dot * cherryCellMultiplier)
 
         // Single shared point sequence — corridor, pellets, and the
         // face-anchor walk all consume the same axis-snapped
@@ -304,9 +352,6 @@ enum PacManRenderer {
         // it from cherry selection keeps the head as a plain dot;
         // cherries land only on the interval-aligned pellets behind
         // it, which are stable.
-        let cherryAttrs: [NSAttributedString.Key: Any] = [
-            .font: cherryFont,
-        ]
         var pelletInfo: [(point: CGPoint, arc: CGFloat)] = []
         walkPolyline(points: snappedPts, interval: interval) { p, _, arc in
             pelletInfo.append((p, arc))
@@ -325,11 +370,7 @@ enum PacManRenderer {
                     }
                     continue
                 }
-                let s = NSAttributedString(string: "🍒",
-                                            attributes: cherryAttrs)
-                let size = s.size()
-                s.draw(at: NSPoint(x: info.point.x - size.width / 2,
-                                    y: info.point.y - size.height / 2))
+                drawCherry(at: info.point, cell: cherryCell)
             } else {
                 pelletFill.setFill()
                 let rect = NSRect(x: info.point.x - dot / 2,
@@ -715,6 +756,41 @@ enum PacManRenderer {
                 width: pupilSize, height: pupilSize)
             pupilColor.setFill()
             NSBezierPath(rect: pupilRect).fill()
+        }
+    }
+
+    /// Draw the arcade cherry bonus as a pixel sprite from
+    /// `cherrySprite`. Centred on `p`, no rotation — orientation
+    /// stays fixed like in the reference image. Cells outside
+    /// the palette (`.`) are skipped so the dark wedge between
+    /// the two cherries falls through to whatever's behind the
+    /// click-through overlay.
+    private static func drawCherry(at p: CGPoint, cell: CGFloat) {
+        let rows = cherrySprite.count
+        let cols = cherrySprite.first?.count ?? 0
+        guard rows > 0, cols > 0 else { return }
+        // Sprite row 0 is the top of the image, but AppKit's y
+        // axis grows upward — so the top edge sits at +height/2
+        // and rows step down by `cell`.
+        let topY = p.y + CGFloat(rows) * cell / 2
+        let leftX = p.x - CGFloat(cols) * cell / 2
+        for (iy, row) in cherrySprite.enumerated() {
+            for (ix, ch) in row.enumerated() {
+                let color: NSColor
+                switch ch {
+                case "R": color = cherryRed
+                case "K": color = cherryOutline
+                case "W": color = cherryHighlight
+                case "B": color = cherryStem
+                default:  continue
+                }
+                color.setFill()
+                let rect = NSRect(
+                    x: leftX + CGFloat(ix) * cell,
+                    y: topY - CGFloat(iy + 1) * cell,
+                    width: cell, height: cell)
+                NSBezierPath(rect: rect).fill()
+            }
         }
     }
 
