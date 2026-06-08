@@ -768,6 +768,22 @@ line-pets = []
 #   filter-shell = "test $(date +%H) -ge 17"   # only after 5pm
 #   filter-shell = "scripts/is_github_pr.sh"   # external predicate
 #
+# `focused-fallback = true` — cast-rule-only opt-in. By default a
+# cast stroke that lands on a non-AX surface (Desktop / Dock /
+# menu bar) is dropped entirely — there's no cursor-anchored
+# target to dispatch to, and the spine refuses to guess. Setting
+# this on a single rule allows it to fire even on those surfaces,
+# routed to `NSWorkspace.frontmostApplication` (typically the
+# focused app). `apps` is then matched against the frontmost app's
+# bundle id, so a rule scoped to `apps = ["com.apple.finder"]`
+# only fires when Finder is the frontmost app — predictable and
+# narrow. Tome items aren't affected (they have a separate
+# Desktop-friendly sentinel). Setting `apps = ["*"]` + this flag
+# logs a warning at startup — it's powerful but the trade-off
+# (any frontmost app receives the action) is on you.
+#
+#   focused-fallback = true
+#
 # Action shapes (decomposed across dotted-style keys — the minimal
 # TOML parser doesn't support inline tables):
 #

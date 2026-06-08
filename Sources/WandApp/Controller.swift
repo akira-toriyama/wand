@@ -139,7 +139,8 @@ public final class Controller: @unchecked Sendable {
             counterNoRule += 1
             let n = Matcher.candidates(prefix: pattern,
                                        bundleID: target.bundleID,
-                                       rules: cfg.rules).count
+                                       rules: cfg.rules,
+                                       isFocusedFallback: target.isFocusedFallback).count
             Log.line("controller: no rule matched \(pattern) for "
                      + "\(target.bundleID) — check `apps` filter in "
                      + "config.toml (\(n) prefix candidate(s))")

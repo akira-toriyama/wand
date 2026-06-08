@@ -23,6 +23,24 @@ public struct TrailSample {
     public let title: String
     public let expired: Bool       // exceeded maxSegmentMs
     public let cancelled: Bool     // scribble-cancelled (latched)
+    /// `true` when the bundleID above was synthesised from the
+    /// frontmost-app fallback (cursor over Desktop / Dock / menu
+    /// bar). The overlay can use this to filter the assist
+    /// tooltips down to focused-fallback rules so the HUD only
+    /// hints at strokes that can actually fire from here.
+    public let isFocusedFallback: Bool
+
+    public init(point: CGPoint, pattern: String, bundleID: String,
+                title: String, expired: Bool, cancelled: Bool,
+                isFocusedFallback: Bool = false) {
+        self.point = point
+        self.pattern = pattern
+        self.bundleID = bundleID
+        self.title = title
+        self.expired = expired
+        self.cancelled = cancelled
+        self.isFocusedFallback = isFocusedFallback
+    }
 }
 
 public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
@@ -318,6 +336,23 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
         let cg = event.location
         downPoint = cg
         currentTarget = AXTarget.resolveAt(point: cg)
+        // Focused-fallback synthesis — when the cursor-anchored AX
+        // walk + CG fallback both failed (Desktop / Dock / menu bar),
+        // synthesise a `Target` from `NSWorkspace.frontmostApplication`
+        // and mark it `isFocusedFallback = true`. The Matcher uses
+        // that flag to keep only rules that opted into the fallback
+        // (`focused-fallback = true`), so every existing rule stays
+        // strict against the original spine.
+        if currentTarget == nil,
+           let frontmost = NSWorkspace.shared.frontmostApplication,
+           let bid = frontmost.bundleIdentifier, !bid.isEmpty {
+            currentTarget = Target(
+                pid: frontmost.processIdentifier,
+                bundleID: bid,
+                title: frontmost.localizedName ?? "",
+                frame: .zero, windowID: 0,
+                isFocusedFallback: true)
+        }
         capturing = true
         strokeStart = CACurrentMediaTime()
         lastTurn = strokeStart
@@ -332,12 +367,22 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
         // production logs — without this the user-visible failure modes
         // ("clicked but no gesture fired") have no log entry at all.
         if let t = currentTarget {
-            Log.line("event-tap: down at \(cg) → \(t.bundleID) "
-                     + "(pid \(t.pid), wid \(t.windowID))")
+            if t.isFocusedFallback {
+                Log.line("event-tap: down at \(cg) → focused-fallback "
+                         + "→ \(t.bundleID) (pid \(t.pid)) — "
+                         + "cursor was on a non-AX surface; only "
+                         + "rules with `focused-fallback = true` "
+                         + "are eligible to fire")
+            } else {
+                Log.line("event-tap: down at \(cg) → \(t.bundleID) "
+                         + "(pid \(t.pid), wid \(t.windowID))")
+            }
         } else {
             Log.line("event-tap: down at \(cg) → target=nil "
                      + "(cursor on Dock / menu bar / desktop / "
-                     + "renderer area where AX walk + CG fallback both failed)")
+                     + "renderer area where AX walk + CG fallback "
+                     + "both failed, AND no frontmost app available "
+                     + "for the focused-fallback path)")
         }
         return nil
     }
@@ -382,7 +427,9 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
             point: cg, pattern: pattern,
             bundleID: currentTarget?.bundleID ?? "",
             title: currentTarget?.title ?? "",
-            expired: strokeExpired, cancelled: cancelled))
+            expired: strokeExpired, cancelled: cancelled,
+            isFocusedFallback: currentTarget?.isFocusedFallback
+                ?? false))
     }
 
     /// Convert CG global coords (Y grows down) to the Y-up convention
