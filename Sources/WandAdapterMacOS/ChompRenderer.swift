@@ -1,7 +1,7 @@
-// Pac-Man trail renderer. Stateless — `TrailView` packages every
+// Chomp trail renderer. Stateless — `TrailView` packages every
 // piece of state the renderer needs into `State` and calls into
 // the static `draw(state:color:outline:)` entry point. Pulling
-// the pac-man/ghost code into its own file keeps GestureOverlay.swift
+// the chomp/ghost code into its own file keeps GestureOverlay.swift
 // focused on the shared trail / HUD plumbing instead of one theme's
 // ~450-line implementation.
 //
@@ -23,12 +23,12 @@
 import AppKit
 import WandCore
 
-/// Stateless renderer for the pac-man special theme
-/// (`[cast].theme = "pac-man"`). Every pac-man/ghost-specific
+/// Stateless renderer for the chomp special theme
+/// (`[cast].theme = "chomp"`). Every chomp/ghost-specific
 /// constant + helper lives in this namespace so the generic
 /// `TrailView` doesn't have to carry them.
 @MainActor
-enum PacManRenderer {
+enum ChompRenderer {
 
     /// Input bundle the renderer needs from `TrailView`. Constructed
     /// at the dispatch site (where TrailView's `fileprivate` state
@@ -41,15 +41,15 @@ enum PacManRenderer {
         let rawTrail: [CGPoint]
         let lastDir: Direction?
         /// Forced `true` by the parser whenever this renderer runs
-        /// (the pac-man theme locks straighten-on-turn) — kept on the
+        /// (the chomp theme locks straighten-on-turn) — kept on the
         /// `State` for the rendering math, but in practice always
         /// `true`.
         let straightenOnTurn: Bool
-        /// Scale multiplier sourced from `[cast.pac-man].size`
-        /// (`.s` = 2.0, `.m` = 3.0, `.l` = 4.5). Every pac-man
+        /// Scale multiplier sourced from `[cast.chomp].size`
+        /// (`.s` = 2.0, `.m` = 3.0, `.l` = 4.5). Every chomp
         /// dimension below scales off this.
         let strokeWidth: CGFloat
-        /// Match state. `false` swaps the pac-man face for the
+        /// Match state. `false` swaps the chomp face for the
         /// chased red ghost sprite AND dims the trail's pellets,
         /// reading as "rule unreachable, no more bonus to eat".
         let valid: Bool
@@ -58,7 +58,7 @@ enum PacManRenderer {
         /// full alpha briefly before fading out). Used to drive
         /// the wide-open chomp flourish on the face — the mouth
         /// freezes wide open instead of cycling through the
-        /// normal 4-frame chomp, reading as "Pac-Man caught the
+        /// normal 4-frame chomp, reading as "Chomp caught the
         /// rule and is mid-bite".
         let isFinalHold: Bool
         /// Face's arc-length from the origin on the previous frame.
@@ -100,7 +100,7 @@ enum PacManRenderer {
     /// to whatever's underneath, exactly like the source image's
     /// black background showed.
     ///
-    /// Rendered without rotation — like Pac-Man's pellets and
+    /// Rendered without rotation — like Chomp's pellets and
     /// the cherry's reference sprite, the cherry orientation
     /// stays fixed regardless of the stroke direction.
     ///
@@ -152,14 +152,14 @@ enum PacManRenderer {
     private static let faceRadius: CGFloat = 16
     /// Cell size of the face's pixel grid, as a fraction of the
     /// face radius. ~0.155 gives ~13 cells across the diameter,
-    /// matching the canonical arcade Pac-Man sprite's 12×13 cell
+    /// matching the canonical arcade Chomp sprite's 12×13 cell
     /// silhouette. Smaller values smooth the edge back toward an
     /// arc; larger values turn the wedge into a coarse polygon.
     private static let pixelCellRatio: CGFloat = 0.155
     /// Mouth half-angle bounds (degrees). The face animates
     /// between these via discrete frames. `min` is just above zero
     /// so the mouth doesn't fully close (a sealed circle reads as
-    /// "not Pac-Man anymore").
+    /// "not Chomp anymore").
     private static let mouthHalfAngleMinDeg: CGFloat = 5
     private static let mouthHalfAngleMaxDeg: CGFloat = 60
     /// Chomp frequency (Hz). One stepped 4-frame cycle per period
@@ -193,7 +193,7 @@ enum PacManRenderer {
 
     // MARK: - Entry point
 
-    /// Pac-Man trail: pellets along a snapped polyline; if
+    /// Chomp trail: pellets along a snapped polyline; if
     /// `outline` is set, two neon walls flanking a black corridor;
     /// and a chasing face sprite (or ghost on no-match) lagging
     /// behind the live cursor. `strokeWidth` is a scale multiplier
@@ -317,7 +317,7 @@ enum PacManRenderer {
             }
         }
 
-        // 2) Locate where Pac-Man's face sits this frame: walk the
+        // 2) Locate where Chomp's face sits this frame: walk the
         // snapped polyline with the lag as `trimTail` — the final
         // step the walker emits is exactly the cutoff point. Skip
         // drawing in this pass; we only need the coordinate +
@@ -339,7 +339,7 @@ enum PacManRenderer {
         // doesn't) across redraws of the same stroke.
         //
         // Cherries the face has already walked past are not drawn
-        // (= "eaten") — the arcade beat where Pac-Man's mouth lands
+        // (= "eaten") — the arcade beat where Chomp's mouth lands
         // on the fruit and the fruit vanishes. When a cherry crosses
         // from "ahead" to "behind" the face on the current frame
         // (i.e. its arc-length is in (previousFaceArc, currentFaceArc]),
@@ -385,7 +385,7 @@ enum PacManRenderer {
         // behind the cursor instead of popping in glued to the
         // cursor at button-down. Sprite swaps to a ghost when the
         // in-progress gesture has fallen off every rule, matching
-        // the arcade pairing (yellow Pac-Man = on-track, red ghost
+        // the arcade pairing (yellow Chomp = on-track, red ghost
         // = chased / failure).
         if let anchor = faceAnchor {
             if state.valid {
@@ -403,7 +403,7 @@ enum PacManRenderer {
 
     // MARK: - Centerline helpers
 
-    /// Shared point sequence for every pac-man-style geometry pass:
+    /// Shared point sequence for every chomp-style geometry pass:
     /// corridor centerline, wall offsets, pellet steps, and the
     /// face-anchor walk all use this exact list so the visuals stay
     /// locked together. With `straightenOnTurn = true` it's
@@ -430,7 +430,7 @@ enum PacManRenderer {
         return pts
     }
 
-    /// Pac-man centerline = straight polyline through `pts`. No
+    /// Chomp centerline = straight polyline through `pts`. No
     /// per-corner smoothing — `copy(strokingWithWidth:lineCap:.round
     /// ,lineJoin:.round,...)` in `draw(...)` then turns each 90°
     /// vertex into a rounded outer arc + sharp inner point, which
@@ -498,7 +498,7 @@ enum PacManRenderer {
             let bisY = sign * perpSumY / perpLen
             // For 90° turns the two perpendicular inner edges meet
             // at distance `wallOffset × √2` from `B` along the
-            // bisector. wand forces 90° turns under pac-man
+            // bisector. wand forces 90° turns under chomp
             // (`straightenOnTurn = true` is mandatory), so the √2
             // is exact; supporting other angles would need
             // `wallOffset / sin(θ/2)`, but there's no path to a
@@ -516,7 +516,7 @@ enum PacManRenderer {
     /// length from the polyline origin to that point. `trimTail`
     /// trims that much distance off the end of the path before
     /// emitting — used to leave a visible gap between the trailing
-    /// pellets and Pac-Man's face. The arc-length is what lets the
+    /// pellets and Chomp's face. The arc-length is what lets the
     /// cherry-eaten detection compare each pellet's position against
     /// the face's lag-adjusted arc-length.
     private static func walkPolyline(points pts: [CGPoint],
@@ -587,7 +587,7 @@ enum PacManRenderer {
 
     // MARK: - Sprite rendering
 
-    /// Draw the pac-man face as a chunky pixel-grid sprite — a
+    /// Draw the chomp face as a chunky pixel-grid sprite — a
     /// circle minus a mouth wedge rasterised onto a square grid.
     /// Cells live in face-local coordinates (mouth opens along
     /// local +x); the graphics context is rotated so the whole
@@ -601,7 +601,7 @@ enum PacManRenderer {
     ///
     /// `isFinalHold = true` freezes the mouth wide open instead of
     /// cycling — used during the post-fire hold so the moment a
-    /// rule fires reads as Pac-Man "biting" the matched rule. The
+    /// rule fires reads as Chomp "biting" the matched rule. The
     /// trail's `finalHoldMs` window also keeps the sprite on
     /// screen, so the wide-open frame stays visible for that
     /// duration before the trail fades.

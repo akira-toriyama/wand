@@ -61,7 +61,7 @@ extension LauncherBorder {
         case .vapor:     return NSColor(srgbRed: 0xff / 255.0,
                                          green: 0x79 / 255.0,
                                          blue:  0xc6 / 255.0, alpha: 1)
-        case .pacMan:    return NSColor(srgbRed: 0xff / 255.0,
+        case .chomp:    return NSColor(srgbRed: 0xff / 255.0,
                                          green: 0xea / 255.0,
                                          blue:  0x00 / 255.0, alpha: 1)
         case .off, .rainbow:
@@ -91,7 +91,7 @@ struct TomeColors {
     /// Solid panel backdrop. When non-nil the system frosted blur is
     /// **replaced** with a solid colour view — required for themes
     /// that need a saturated backdrop the blur can't deliver
-    /// (pac-man / terminal black, mono OLED, etc).
+    /// (chomp / terminal black, mono OLED, etc).
     let background: NSColor?
 
     static func resolve(_ palette: TomeThemePalette) -> TomeColors {
@@ -294,7 +294,7 @@ private enum PanelLayout {
         // Backdrop: themed solid colour replaces the system frosted
         // blur when `colors.background` is set. The blur can't be
         // tinted (NSVisualEffectView's `.menu` material has no colour
-        // knob), so saturated themes like pac-man / terminal need a
+        // knob), so saturated themes like chomp / terminal need a
         // full surface swap — at the cost of losing vibrancy. The
         // default (`background == nil`) keeps the historical
         // frosted-glass `.menu` look.
@@ -843,7 +843,7 @@ private final class PanelController {
     /// fringe on the border decoration, so the project default is
     /// no shadow. Child panels inherit from the root.
     private let shadow: Bool
-    /// Pac-man "pets" walking the panel's outer edge. Empty array
+    /// Chomp "pets" walking the panel's outer edge. Empty array
     /// = no decoration. Theme-agnostic; child panels inherit from
     /// the root.
     private let linePets: [LinePet]
@@ -1026,7 +1026,7 @@ private final class PanelController {
             anim.repeatCount = .infinity
             anim.calculationMode = .linear
             layer.add(anim, forKey: "rainbow")
-        case .terminal, .neon, .splatoon, .mono, .vapor, .pacMan:
+        case .terminal, .neon, .splatoon, .mono, .vapor, .chomp:
             // Static signature-colour rim — ports the per-theme
             // `borderColor` that lived on `TomeThemePalette` through
             // PR #111. Pair freely with any `[tome].theme`.
@@ -1241,10 +1241,10 @@ private final class PanelController {
 }
 
 
-// MARK: - Pac-man line-pet overlay
+// MARK: - Chomp line-pet overlay
 
-/// Click-through view that paints one or more pac-man "pets"
-/// (`pac-man`, `ghost`) walking the panel's rounded outline. Pets
+/// Click-through view that paints one or more chomp "pets"
+/// (`chomp`, `ghost`) walking the panel's rounded outline. Pets
 /// share a single 60 fps timer so the rim doesn't accumulate
 /// independent animation loops. Each pet's centre traces `bgFrame`
 /// directly; the configured outer margin gives them room to spill
@@ -1335,7 +1335,7 @@ private final class TomePetsView: NSView {
             tx.rotate(byRadians: rot)
             tx.concat()
             switch pet {
-            case .pacMan: drawPacMan(now: now)
+            case .chomp: drawChomp(now: now)
             case .ghost:  drawGhost(now: now)
             }
             NSGraphicsContext.restoreGraphicsState()
@@ -1367,10 +1367,10 @@ private final class TomePetsView: NSView {
         }
     }
 
-    /// Yellow pac-man wedge with the mouth opening / closing on a
+    /// Yellow chomp wedge with the mouth opening / closing on a
     /// ~0.25 s cycle, drawn centred on the current transform origin.
     /// Geometry mirrors the cast-overlay variant.
-    private func drawPacMan(now: CFTimeInterval) {
+    private func drawChomp(now: CFTimeInterval) {
         let r: CGFloat = 7 * petScale
         let chompPhase = 0.5 - 0.5 * cos(now * (2 * .pi / 0.25))
         let openRad = chompPhase * (35.0 * .pi / 180.0)

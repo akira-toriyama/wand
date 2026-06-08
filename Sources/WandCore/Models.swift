@@ -208,25 +208,25 @@ public enum TrailEndKind: String, Sendable, Hashable, CaseIterable {
     case off
     case burst
     /// Arcade bonus-score popup: a yellow monospaced "+N" floats up
-    /// from the cursor and fades, mirroring the arcade Pac-Man
+    /// from the cursor and fades, mirroring the arcade Chomp
     /// bonus-tile flash. Works regardless of `[cast].theme`, but
-    /// reads best alongside the pac-man theme's other arcade
+    /// reads best alongside the chomp theme's other arcade
     /// flourishes. Picks a random value per fire from the
     /// canonical eight arcade bonus scores (100..5000).
     case arcadeScore = "arcade-score"
 }
 
-/// One of the small pac-man "pets" that walk the tome panel's
+/// One of the small chomp "pets" that walk the tome panel's
 /// rounded outline when configured under
 /// `[tome.decoration].line-pet`. Multiple pets ride the same path —
 /// when more than one is configured they chase each other around the
 /// rim in array order (first leads, the rest trail at a fixed gap).
 /// Theme-agnostic: each pet's colours are baked into its silhouette.
 public enum LinePet: String, Sendable, Hashable, CaseIterable {
-    /// Classic yellow chomping pac-man wedge.
-    case pacMan = "pac-man"
+    /// Classic yellow chomping chomp wedge.
+    case chomp = "chomp"
     /// Red Blinky-style ghost — dome top, two eyes, scalloped skirt.
-    /// Sized larger than pac-man so the silhouette stays readable
+    /// Sized larger than chomp so the silhouette stays readable
     /// despite the small footprint.
     case ghost
 }
@@ -246,7 +246,7 @@ public enum LauncherBorder: String, Sendable, Hashable, CaseIterable {
     case splatoon
     case mono
     case vapor
-    case pacMan = "pac-man"
+    case chomp = "chomp"
 }
 
 /// Launcher panel open-animation. Default `.off` (panel pops in
@@ -281,7 +281,7 @@ public enum DecalKind: String, Sendable, Hashable, CaseIterable {
 /// every reachable rule (the trail flips into the no-match colour).
 /// Drawn from `[cast.overlay.no-match].kind`; default `.off` (no
 /// banner). Decoupled from `[cast].theme` so users can pair the
-/// arcade GAME OVER cue with any theme — pac-man's red-wall flash is
+/// arcade GAME OVER cue with any theme — chomp's red-wall flash is
 /// a separate, theme-specific effect that fires independently.
 public enum NoMatchBanner: String, Sendable, Hashable, CaseIterable {
     case off

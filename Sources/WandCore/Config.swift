@@ -22,13 +22,13 @@ public struct WandConfig: Sendable {
     /// cards. Individual colour keys still win when explicitly set
     /// in the TOML (non-empty string).
     public var theme: CastTheme
-    /// `[cast.pac-man]` — only populated when `theme ==
-    /// .pacMan` (the pac-man "special theme"). `nil` under every
+    /// `[cast.chomp]` — only populated when `theme ==
+    /// .chomp` (the chomp "special theme"). `nil` under every
     /// other theme. The adapter reads this single field to decide
-    /// whether to route the trail through `PacManRenderer` and
+    /// whether to route the trail through `ChompRenderer` and
     /// what scale to use; the rest of the codebase doesn't need to
     /// know `CastTheme` has a special case.
-    public var pacMan: PacManSpec?
+    public var chomp: ChompSpec?
     /// `[cast.recognition]` — sample → direction tuning.
     public var recognition: GestureRecognitionSpec
     /// `[exclude].apps` — global bundle-id exclusion list. Applies
@@ -54,7 +54,7 @@ public struct WandConfig: Sendable {
         trigger: Trigger(button: .right, modifiers: []),
         intensity: .normal,
         theme: .default,
-        pacMan: nil,
+        chomp: nil,
         recognition: .default,
         excludeApps: [],
         rules: [],
@@ -181,22 +181,22 @@ public struct WandConfig: Sendable {
         let trailColorOutline = { let c = tr.string("color-outline")
             return c.isEmpty ? palette.trailColorOutline : c }()
 
-        // [cast.pac-man] — only read when `[cast].theme = "pac-man"`.
+        // [cast.chomp] — only read when `[cast].theme = "chomp"`.
         // Under every other theme it's nil so the rest of the codebase
         // branches on a single optional. The `size` knob replaces
         // the trail's free-form `width`, and the parser forces
-        // `straighten-on-turn = true` for the pac-man render (the
+        // `straighten-on-turn = true` for the chomp render (the
         // arcade-maze metaphor only reads with axis-snapped corridors).
         // Standard trail knobs (`style` / `width` / `straighten-on-turn`)
         // are silently overridden when present — the warning below
         // tells the user exactly which lines are dead.
-        let pacManTable = doc.tables["cast.pac-man"] ?? [:]
-        let pacMan: PacManSpec?
-        if theme == .pacMan {
-            let size: PacManSize = parseEnum(
-                pacManTable, key: "size",
-                section: "cast.pac-man", default: .m)
-            pacMan = PacManSpec(size: size)
+        let chompTable = doc.tables["cast.chomp"] ?? [:]
+        let chomp: ChompSpec?
+        if theme == .chomp {
+            let size: ChompSize = parseEnum(
+                chompTable, key: "size",
+                section: "cast.chomp", default: .m)
+            chomp = ChompSpec(size: size)
             var overridden: [String] = []
             if tr["style"] != nil { overridden.append("style") }
             if tr["width"] != nil { overridden.append("width") }
@@ -206,42 +206,42 @@ public struct WandConfig: Sendable {
             if !overridden.isEmpty {
                 Log.line("config: [cast.overlay.trail]."
                     + "\(overridden.joined(separator: " / "))"
-                    + " is ignored under [cast].theme = \"pac-man\""
-                    + " — pac-man is a special theme that locks the"
+                    + " is ignored under [cast].theme = \"chomp\""
+                    + " — chomp is a special theme that locks the"
                     + " trail's style, width, and straighten-on-turn."
-                    + " Use [cast.pac-man].size = \"s\" |"
+                    + " Use [cast.chomp].size = \"s\" |"
                     + " \"m\" | \"l\" to adjust scale.")
             }
         } else {
-            pacMan = nil
+            chomp = nil
             // Only complain when the block carries a non-default value
             // — the bundled config.toml ships `size = "m"` for
             // documentation, and that shouldn't read as a
             // misconfiguration just because the user hasn't picked
-            // the pac-man theme yet.
-            let sizeForCheck: PacManSize = parseEnum(
-                pacManTable, key: "size",
-                section: "cast.pac-man", default: .m)
-            if sizeForCheck != PacManSpec.default.size {
-                Log.line("config: [cast.pac-man].size = "
+            // the chomp theme yet.
+            let sizeForCheck: ChompSize = parseEnum(
+                chompTable, key: "size",
+                section: "cast.chomp", default: .m)
+            if sizeForCheck != ChompSpec.default.size {
+                Log.line("config: [cast.chomp].size = "
                     + "\"\(sizeForCheck.rawValue)\" is set but"
                     + " [cast].theme = \"\(theme.rawValue)\" — this"
                     + " knob only applies when [cast].theme ="
-                    + " \"pac-man\". Either switch themes or remove"
+                    + " \"chomp\". Either switch themes or remove"
                     + " the line to silence this warning.")
             }
         }
 
-        // Pac-man locks the trail's render shape to the arcade pellet
+        // Chomp locks the trail's render shape to the arcade pellet
         // line. `style = .normal` is just an inert placeholder since
-        // the renderer is gated on `cfg.pacMan != nil`, not on
+        // the renderer is gated on `cfg.chomp != nil`, not on
         // `TrailStyle`. `width` is left as written — the adapter
-        // reads `cfg.pacMan!.size.scale` directly, so the precise
+        // reads `cfg.chomp!.size.scale` directly, so the precise
         // sub-integer values for `.s` / `.m` / `.l` survive.
         let trailStyle: TrailStyle =
-            pacMan != nil ? .normal : parsedTrailStyle
+            chomp != nil ? .normal : parsedTrailStyle
         let trailStraightenOnTurn =
-            pacMan != nil ? true : parsedTrailStraightenOnTurn
+            chomp != nil ? true : parsedTrailStraightenOnTurn
         let trail = GestureOverlayTrailSpec(
             color: trailColor,
             colorNoMatch: trailColorNoMatch,
@@ -487,7 +487,7 @@ public struct WandConfig: Sendable {
             trigger: gestureTrigger,
             intensity: intensity,
             theme: theme,
-            pacMan: pacMan,
+            chomp: chomp,
             recognition: recognition,
             excludeApps: excludes,
             rules: rules,

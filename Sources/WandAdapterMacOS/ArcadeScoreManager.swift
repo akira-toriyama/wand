@@ -9,10 +9,10 @@
 // and fades to transparent. The value picks at random per fire
 // from the canonical arcade bonus-tile scores (100 / 200 / 300 /
 // 500 / 700 / 1000 / 2000 / 5000) so successive fires don't all
-// flash the same number. Distinct from the pac-man card-level
+// flash the same number. Distinct from the chomp card-level
 // popup (which floats from the firing HUD card) — this popup
 // lands at the cursor instead, matching where the arcade frame
-// flashes "+200" right next to Pac-Man as he eats the fruit.
+// flashes "+200" right next to Chomp as he eats the fruit.
 
 import AppKit
 import WandCore
@@ -39,7 +39,7 @@ public final class ArcadeScoreManager {
     /// flash a noticeable rectangle through to whatever app sits
     /// underneath.
     private static let windowSize = CGSize(width: 140, height: 80)
-    /// Canonical arcade Pac-Man bonus-tile scores (cherry /
+    /// Canonical arcade Chomp bonus-tile scores (cherry /
     /// strawberry / orange / apple / melon / Galaxian / bell /
     /// key). Picked at random per fire so consecutive bursts don't
     /// repeat the same number.

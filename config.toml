@@ -44,9 +44,9 @@
 #   [cast.overlay.trail]            — trail line itself
 #   [cast.overlay.badge]            — origin badge
 #   [cast.overlay.cards]            — assist-card cosmetics + effects
-#   [cast.pac-man]                  — pac-man special-theme knobs
+#   [cast.chomp]                  — chomp special-theme knobs
 #                                     (only read under
-#                                      [cast].theme = "pac-man")
+#                                      [cast].theme = "chomp")
 #   [cast.fire.burst]               — fire-moment particle burst
 #   [cast.fire.decal]               — post-fire ink decal
 #   [[cast.rule]]                   — one cast pattern → action
@@ -159,13 +159,13 @@ intensity = "normal"
 #                — failure stays loud, everything else monochrome
 #   "vapor"    — synthwave: pink trail, lime no-match, slate
 #                outline, Dracula-style dark card
-#   "pac-man"  — ★ SPECIAL THEME. Picks the full arcade Pac-Man
-#                look — yellow Pac-Man wedge chasing along a
+#   "chomp"  — ★ SPECIAL THEME. Picks the full arcade Chomp
+#                look — yellow Chomp wedge chasing along a
 #                black corridor flanked by neon-blue maze walls,
 #                with red-ghost no-match. Locks the trail render
 #                shape: `style`, `width`, and `straighten-on-turn`
 #                under [cast.overlay.trail] are IGNORED. Replaces
-#                `width` with `[cast.pac-man].size = "s" | "m" |
+#                `width` with `[cast.chomp].size = "s" | "m" |
 #                "l"` (see that block below for tuning).
 #
 # Unknown names clamp to "default". Validate with `wand --validate`.
@@ -272,7 +272,7 @@ color-no-match = "#ef4444"
 #                          cell (every dot looks framed)
 #   ascii                — solid backing rect under each glyph
 #                          (terminal / cmatrix feel)
-# Under `[cast].theme = "pac-man"` the outline drives the corridor's
+# Under `[cast].theme = "chomp"` the outline drives the corridor's
 # flanking wall colour — the theme palette already supplies the
 # neon-arcade blue, so set this only to override.
 color-outline = ""
@@ -284,8 +284,8 @@ color-outline = ""
 #   paws                     — scale multiplier on paw print size +
 #                              spacing
 #
-# IGNORED under `[cast].theme = "pac-man"` — use
-# `[cast.pac-man].size = "s" | "m" | "l"` instead.
+# IGNORED under `[cast].theme = "chomp"` — use
+# `[cast.chomp].size = "s" | "m" | "l"` instead.
 width = 3
 
 # Trail dash pattern preset. **Shape only — the trail's colour is
@@ -327,7 +327,7 @@ final-hold-ms = 400
 #            the literal hand path, jitter included.
 # Recognition is unaffected either way — this is a render-only knob.
 #
-# IGNORED under `[cast].theme = "pac-man"` — that theme forces
+# IGNORED under `[cast].theme = "chomp"` — that theme forces
 # straighten-on-turn = true.
 straighten-on-turn = true
 
@@ -380,13 +380,13 @@ anim-enabled = true
 #   "sparkle"  — twinkles around the card's perimeter
 #   "marching" — dashed border that scrolls ("marching ants")
 #
-# `line-pets` lists pac-man "pets" walking the firing card's
+# `line-pets` lists chomp "pets" walking the firing card's
 # outline, chasing each other in array order (first leads, the rest
 # trail at a fixed gap). Mirrors `[tome.decoration].line-pets` on
 # the menu side so both surfaces share a vocabulary. Theme-
 # agnostic — each pet's silhouette is its own colour signature.
 #
-#   "pac-man" — yellow chomping wedge
+#   "chomp" — yellow chomping wedge
 #   "ghost"   — red Blinky-style ghost (dome + eyes + skirt)
 #
 # Pet sizes scale with `font-size` below so a larger card gets
@@ -395,7 +395,7 @@ anim-enabled = true
 fire = "off"          # the firing card, on button-up
 cancel = "off"        # cards that became unreachable mid-gesture
 armed = "off"         # live cue on the firing card mid-stroke
-line-pets = []        # pac-man pets orbiting the firing card
+line-pets = []        # chomp pets orbiting the firing card
 
 # Card-text base font size in points. The arrow column rides at
 # `font-size + 1` so directional glyphs stay a hair taller than
@@ -411,8 +411,8 @@ font-size = 13
 
 # Banner shown at the cursor when the in-progress gesture falls off
 # every reachable rule. Independent of `[cast].theme` — works under
-# any theme (pac-man's red wall-flash on no-match is a separate,
-# theme-specific cue and stays under pac-man).
+# any theme (chomp's red wall-flash on no-match is a separate,
+# theme-specific cue and stays under chomp).
 #
 #   "off"       — no banner (default)
 #   "game-over" — arcade-style "GAME OVER" overlay anchored at the
@@ -420,24 +420,24 @@ font-size = 13
 #                 have been). Scale-in pop on first appearance +
 #                 2 Hz blink while the stroke remains off every
 #                 rule. Pairs naturally with `[cast].theme =
-#                 "pac-man"` but works under any theme.
+#                 "chomp"` but works under any theme.
 [cast.overlay.no-match]
 kind = "off"
 
 
 # -----------------------------------------------------------------
-# Cast theme — pac-man special-theme knobs
+# Cast theme — chomp special-theme knobs
 # -----------------------------------------------------------------
-# Only read when `[cast].theme = "pac-man"`. Under every other theme
+# Only read when `[cast].theme = "chomp"`. Under every other theme
 # this block is ignored (a warning lists the dead keys). Picking
-# pac-man as a theme also forces the trail's `style` /
+# chomp as a theme also forces the trail's `style` /
 # `straighten-on-turn` and ignores `[cast.overlay.trail].width`
 # entirely — the arcade aesthetic is "the whole line, locked in",
 # so it gets its own scale knob below instead of mixing into the
 # per-style trail width.
-[cast.pac-man]
+[cast.chomp]
 
-# Overall scale of the pac-man trail. Replaces `width` under this
+# Overall scale of the chomp trail. Replaces `width` under this
 # theme.
 #
 #   "s" — compact arcade-pixel-art feel (scale ≈ 2.0)
@@ -460,14 +460,14 @@ size = "m"
 
 #   "off"           — no burst (default)
 #   "burst"         — omnidirectional particle explosion (~0.7s)
-#   "arcade-score"  — arcade Pac-Man bonus-tile readout: a yellow
+#   "arcade-score"  — arcade Chomp bonus-tile readout: a yellow
 #                     monospaced "+N" floats up from the cursor
 #                     (~40pt over 800ms) and fades. The value is
 #                     picked at random per fire from the eight
 #                     canonical arcade scores (100 / 200 / 300 /
 #                     500 / 700 / 1000 / 2000 / 5000). Works under
 #                     any theme, but pairs naturally with
-#                     `[cast].theme = "pac-man"`.
+#                     `[cast].theme = "chomp"`.
 kind = "off"
 
 # Burst particle colour:
@@ -554,8 +554,8 @@ layout = "list"
 #   "mono"     — stark white-on-black; inverted on hover
 #   "vapor"    — synthwave pink hover on Dracula charcoal,
 #                off-white rows
-#   "pac-man"  — yellow accent on black with yellow rows; pairs
-#                with `[cast].theme = "pac-man"` for a coordinated
+#   "chomp"  — yellow accent on black with yellow rows; pairs
+#                with `[cast].theme = "chomp"` for a coordinated
 #                arcade look across both surfaces
 #   "rainbow"  — vivid rainbow palette: white rows on deep violet-
 #                black, hot-rose hover. Pair with
@@ -637,7 +637,7 @@ close = "off"
 #   "splatoon" — static lime rim (#bfff00)
 #   "mono"     — static white rim
 #   "vapor"    — static synthwave pink rim (#ff79c6)
-#   "pac-man"  — static arcade yellow rim (#ffea00)
+#   "chomp"  — static arcade yellow rim (#ffea00)
 border = "off"
 
 # Cycle period (ms) for any animated `border` kind — currently only
@@ -656,7 +656,7 @@ color-cycle-ms = 4000
 #   1     — hairline (thin rim, very subtle)
 #   2     — default; reads as a clean panel edge
 #   4     — bold ribbon
-#   8+    — chunky / arcade-pixel feel; pairs well with pac-man / mono
+#   8+    — chunky / arcade-pixel feel; pairs well with chomp / mono
 border-width = 2
 
 # macOS window drop shadow under the panel. Default `false`: macOS
@@ -665,13 +665,13 @@ border-width = 2
 # decoration. Set `true` to restore the system menu shadow.
 shadow = false
 
-# Pac-man "pets" that walk the panel's rounded outline. Default
+# Chomp "pets" that walk the panel's rounded outline. Default
 # `[]` (no pets). Theme-agnostic — each pet's silhouette is its own
 # colour signature, so they stand alongside any `[tome].theme`.
 # When more than one is listed they chase each other around the rim
 # in array order (first leads, the rest trail at a fixed gap).
 #
-#   "pac-man" — classic yellow chomping wedge
+#   "chomp" — classic yellow chomping wedge
 #   "ghost"   — red Blinky-style ghost (dome + eyes + skirt)
 #
 # Pet sizes scale with `[tome.row].font-size` so a larger panel gets

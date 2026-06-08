@@ -325,11 +325,11 @@ enum WandApp {
         if cfg.overlay.enabled {
             overlay = GestureOverlay(cfg)
             overlay?.show()
-            // Pac-man cherry pickup — `+N` arcade-score popup floats
+            // Chomp cherry pickup — `+N` arcade-score popup floats
             // up from the cherry's screen position when the face
             // catches it. Always uses the `.arcadeScore` kind here
             // (independent of `[cast.fire.burst].kind` which only
-            // governs the rule-fire moment); cherries are a pac-man-
+            // governs the rule-fire moment); cherries are a chomp-
             // theme flourish and the popup is part of that vibe.
             overlay?.onCherryEaten = { [weak controller] cocoaPt in
                 MainActor.assumeIsolated {
@@ -375,7 +375,7 @@ enum WandApp {
                     // exact-match-fires-now: drawing just `D` when
                     // rules `DL` / `DLU` exist is still on-track and
                     // should keep the trail in the match colour
-                    // (and skip the pac-man ghost + GAME OVER cues
+                    // (and skip the chomp ghost + GAME OVER cues
                     // until a non-prefix direction lands). The exact-
                     // match-fires signal is still available — any
                     // `hint.rows.fires = true` carries it.
