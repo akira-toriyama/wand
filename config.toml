@@ -159,6 +159,19 @@ intensity = "normal"
 #                — failure stays loud, everything else monochrome
 #   "vapor"    — synthwave: pink trail, lime no-match, slate
 #                outline, Dracula-style dark card
+#   "nord"     — Arctic-blue Frost accent on Polar Night;
+#                Aurora red as no-match
+#   "dracula"  — Dracula purple trail / classic red no-match
+#                (same backdrop as "vapor" with a different
+#                accent register)
+#   "gruvbox"  — gruvbox-dark yellow on warm-brown bg, red
+#                no-match
+#   "catppuccin" — Mocha pastel mauve on the canonical base,
+#                  pink no-match
+#   "rosepine" — muted moonlit rose on the canonical base;
+#                brighter "love" hue for no-match
+#   "onedark"  — Atom One Dark blue accent on the editor
+#                backdrop
 #   "chomp"  — ★ SPECIAL THEME. Picks the full arcade Chomp
 #                look — yellow Chomp wedge chasing along a
 #                black corridor flanked by neon-blue maze walls,
@@ -564,6 +577,13 @@ layout = "list"
 #   "aurora"   — polar-lights variant: deep navy backdrop, pastel-
 #                mint hover, off-white rows. Calmer counterpart to
 #                "rainbow"
+#   "nord"     — Arctic-blue Frost hover on Polar Night backdrop
+#   "dracula"  — purple hover on the canonical Dracula bg, off-
+#                white rows
+#   "gruvbox"  — gruvbox-dark yellow hover on warm-brown bg
+#   "catppuccin" — Mocha pastel mauve hover on the canonical base
+#   "rosepine" — muted moonlit rose hover on the canonical base
+#   "onedark"  — Atom One Dark blue hover on the editor backdrop
 #
 # Unknown names clamp to "default". Validate with `wand --validate`.
 theme = "default"

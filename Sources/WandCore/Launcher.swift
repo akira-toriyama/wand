@@ -278,6 +278,16 @@ public enum TomeTheme: String, Sendable, CaseIterable {
     /// Polar-lights variant of `rainbow` — calmer pastel palette
     /// (deep-navy backdrop, pastel-mint accent, soft off-white rows).
     case aurora
+    // Static dark-editor palettes — same shape as the existing
+    // dark themes, named to match `CastTheme` (and facet) so a user
+    // can pick the same look for both surfaces with a single
+    // string. Step 1 of issue #62.
+    case nord
+    case dracula
+    case gruvbox
+    case catppuccin
+    case rosepine
+    case onedark
 
     public var palette: TomeThemePalette {
         switch self {
@@ -337,6 +347,42 @@ public enum TomeTheme: String, Sendable, CaseIterable {
                 accentTextColor: "#0a0e27",
                 textColor: "#f0f0f5",
                 backgroundColor: "#0a0e27")
+        case .nord:
+            return TomeThemePalette(
+                accentColor: "#88c0d0",
+                accentTextColor: "#2e3440",
+                textColor: "#eceff4",
+                backgroundColor: "#2e3440")
+        case .dracula:
+            return TomeThemePalette(
+                accentColor: "#bd93f9",
+                accentTextColor: "#282a36",
+                textColor: "#f8f8f2",
+                backgroundColor: "#282a36")
+        case .gruvbox:
+            return TomeThemePalette(
+                accentColor: "#d79921",
+                accentTextColor: "#1d2021",
+                textColor: "#ebdbb2",
+                backgroundColor: "#282828")
+        case .catppuccin:
+            return TomeThemePalette(
+                accentColor: "#cba6f7",
+                accentTextColor: "#1e1e2e",
+                textColor: "#cdd6f4",
+                backgroundColor: "#1e1e2e")
+        case .rosepine:
+            return TomeThemePalette(
+                accentColor: "#ebbcba",
+                accentTextColor: "#191724",
+                textColor: "#e0def4",
+                backgroundColor: "#191724")
+        case .onedark:
+            return TomeThemePalette(
+                accentColor: "#61afef",
+                accentTextColor: "#282c34",
+                textColor: "#abb2bf",
+                backgroundColor: "#282c34")
         }
     }
 }
