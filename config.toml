@@ -330,6 +330,14 @@ style = "normal"
 # path reads as a clean orthogonal polyline, held at full alpha,
 # then faded out across the window. Set to 0 for an instant clear
 # (matches the no-match behaviour). Clamped 0..2000.
+#
+# Under `[cast].theme = "chomp"` this value is mostly IGNORED —
+# the dedicated post-fire eat sequence (icon appears at the trail
+# tip, Pac-Man chomps toward it, "+N" popup floats up) uses its
+# own fixed 1.10 s hold + fade timing. The one knob still
+# respected is `final-hold-ms = 0`, which disables the hold path
+# entirely and skips the eat sequence too (matches the "hold off"
+# intent).
 final-hold-ms = 400
 
 # How committed past segments render once you turn (e.g. `D → L` in
