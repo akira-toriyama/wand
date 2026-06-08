@@ -18,6 +18,17 @@ public enum Matcher {
         -> Rule? {
         for r in rules {
             guard r.pattern == pattern else { continue }
+            // Focused-fallback gate: a synthetic target from
+            // `NSWorkspace.frontmostApplication` (cursor over
+            // Desktop / Dock / menu bar) only fires rules that
+            // opted into the fallback. Cursor-anchored targets
+            // (`isFocusedFallback == false`) match every rule
+            // including `focusedFallback = true` ones, since
+            // opting into the fallback is a superset, not a
+            // replacement.
+            if target.isFocusedFallback && !r.focusedFallback {
+                continue
+            }
             if passesFilter(apps: r.apps,
                             filterTitle: r.filterTitle,
                             filterShell: r.filterShell,
@@ -35,12 +46,22 @@ public enum Matcher {
     /// title-glob / shell predicates per sample is too costly. The
     /// overlay's hint is permissive — it shows what *might* fire;
     /// the actual decision at button-up runs the full filter chain.
+    ///
+    /// `isFocusedFallback` mirrors the `Target.isFocusedFallback`
+    /// gate on `match` — when the live target was synthesised from
+    /// the frontmost-app fallback (cursor over Desktop / Dock /
+    /// menu bar), the assist HUD only hints rules that opted into
+    /// the fallback, so the tooltips don't promise strokes that the
+    /// gate will reject at button-up.
     public static func candidates(prefix: String, bundleID: String,
-                                  rules: [Rule]) -> [Rule] {
+                                  rules: [Rule],
+                                  isFocusedFallback: Bool = false) -> [Rule] {
         guard !prefix.isEmpty else { return [] }
         let bid = bundleID.lowercased()
         return rules.filter {
-            $0.pattern.hasPrefix(prefix) && appsAllow($0.apps, bundleID: bid)
+            $0.pattern.hasPrefix(prefix)
+                && (!isFocusedFallback || $0.focusedFallback)
+                && appsAllow($0.apps, bundleID: bid)
         }
     }
 

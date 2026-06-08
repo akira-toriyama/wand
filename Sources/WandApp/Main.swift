@@ -381,7 +381,8 @@ enum WandApp {
                     // `hint.rows.fires = true` carries it.
                     let cands = Matcher.candidates(
                         prefix: s.pattern, bundleID: s.bundleID,
-                        rules: live.rules)
+                        rules: live.rules,
+                        isFocusedFallback: s.isFocusedFallback)
                     valid = !cands.isEmpty
                     hint = assistHint(pattern: s.pattern,
                                       candidates: cands)

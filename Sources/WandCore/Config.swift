@@ -461,12 +461,33 @@ public struct WandConfig: Sendable {
                 }
                 let name = row.string("name")
                 let apps = row.strings("apps")
+                let focusedFallback = row.bool("focused-fallback", false)
+                let resolvedApps = apps.isEmpty ? ["*"] : apps
+                // Opt-in safety warning: a focused-fallback rule
+                // with `apps = ["*"]` (or empty → ["*"]) will fire
+                // against whichever app happens to be frontmost when
+                // the stroke lands on a non-AX surface — surprising
+                // by design, but the user opted in. Don't reject /
+                // clamp; just surface it in `--validate` + the daemon
+                // log so the trade-off is visible.
+                if focusedFallback,
+                   resolvedApps.contains("*") {
+                    let label = name.isEmpty ? pattern : name
+                    Log.line("config: cast.rule \"\(label)\" has "
+                             + "`focused-fallback = true` with "
+                             + "`apps = [\"*\"]` — this rule will "
+                             + "dispatch to whichever app happens to "
+                             + "be frontmost on a non-AX surface. "
+                             + "Tighten `apps` to specific bundle "
+                             + "ids for predictable targeting.")
+                }
                 return Rule(name: name.isEmpty ? pattern : name,
                             pattern: pattern,
-                            apps: apps.isEmpty ? ["*"] : apps,
+                            apps: resolvedApps,
                             icon: row.string("icon"),
                             filterTitle: row.string("filter-title"),
                             filterShell: row.string("filter-shell"),
+                            focusedFallback: focusedFallback,
                             action: action)
             }
 

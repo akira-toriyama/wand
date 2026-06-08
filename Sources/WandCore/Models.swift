@@ -81,12 +81,22 @@ public struct Rule: Sendable, Equatable {
     /// rule fires. The `WAND_TARGET_*` env vars carry the target
     /// identity into the shell, same shape as `Action.shell`.
     public let filterShell: String
+    /// Opt-in flag (`[[cast.rule]].focused-fallback`) that lets this
+    /// rule fire even when the cursor-anchored AX target resolution
+    /// failed (cursor over Desktop / Dock / menu bar). When true and
+    /// the stroke lands on a non-AX surface, EventTap synthesises a
+    /// `Target.isFocusedFallback` from `NSWorkspace.frontmostApplication`
+    /// and the Matcher only keeps rules where this flag is set. Every
+    /// other rule keeps the historical "no spine, no fire" behaviour
+    /// so existing configs stay untouched.
+    public let focusedFallback: Bool
     public let action: Action
 
     public init(name: String, pattern: String, apps: [String],
                 icon: String = "",
                 filterTitle: String = "",
                 filterShell: String = "",
+                focusedFallback: Bool = false,
                 action: Action) {
         self.name = name
         self.pattern = pattern
@@ -94,6 +104,7 @@ public struct Rule: Sendable, Equatable {
         self.icon = icon
         self.filterTitle = filterTitle
         self.filterShell = filterShell
+        self.focusedFallback = focusedFallback
         self.action = action
     }
 }
@@ -357,12 +368,24 @@ public struct Target: Sendable, Equatable {
     /// time. Stored as `UInt32` so Core can carry it around without
     /// depending on CoreGraphics's `CGWindowID` typedef.
     public let windowID: UInt32
+    /// `true` when this target was synthesised from
+    /// `NSWorkspace.frontmostApplication` because the cursor-anchored
+    /// AX walk + CGWindowList fallback both came back empty (cursor
+    /// over Desktop / Dock / menu bar). Routed to the Matcher so
+    /// only rules with `focusedFallback = true` are eligible to fire
+    /// — every other rule still treats a missing target as a hard
+    /// "drop the gesture" signal. Default `false` keeps the historical
+    /// "no spine, no fire" invariant for code paths that don't know
+    /// about the fallback.
+    public let isFocusedFallback: Bool
     public init(pid: Int32, bundleID: String, title: String,
-                frame: CGRect, windowID: UInt32 = 0) {
+                frame: CGRect, windowID: UInt32 = 0,
+                isFocusedFallback: Bool = false) {
         self.pid = pid
         self.bundleID = bundleID
         self.title = title
         self.frame = frame
         self.windowID = windowID
+        self.isFocusedFallback = isFocusedFallback
     }
 }
