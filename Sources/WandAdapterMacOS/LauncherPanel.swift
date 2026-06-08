@@ -602,6 +602,7 @@ private enum PanelLayout {
         let r = ItemRow(kind: .leaf(item), label: label, icon: icon,
                          layout: layout, shortcut: shortcut,
                          subtitle: subtitle, iconAnim: item.iconAnim,
+                         iconSpec: item.icon,
                          fontSize: fontSize)
         rows.append(r)
         return r
@@ -1632,6 +1633,7 @@ private final class ItemRow: NSView {
     init(kind: RowKind, label: String, icon: NSImage?,
          layout: LauncherLayout, shortcut: String = "",
          subtitle: String = "", iconAnim: String = "",
+         iconSpec: String = "",
          fontSize: Int = 13) {
         self.kind = kind
         self.layout = layout
@@ -1650,6 +1652,27 @@ private final class ItemRow: NSView {
         iconView.imageScaling = .scaleProportionallyUpOrDown
         iconView.image = icon
         addSubview(iconView)
+
+        // Favicon async swap — when the row was constructed with a
+        // `favicon:<host>` spec that resolved to the SF:globe
+        // placeholder, kick off the network fetch and update
+        // `iconView.image` in place once it lands. Cache hits are
+        // already handled synchronously by `IconResolver`, so this
+        // path only fires on the very first sight of a host (or
+        // after the 24 h disk-cache expiry). Resize on swap matches
+        // the resize the synchronous path applies.
+        if iconSpec.hasPrefix("favicon:"),
+           let host = FaviconCache.host(from: iconSpec) {
+            let pt = IconResolver.pt(forFontSize: Int(self.fontSize))
+            // No-op when the host is already in cache (the closure
+            // fires synchronously with the same image we already
+            // drew); the network round-trip only happens on misses.
+            FaviconCache.shared.loadOrFetch(host: host) { [weak self] img in
+                guard let self = self, let img = img else { return }
+                img.size = NSSize(width: pt, height: pt)
+                self.iconView.image = img
+            }
+        }
 
         // Section headers get their own compact layout (no icon, smaller
         // font, shorter row). Everything else goes through the

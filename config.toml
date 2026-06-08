@@ -798,6 +798,17 @@ line-pets = []
 #                                  open Symbols.app)
 #   icon = "app:com.apple.Safari"— installed app icon (any app
 #                                  LaunchServices knows about)
+#   icon = "favicon:github.com"  — website favicon (Google s2 CDN).
+#                                  Cached on disk for 24 h under
+#                                  ~/.cache/wand/favicons/<host>.png.
+#                                  First sight of a host shows the
+#                                  SF:globe placeholder while the
+#                                  fetch lands (~500 ms); subsequent
+#                                  panel opens hit the cache and
+#                                  render instantly. Privacy note:
+#                                  the request goes to Google's
+#                                  s2 endpoint, so the host you
+#                                  reference is visible to Google.
 #   icon = "~/icons/foo.png"     — tilde-expanded path
 #   icon = "icons/foo.png"       — relative to ~/.config/wand/
 #   icon = "/abs/path.png"       — absolute path

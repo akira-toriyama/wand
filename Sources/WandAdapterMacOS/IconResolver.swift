@@ -75,6 +75,28 @@ enum IconResolver {
             return img
         }
 
+        if spec.hasPrefix("favicon:") {
+            // Cache hit returns the site icon immediately; misses fall
+            // through to the `SF:globe` placeholder below and the
+            // calling row kicks the async fetch. Sizing matches the
+            // surrounding column so the rendered NSImage lands at the
+            // same footprint as an `app:` or SF Symbol icon.
+            if let host = FaviconCache.host(from: spec),
+               let img = FaviconCache.shared.cached(host: host) {
+                img.size = NSSize(width: pt, height: pt)
+                return img
+            }
+            // Placeholder — same SF:globe the row will keep showing
+            // when the fetch fails. Built here (rather than via the
+            // SF: branch) so the favicon-specific resize is applied
+            // consistently with the eventual real favicon.
+            let cfg = NSImage.SymbolConfiguration(
+                pointSize: pt, weight: .medium, scale: .large)
+            return NSImage(systemSymbolName: "globe",
+                            accessibilityDescription: nil)?
+                .withSymbolConfiguration(cfg)
+        }
+
         if spec.hasPrefix("SF:") {
             let name = String(spec.dropFirst(3))
             var cfg = NSImage.SymbolConfiguration(

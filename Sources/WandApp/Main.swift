@@ -413,11 +413,26 @@ enum WandApp {
         // effect without a restart. `applyConfig` covers every
         // overlay knob; `[trigger]` and the `[recognition]` timing
         // knobs still need a restart (Controller.reload logs them).
-        if let overlay {
-            controller.onConfigChanged = { [weak overlay] new in
-                MainActor.assumeIsolated { overlay?.applyConfig(new) }
+        // The favicon prewarm rides on the same callback so the
+        // moment a user adds `icon = "favicon:..."` to their config
+        // and saves, the host(s) start downloading in the background
+        // — no need to wait for the next panel open to populate the
+        // cache. The outer `if let overlay` is gone so prewarm fires
+        // even on configs that disable the overlay; `overlay?` makes
+        // the applyConfig call a no-op when the overlay is nil.
+        controller.onConfigChanged = { [weak overlay] new in
+            MainActor.assumeIsolated {
+                overlay?.applyConfig(new)
+                FaviconCache.prewarm(from: new)
             }
         }
+        // Boot-time prewarm: kick off background fetches for every
+        // `favicon:<host>` referenced in the current config before
+        // the first panel open. The cache hits are populated by the
+        // time the user middle-clicks, so the SF:globe placeholder
+        // flash collapses to "happens only on stale cache / network
+        // failure".
+        FaviconCache.prewarm(from: controller.config)
 
         // Post-fire fire-moment effects — decal (Splatoon-style
         // splatter/blob/scorch/star) AND trail-end burst (particle
