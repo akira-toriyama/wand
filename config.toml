@@ -562,13 +562,16 @@ layout = "list"
 #                black text. Solid black backdrop
 #   "neon"     — electric cyan hover on white rows; deep blue-black
 #                backdrop
-#   "splatoon" — Turf-War ink rotation: each panel-open rolls a
+#   "splatoon" — Turf-War ink rotation: each row rolls its own
 #                random colour from the Splatoon palette (10
-#                saturated hues) and holds it stable across every
-#                hover in that session. Dismissing and re-opening
-#                the menu re-rolls. Text colour adapts to the
-#                ink's luminance so labels stay legible on
-#                yellow / lime just as well as on sapphire / purple
+#                saturated hues) at panel-open and holds it for
+#                the panel's lifetime, so neighbouring rows light
+#                up in different inks but the same row stays the
+#                same colour while the menu is open. Dismissing
+#                and re-opening rerolls every row. Text colour
+#                adapts to each ink's luminance so labels stay
+#                legible on bright (yellow / lime) and dark
+#                (sapphire / purple) inks alike
 #   "mono"     — stark white-on-black; inverted on hover
 #   "vapor"    — synthwave pink hover on Dracula charcoal,
 #                off-white rows
