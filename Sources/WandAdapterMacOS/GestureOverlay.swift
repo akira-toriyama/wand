@@ -897,7 +897,8 @@ private final class TrailView: NSView {
                             x: cherryPt.x + self.originOffset.x,
                             y: cherryPt.y + self.originOffset.y)
                         self.onCherryEatenGlobal?(cocoaGlobal)
-                    }),
+                    },
+                    originIcon: originIcon),
                 color: color, outline: chompOutline)
             prevFaceArcLength = newFaceArc
             drawNoMatchBannerIfNeeded(cursor: cursor)
