@@ -417,6 +417,16 @@ line-pets = []        # chomp pets orbiting the firing card
 # Clamped 8..32.
 font-size = 13
 
+# Prepend the target-app icon to the firing card so the row reads
+# `app-icon → rule-icon → name` (or `app-icon → name` for an
+# iconless rule). Same "this fires against THIS app" confirmation
+# the origin badge gives, surfaced on the firing card itself.
+# Candidate (directional) cards keep their existing
+# `arrow → icon → name` layout regardless. When the cursor is over
+# a surface with no resolvable AX target (Desktop / menu bar) the
+# column collapses so the row stays flush against the rule icon.
+fires-app-icon = true
+
 # Card colours (border / body / text / firing-card body & text)
 # live on `[cast].theme` exclusively — pick a theme to change
 # them.

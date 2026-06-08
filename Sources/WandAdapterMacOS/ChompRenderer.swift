@@ -76,6 +76,16 @@ enum ChompRenderer {
         /// arcade-score "+N" popup floats up from where the cherry
         /// was eaten.
         let onCherryEaten: @MainActor (CGPoint) -> Void
+        /// Target-app icon for the cursor-anchored window the
+        /// stroke is acting on. When non-nil and a pellet lands in
+        /// the icon-bonus hash band, the renderer draws this image
+        /// in place of the regular yellow dot, giving the player a
+        /// second flavour of arcade pickup to chase besides the
+        /// cherries. Eaten with the exact same beat as a cherry
+        /// (`onCherryEaten` callback, rainbow wall flash, score
+        /// popup). `nil` collapses the icon band back to plain
+        /// pellets — same fail-soft as a cursor over the Desktop.
+        let originIcon: NSImage?
     }
 
     // MARK: - Tuning constants
@@ -140,12 +150,14 @@ enum ChompRenderer {
                                              alpha: 1.0)
     /// Probability (0..1) that a yellow pellet gets swapped for the
     /// arcade cherry bonus token, decided per-pellet from a stable
-    /// hash of its position. ~8% gives 1-3 cherries on a typical
+    /// hash of its position. ~4% gives 0-2 cherries on a typical
     /// 20-50 pellet stroke, with a high enough rate that even
-    /// shorter strokes (~10 pellets) usually carry at least one.
-    /// Only fires while the gesture is on-track (no cherries on the
-    /// no-match crumb trail).
-    private static let cherryProbability: Double = 0.08
+    /// shorter strokes (~10 pellets) often still carry one. Only
+    /// fires while the gesture is on-track (no cherries on the
+    /// no-match crumb trail). The app-icon pellet shares the same
+    /// rate via the adjacent `[p, 2p)` hash band — see the bonus-
+    /// pellet section in `draw(state:color:outline:)`.
+    private static let cherryProbability: Double = 0.04
     /// Face silhouette radius (pt at scale=1). Tuned so 13-ish
     /// cells across the diameter still leave room for the eyes /
     /// mouth detail without crowding.
@@ -352,6 +364,16 @@ enum ChompRenderer {
         // it from cherry selection keeps the head as a plain dot;
         // cherries land only on the interval-aligned pellets behind
         // it, which are stable.
+        // Bonus-pellet hash bands: the position hash partitions
+        // pellets into [0, p) → cherry, [p, 2p) → app icon (only
+        // when an icon is resolved — the band collapses back to a
+        // plain dot otherwise), [2p, 1) → regular pellet. Keeping
+        // the cherry band fixed at the bottom means halving /
+        // tweaking `cherryProbability` doesn't shift cherry
+        // placements (their hashes haven't moved), and the icon
+        // band gets the matching width — so both bonuses appear at
+        // the same rate without competing for the same hash slots.
+        let iconBandUpper = cherryProbability * 2
         var pelletInfo: [(point: CGPoint, arc: CGFloat)] = []
         walkPolyline(points: snappedPts, interval: interval) { p, _, arc in
             pelletInfo.append((p, arc))
@@ -359,18 +381,32 @@ enum ChompRenderer {
         let headIdx = pelletInfo.count - 1
         for (i, info) in pelletInfo.enumerated() {
             let isHead = i == headIdx
+            let h = positionHash01(info.point)
             let isCherry = state.valid && !isHead
-                && positionHash01(info.point) < cherryProbability
-            if isCherry {
+                && h < cherryProbability
+            let isIconPellet = state.valid && !isHead
+                && !isCherry
+                && state.originIcon != nil
+                && h < iconBandUpper
+            if isCherry || isIconPellet {
                 // Eaten — don't draw, and fire the celebratory
-                // callback if the face crossed it this frame.
+                // callback if the face crossed it this frame. Both
+                // bonus pellets share the same eat machinery so the
+                // wall-flash beat looks identical regardless of
+                // which pickup Chomp just landed on.
                 if info.arc <= currentFaceArc {
                     if info.arc > state.previousFaceArcLength {
                         state.onCherryEaten(info.point)
                     }
                     continue
                 }
-                drawCherry(at: info.point, cell: cherryCell)
+                if isCherry {
+                    drawCherry(at: info.point, cell: cherryCell)
+                } else if let icon = state.originIcon {
+                    drawAppIconPellet(at: info.point,
+                                       cell: cherryCell,
+                                       icon: icon)
+                }
             } else {
                 pelletFill.setFill()
                 let rect = NSRect(x: info.point.x - dot / 2,
@@ -828,6 +864,30 @@ enum ChompRenderer {
                 width: cell * 2,
                 height: cell * 2)).fill()
         }
+    }
+
+    /// Draw the target-app icon as a square pellet centred on `p`.
+    /// Sized off the same `cell` unit as the cherry sprite so it
+    /// reads at roughly the same visual footprint — 12 cells wide
+    /// ≈ cherry's 12-col span — and stays upright regardless of the
+    /// stroke direction (no rotation, mirroring cherry). The icon
+    /// is an NSImage from the app's high-resolution representation,
+    /// so AppKit's draw pipeline handles scaling down to pellet
+    /// size cleanly. Drawn with `.sourceOver` at full opacity; the
+    /// underlying corridor + dimmed-trail logic still shows through
+    /// any transparent regions in the icon (common for SF-Symbol-
+    /// shaped app icons).
+    private static func drawAppIconPellet(at p: CGPoint,
+                                           cell: CGFloat,
+                                           icon: NSImage) {
+        let size = cell * 12
+        let rect = NSRect(x: p.x - size / 2,
+                          y: p.y - size / 2,
+                          width: size, height: size)
+        icon.draw(in: rect,
+                  from: .zero,
+                  operation: .sourceOver,
+                  fraction: 1.0)
     }
 
     /// Draw the arcade cherry bonus as a pixel sprite from

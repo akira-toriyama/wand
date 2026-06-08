@@ -400,17 +400,28 @@ public struct GestureOverlayCardsSpec: Sendable, Equatable {
     /// than the rule name. The card's padding is fixed in pt, so a
     /// larger font expands the card naturally. Clamped 8..32.
     public let fontSize: Int
+    /// Prepend the target-app icon to the firing card's row(s) —
+    /// reads as "this rule will fire against THIS app on release",
+    /// the same confirmation the origin badge gives but on the
+    /// firing-card surface. Only applied to the firing card; the
+    /// directional candidate cards keep their `arrow → icon → name`
+    /// layout. When the cursor sits on a surface with no resolvable
+    /// AX target (Desktop / menu bar) the column collapses so the
+    /// firing row stays flush against the rule icon / name.
+    public let firesAppIcon: Bool
 
     public init(fire: Effect = .off,
                 cancel: Effect = .off,
                 armed: ArmedEffect = .off,
                 linePets: [LinePet] = [],
-                fontSize: Int = 13) {
+                fontSize: Int = 13,
+                firesAppIcon: Bool = true) {
         self.fire = fire
         self.cancel = cancel
         self.armed = armed
         self.linePets = linePets
         self.fontSize = fontSize
+        self.firesAppIcon = firesAppIcon
     }
 
     public static let `default` = GestureOverlayCardsSpec()
