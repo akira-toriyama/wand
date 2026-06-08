@@ -653,44 +653,83 @@ enum PacManRenderer {
         }
     }
 
-    /// Draw the no-match ghost sprite — arcade-style "Blinky" shape
-    /// rasterised onto the same pixel grid as the pac-man face: a
-    /// dome on top, square body below, and a wavy skirt of 4 humps
-    /// along the bottom edge that **alternates between two leg
-    /// poses** at `ghostSkirtHz` (humps on the outside vs humps on
-    /// the inside) so the sprite reads as walking. Body sits
-    /// upright (arcade ghosts don't rotate); only the eyes look
-    /// along `tangent`. Body colour flows from `color`
-    /// (= `trailColorNoMatch`, typically red).
+    /// 14×14 ghost body sprite, traced from `/Users/tommy/Desktop/b/1.gif`
+    /// frame A at 7 px / cell with the eye whites stripped — both
+    /// eye whites AND pupils are drawn procedurally on top so the
+    /// whole eye (white + blue) snaps through 4 cardinal
+    /// directions per `2.gif`, not just the pupil. `R` cells fill
+    /// with the passed-in body colour; `.` cells are transparent.
+    /// The last 2 rows are leg pose A's skirt; on the alternate
+    /// frame the renderer swaps them for `ghostSkirtAlt` to give
+    /// the classic arcade leg shuffle.
+    private static let ghostSprite: [String] = [
+        ".....RRRR.....",
+        "...RRRRRRRR...",
+        "..RRRRRRRRRR..",
+        ".RRRRRRRRRRRR.",
+        ".RRRRRRRRRRRR.",
+        ".RRRRRRRRRRRR.",
+        "RRRRRRRRRRRRRR",
+        "RRRRRRRRRRRRRR",
+        "RRRRRRRRRRRRRR",
+        "RRRRRRRRRRRRRR",
+        "RRRRRRRRRRRRRR",
+        "RRRRRRRRRRRRRR",
+        "RR.RRR..RRR.RR",
+        "R...RR..RR...R",
+    ]
+    /// Alternate skirt pose (last 2 rows of `1.gif` frame B). The
+    /// renderer swaps `ghostSprite`'s last 2 rows with these when
+    /// `legFrame == 1`, so over time the humps shift by half a
+    /// hump-width and the silhouette reads as walking.
+    private static let ghostSkirtAlt: [String] = [
+        "RRRR.RRRR.RRRR",
+        ".RR...RR...RR.",
+    ]
+    /// Eye-white dimensions in sprite-cell units (width × height).
+    /// Drawn as a solid 4×4 rectangle (no rounded corners) so that
+    /// when the eye shifts up/down, the corner cells of a rounded
+    /// shape don't expose the red body underneath as
+    /// "red dots in the white" — the source `2.gif` has the same
+    /// rounding artefact, but on the trail overlay it reads
+    /// worse, so we square the corners. Pupil keeps its 2×2.
+    private static let ghostEyeWhiteCols: CGFloat = 4
+    private static let ghostEyeWhiteRows: CGFloat = 4
+    /// Pupil colour (arcade ghost blue). Sampled from `1.gif`.
+    private static let ghostPupilColor = NSColor(srgbRed: 0.0,
+                                                  green: 0.0,
+                                                  blue: 0.93,
+                                                  alpha: 1.0)
+    /// Eye centres in `ghostSprite` grid coords (col, row) when
+    /// looking forward (no direction shift applied). The 4-wide
+    /// eye-white sprite sits centred on these points and then
+    /// translates by one cell in the dominant `tangent` axis;
+    /// the pupil rides one further cell in the same direction.
+    /// Positioned symmetrically around the sprite's geometric
+    /// centre (col 6.5) so left/right gaze reads even.
+    private static let ghostLeftEyeCenter = CGPoint(x: 3.5, y: 5)
+    private static let ghostRightEyeCenter = CGPoint(x: 9.5, y: 5)
+
+    /// Draw the no-match ghost — pixel sprite traced from
+    /// `1.gif`, with the skirt's last 2 rows alternating at
+    /// `ghostSkirtHz` between frame A and frame B (`ghostSkirtAlt`)
+    /// to give the classic arcade leg shuffle. Body sits upright
+    /// (arcade ghosts don't rotate); only the pupils track
+    /// `tangent`, snapped to 4 cardinals to match `2.gif`'s
+    /// discrete eye-direction frames.
     ///
     /// The whole sprite picks up a `panic-jitter` offset
     /// (Lissajous-style, ~`cell × 1.0` pt amplitude with co-prime
-    /// frequencies on each axis) — reads as the chased ghost
-    /// shaking from the "you've lost the rule" no-match state. The
-    /// amplitude is visibly larger than a sub-pixel tremor so the
-    /// jitter registers at a glance, but still capped to roughly
-    /// one pixel-grid cell so the sprite never tears free of the
+    /// frequencies on each axis) so it reads as the chased ghost
+    /// shaking from the no-match state — amplitude is visibly
+    /// larger than a sub-pixel tremor but capped to roughly one
+    /// pixel-grid cell so the sprite never tears free of the
     /// pellet line it's chasing.
     private static func drawGhost(at p: CGPoint, tangent: CGPoint,
                                     radius: CGFloat, color: NSColor) {
         let cell = max(2, radius * pixelCellRatio)
-        // Body below the dome is shorter than the dome's radius —
-        // the arcade ghost is a chunky/squat silhouette, not a
-        // tall one.
-        let bodyHeight = radius * 0.82
-        let skirtAmp = radius * 0.34
-        let totalBottom = -bodyHeight - skirtAmp
-        let r2 = radius * radius
-        // Skirt frame: 0 = humps centred at hump-A positions, 1 =
-        // humps shifted by half a hump-width (A-frame's valleys
-        // become humps and vice versa). Synced off wall time so
-        // every ghost on screen pulses together.
         let legFrame = Int(CACurrentMediaTime() * ghostSkirtHz) & 1
 
-        // Panic-jitter: noticeable per-frame offset on the whole
-        // sprite body. Co-prime frequencies on x/y give a Lissajous-
-        // like chaotic shake that doesn't read as a sine wave (=
-        // too smooth) or a random twitch (= too violent).
         let t = CACurrentMediaTime()
         let jitterAmp = cell * 1.0
         let jx = CGFloat(sin(t * 17.0)) * jitterAmp
@@ -702,60 +741,92 @@ enum PacManRenderer {
         xform.translateX(by: p.x + jx, yBy: p.y + jy)
         xform.concat()
 
-        color.withAlphaComponent(0.95).setFill()
-        let extentX = Int(ceil(radius / cell))
-        let extentYTop = Int(ceil(radius / cell))
-        let extentYBot = Int(ceil(-totalBottom / cell))
-        for iy in -extentYBot...extentYTop {
-            for ix in -extentX...extentX {
-                let cx = (CGFloat(ix) + 0.5) * cell
-                let cy = (CGFloat(iy) + 0.5) * cell
-                if !ghostBodyFilled(cx: cx, cy: cy,
-                                     radius: radius, r2: r2,
-                                     bodyHeight: bodyHeight,
-                                     skirtAmp: skirtAmp,
-                                     legFrame: legFrame) { continue }
+        let rows = ghostSprite.count
+        let cols = ghostSprite.first?.count ?? 0
+        let bodyFill = color.withAlphaComponent(0.95)
+        // Sprite row 0 is the top of the image; local +y is up,
+        // so the top edge sits at +rows/2 * cell and rows step
+        // down by `cell` as iy grows.
+        let topY = CGFloat(rows) * cell / 2
+        let leftX = -CGFloat(cols) * cell / 2
+        bodyFill.setFill()
+        for iy in 0..<rows {
+            // The bottom 2 rows of the sprite are the skirt — on
+            // alt-leg frames, swap them in from `ghostSkirtAlt` so
+            // the humps shift by half a hump-width.
+            let row: String
+            if legFrame == 1 && iy >= rows - ghostSkirtAlt.count {
+                row = ghostSkirtAlt[iy - (rows - ghostSkirtAlt.count)]
+            } else {
+                row = ghostSprite[iy]
+            }
+            for (ix, ch) in row.enumerated() {
+                guard ch == "R" else { continue }
                 let rect = NSRect(
-                    x: CGFloat(ix) * cell,
-                    y: CGFloat(iy) * cell,
+                    x: leftX + CGFloat(ix) * cell,
+                    y: topY - CGFloat(iy + 1) * cell,
                     width: cell, height: cell)
                 NSBezierPath(rect: rect).fill()
             }
         }
 
-        // Eyes — two 4×4 white blocks set into the upper body, each
-        // with a 2×2 blue pupil whose offset within the eye tracks
-        // the tangent direction. Eye / pupil sizing matches the
-        // arcade ghost sprite where the eyes dominate the visual
-        // mass. Pupil shift is symmetric in both axes so diagonal
-        // travel reads as a true diagonal gaze.
-        let eyeOffsetX = radius * 0.42
-        let eyeY = radius * 0.10
-        let eyeHalfW = cell * 2.0
-        let eyeHalfH = cell * 2.0
-        let pupilSize = cell * 2
-        let len = max(hypot(tangent.x, tangent.y), 0.0001)
-        // Pupil rides flush against the eye edge at full tangent.
-        let pupilShift = cell
-        let pupilDx = (tangent.x / len) * pupilShift
-        let pupilDy = (tangent.y / len) * pupilShift
-        let pupilColor = NSColor(srgbRed: 0.13, green: 0.13,
-                                  blue: 1.0, alpha: 1.0)
+        // Direction snap — eye whites AND pupils both ride the
+        // dominant `tangent` axis, snapped to 4 cardinals to
+        // mirror `2.gif` frames 1-4. With zero tangent the eyes
+        // default to a rightward look (matching the 1.gif idle
+        // pose) so they never sit dead-centre.
+        let absX = abs(tangent.x), absY = abs(tangent.y)
+        var dirX: CGFloat
+        var dirY: CGFloat
+        if absX < 1e-4 && absY < 1e-4 {
+            dirX = 1; dirY = 0
+        } else if absX >= absY {
+            dirX = tangent.x >= 0 ? 1 : -1; dirY = 0
+        } else {
+            dirX = 0; dirY = tangent.y >= 0 ? 1 : -1
+        }
 
-        for side: CGFloat in [-1, 1] {
-            let ex = side * eyeOffsetX
-            let eyeRect = NSRect(x: ex - eyeHalfW,
-                                 y: eyeY - eyeHalfH,
-                                 width: eyeHalfW * 2,
-                                 height: eyeHalfH * 2)
+        // Eye whites + pupils share the same direction shift, so
+        // the whole eye reads as displaced — not just the iris on
+        // a fixed white backing. Eye shifts one cell in `dir`;
+        // the pupil shifts a further cell so it rides flush
+        // against the eye-white's leading edge.
+        let eyeShift = cell
+        let pupilShift = cell
+        let whiteW = ghostEyeWhiteCols * cell
+        let whiteH = ghostEyeWhiteRows * cell
+        for eyeCenter in [ghostLeftEyeCenter, ghostRightEyeCenter] {
+            // Eye-centre sprite-grid coords → local rendering coords.
+            // Cell (gx, gy) centre sits at:
+            //   x = (gx - cols/2 + 0.5) * cell  →  for cols=14, (gx - 6.5) * cell
+            //   y = (rows/2 - gy - 0.5) * cell  →  for rows=14, (6.5 - gy) * cell
+            // …but the sprite is rendered cell-aligned, so eyes
+            // sit at the cell corner (gx - cols/2) * cell instead
+            // of the cell centre — this lets the 4-wide eye-white
+            // rectangle drop in flush on the half-integer eye
+            // centre.
+            let baseX = (eyeCenter.x - CGFloat(cols) / 2) * cell
+            let baseY = (CGFloat(rows) / 2 - eyeCenter.y) * cell
+            let whiteCenterX = baseX + dirX * eyeShift
+            let whiteCenterY = baseY + dirY * eyeShift
+
             NSColor.white.setFill()
-            NSBezierPath(rect: eyeRect).fill()
-            let pupilRect = NSRect(
-                x: ex - pupilSize / 2 + pupilDx,
-                y: eyeY - pupilSize / 2 + pupilDy,
-                width: pupilSize, height: pupilSize)
-            pupilColor.setFill()
-            NSBezierPath(rect: pupilRect).fill()
+            NSBezierPath(rect: NSRect(
+                x: whiteCenterX - whiteW / 2,
+                y: whiteCenterY - whiteH / 2,
+                width: whiteW, height: whiteH)).fill()
+
+            // Pupil — 2×2 cells, rides one cell further in `dir`
+            // so its edge aligns with the eye-white's leading
+            // edge.
+            let pupilCenterX = whiteCenterX + dirX * pupilShift
+            let pupilCenterY = whiteCenterY + dirY * pupilShift
+            ghostPupilColor.setFill()
+            NSBezierPath(rect: NSRect(
+                x: pupilCenterX - cell,
+                y: pupilCenterY - cell,
+                width: cell * 2,
+                height: cell * 2)).fill()
         }
     }
 
@@ -792,42 +863,6 @@ enum PacManRenderer {
                 NSBezierPath(rect: rect).fill()
             }
         }
-    }
-
-    /// Predicate: is the cell at local (cx, cy) inside the ghost
-    /// silhouette? Top half is a circle (dome); middle is a
-    /// rectangle (body); bottom is a 4-hump skirt — each hump is
-    /// a triangle wedge extending below the body baseline.
-    /// `legFrame` (0 or 1) shifts the hump pattern by half a
-    /// hump-width so alternating frames give the classic arcade
-    /// "leg shuffle".
-    private static func ghostBodyFilled(cx: CGFloat, cy: CGFloat,
-                                          radius: CGFloat, r2: CGFloat,
-                                          bodyHeight: CGFloat,
-                                          skirtAmp: CGFloat,
-                                          legFrame: Int) -> Bool {
-        if abs(cx) > radius { return false }
-        // Dome: cy >= 0, inside circle.
-        if cy >= 0 { return cx * cx + cy * cy <= r2 }
-        // Body rectangle: -bodyHeight <= cy <= 0.
-        if cy >= -bodyHeight { return true }
-        // Skirt humps. 4 humps across — matches the canonical
-        // 14-wide arcade ghost sprite's 4-toothed bottom.
-        let humpCount: CGFloat = 4
-        let humpWidth = (2 * radius) / humpCount
-        let humpHalf = humpWidth / 2
-        let phaseShift: CGFloat = (legFrame == 0) ? 0 : humpHalf
-        // Wrap into the [-radius, radius) band so a shifted hump
-        // that pokes off one side is folded back onto the other.
-        let shifted = cx + phaseShift
-        let wrapped = shifted - 2 * radius
-            * floor((shifted + radius) / (2 * radius))
-        let segIdx = min(Int(humpCount) - 1, max(0,
-            Int(floor((wrapped + radius) / humpWidth))))
-        let humpCentre = -radius + (CGFloat(segIdx) + 0.5) * humpWidth
-        let distFromCentre = abs(wrapped - humpCentre) / humpHalf
-        let depthAllowed = (1 - distFromCentre) * skirtAmp
-        return cy >= -bodyHeight - depthAllowed
     }
 
     // MARK: - Utility
