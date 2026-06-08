@@ -86,6 +86,15 @@ enum ChompRenderer {
         /// popup). `nil` collapses the icon band back to plain
         /// pellets — same fail-soft as a cursor over the Desktop.
         let originIcon: NSImage?
+        /// Overrides the historical `faceLag * scale` (the gap between
+        /// the live cursor and where Chomp's face renders). `nil`
+        /// keeps the default lag — the chase feel during a live
+        /// stroke. Used by the post-fire eat sequence (TrailView's
+        /// `chompFireBonusPos` path) to ramp the lag down to zero
+        /// over the animation window so the face visibly catches up
+        /// to the trail tip and lands on the bonus icon. Capped at
+        /// `>= 0` by the renderer regardless of caller input.
+        let faceLagOverride: CGFloat?
     }
 
     // MARK: - Tuning constants
@@ -224,7 +233,12 @@ enum ChompRenderer {
         let scale = max(1, state.strokeWidth)
         let dot = pelletDiameter * scale
         let interval = pelletInterval * scale
-        let lag = faceLag * scale
+        // `faceLagOverride` lets the post-fire eat sequence collapse
+        // the gap between cursor and face progressively so the face
+        // visibly lands on the bonus icon. `max(0, …)` so a caller
+        // accidentally passing a negative value can never wrap into
+        // a giant positive lag.
+        let lag = max(0, state.faceLagOverride ?? (faceLag * scale))
         let radius = faceRadius * scale
         // Pellet fill dims to ~30% alpha when the in-progress
         // gesture has fallen off every rule (`valid == false`),

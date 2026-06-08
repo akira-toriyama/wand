@@ -522,6 +522,51 @@ private final class TrailView: NSView {
     /// Reflected live via `GestureOverlay.applyConfig(_:)`.
     fileprivate var finalHoldDuration: TimeInterval = 0.40
 
+    // MARK: - Chomp post-fire "eat the app icon" sequence
+    //
+    // chomp theme only: when a rule fires, place the target-app icon
+    // one chomp-cell past the trail's snapped end, advance the face
+    // forward over `chompFireAdvanceDuration` to catch up, then fire
+    // the same `onCherryEaten` callback the regular cherry / icon-
+    // pellet pickups use so the arcade-score "+N" floats up from the
+    // icon's position. After the eat moment the icon stops drawing
+    // and the trail continues its normal fade-out.
+    //
+    // All four fields are non-nil ONLY between fire-time and the
+    // matching `_actualReset()`; they're set together in `_reset()`'s
+    // chomp branch and cleared together in `_actualReset()`.
+    fileprivate var chompFireStartedAt: TimeInterval?
+    /// Cursor position (TrailView-local) at the moment the gesture
+    /// fired, AFTER `commitFinalSegment` snapped it onto the
+    /// lastDir axis. Source of truth for the advance animation's
+    /// start point.
+    fileprivate var chompFireSnapStart: CGPoint?
+    /// Where the target-app icon sits — one chomp cell forward of
+    /// `chompFireSnapStart` along `lastDir`. The animation ends with
+    /// the face arriving here.
+    fileprivate var chompFireBonusPos: CGPoint?
+    /// `true` once the face has crossed `chompFireBonusPos` and the
+    /// arcade-score popup has been emitted. Stops the icon rendering
+    /// for the remainder of the hold so it disappears the moment
+    /// Chomp "bites" it.
+    fileprivate var chompFireBonusEaten: Bool = false
+    /// Seconds the bonus icon hangs at `chompFireBonusPos` BEFORE
+    /// the face starts sprinting toward it. Without a beat here the
+    /// icon flashes in and gets eaten in the same eye-blink, so the
+    /// user only registers the score popup — never the icon itself.
+    /// 0.18 s is roughly two frames at human-noticeable resolution.
+    fileprivate static let chompFirePreAdvanceDuration: TimeInterval = 0.18
+    /// Seconds it takes the face to advance from `chompFireSnapStart`
+    /// to `chompFireBonusPos` AFTER the pre-advance beat. Slower than
+    /// the original 0.22 s — the deliberate glide reads as Pac-Man
+    /// closing in on the pellet rather than a snap-eat.
+    fileprivate static let chompFireAdvanceDuration: TimeInterval = 0.42
+    /// Total post-fire hold under chomp. Reserves time AFTER the eat
+    /// moment so the arcade-score popup gets a beat to register
+    /// before the trail fades out underneath it. Sized as
+    /// pre-advance + advance + ~0.5 s tail.
+    fileprivate static let chompFireHoldDuration: TimeInterval = 1.10
+
     /// Behind-window vibrant blur, masked to the union of all current
     /// card + badge rounded rects so blur only appears where the HUD
     /// actually is — the rest of the overlay window stays fully
@@ -703,14 +748,60 @@ private final class TrailView: NSView {
         // skipped when nothing fired (immediate clear, as before).
         if firedThisStroke && !holdingFinal && finalHoldDuration > 0 {
             commitFinalSegment()
+            // Chomp eat sequence: stage the bonus-icon target one
+            // chomp cell forward in `lastDir`. The draw loop reads
+            // these fields each frame to interpolate the face's
+            // advance cursor and to draw the icon at the destination
+            // until it gets "eaten". `originIcon` stays alive across
+            // this branch (every other theme nils it out below) so
+            // the icon has something to render.
+            let runFireEat = chomp != nil
+                && originIcon != nil
+                && lastDir != nil
+                && cursor != nil
+            if runFireEat,
+               let snapStart = cursor,
+               let dir = lastDir
+            {
+                // Spacing matches `ChompRenderer.pelletInterval`
+                // (14pt) scaled by the same `strokeWidth`
+                // multiplier the renderer uses, so the bonus pellet
+                // lands exactly where the next chomp pellet would
+                // have been on a longer stroke. Slight extra (1.4×)
+                // gives the face room to visibly traverse instead
+                // of snapping onto the icon in a single frame.
+                let cellStep: CGFloat = 14.0 * strokeWidth * 1.4
+                let dx: CGFloat
+                let dy: CGFloat
+                switch dir {
+                case .left:  dx = -cellStep; dy = 0
+                case .right: dx =  cellStep; dy = 0
+                case .up:    dx = 0; dy =  cellStep
+                case .down:  dx = 0; dy = -cellStep
+                }
+                chompFireSnapStart = snapStart
+                chompFireBonusPos = CGPoint(x: snapStart.x + dx,
+                                             y: snapStart.y + dy)
+                chompFireStartedAt = CACurrentMediaTime()
+                chompFireBonusEaten = false
+            }
             hint = nil
-            originIcon = nil
+            // Keep originIcon alive across the chomp eat sequence;
+            // clear it for every other theme so the historical
+            // hold-then-fade path is unchanged.
+            if !runFireEat { originIcon = nil }
             badgeAppearedAt = nil
             cardLayouts.removeAll()
             badgeLayout = nil
             holdingFinal = true
             finalizeStartedAt = CACurrentMediaTime()
-            DispatchQueue.main.asyncAfter(deadline: .now() + finalHoldDuration) {
+            // Chomp's eat sequence needs longer than the historical
+            // 0.40 s hold — the face has to advance, the popup needs
+            // a beat to register, and only then does the trail fade.
+            let holdSec = runFireEat
+                ? Self.chompFireHoldDuration
+                : finalHoldDuration
+            DispatchQueue.main.asyncAfter(deadline: .now() + holdSec) {
                 [weak self] in
                 guard let self = self, self.holdingFinal else { return }
                 self._actualReset()
@@ -761,6 +852,10 @@ private final class TrailView: NSView {
         gameOverStartedAt = nil
         cherryFlashStartedAt = nil
         prevFaceArcLength = 0
+        chompFireStartedAt = nil
+        chompFireSnapStart = nil
+        chompFireBonusPos = nil
+        chompFireBonusEaten = false
         // Re-roll the stroke seed so the NEXT stroke's `splatoon`-
         // mode trail picks a different team colour. The seed is also
         // ignored by static / rainbow / neon modes (they read time
@@ -821,12 +916,20 @@ private final class TrailView: NSView {
 
         // While holding the post-fire snapped polyline, fade the trail
         // out over the last third of the hold so it doesn't pop off.
+        // Chomp's eat sequence overrides `finalHoldDuration` (0.40 s
+        // default) with the longer `chompFireHoldDuration` (0.85 s);
+        // the fade timing has to track THAT, otherwise the trail goes
+        // transparent at 0.40 s — well before the eat animation, the
+        // bonus-icon overlay, and the arcade-score popup are done.
         var alpha: CGFloat = 1.0
         if holdingFinal, let t0 = finalizeStartedAt {
             let elapsed = CACurrentMediaTime() - t0
-            let fadeStart = finalHoldDuration * 0.66
+            let totalHold = chompFireStartedAt != nil
+                ? Self.chompFireHoldDuration
+                : finalHoldDuration
+            let fadeStart = totalHold * 0.66
             if elapsed > fadeStart {
-                let p = (elapsed - fadeStart) / (finalHoldDuration - fadeStart)
+                let p = (elapsed - fadeStart) / (totalHold - fadeStart)
                 alpha = max(0.0, 1.0 - CGFloat(p))
             }
         }
@@ -881,17 +984,102 @@ private final class TrailView: NSView {
                     cherryFlashStartedAt = nil
                 }
             }
+            // Chomp post-fire eat sequence: interpolate the cursor
+            // forward from `chompFireSnapStart` to `chompFireBonusPos`
+            // over `chompFireAdvanceDuration`. The polyline ChompRenderer
+            // walks lengthens accordingly, so the face visibly lurches
+            // forward toward the bonus icon. The icon itself is drawn
+            // separately below the renderer call so it sits on top of
+            // the trail until the eat moment.
+            //
+            // The historical `faceLag * strokeWidth` (~90 × scale, so
+            // 270 pt at chomp `.m`) parks the face well behind the
+            // cursor during a live stroke — fine for the chase feel,
+            // but it means a bare cursor advance leaves the face
+            // stranded at the last corner. We ramp `faceLagOverride`
+            // from the full lag down to zero alongside the cursor
+            // advance so the face glides forward to MEET the icon at
+            // the trail tip on the final frame.
+            //
+            // Only the chomp branch of `_reset()` populates these
+            // fields — every other theme keeps them nil and falls
+            // through to the historical `cursor` + default lag.
+            var drawCursor = cursor
+            var faceLagOverride: CGFloat? = nil
+            if let start = chompFireSnapStart,
+               let bonus = chompFireBonusPos,
+               let fireT = chompFireStartedAt
+            {
+                let elapsed = CACurrentMediaTime() - fireT
+                // Two-phase timing: first the icon hangs in place
+                // (`chompFirePreAdvanceDuration`) so the user
+                // actually SEES it; then the face glides forward
+                // over `chompFireAdvanceDuration` to the bonus.
+                // Without the hang, the icon flashes in and out in
+                // a single eye-blink and only the score popup
+                // registers.
+                let advanceElapsed = elapsed
+                    - Self.chompFirePreAdvanceDuration
+                let rawProgress = advanceElapsed
+                    / Self.chompFireAdvanceDuration
+                let progress = min(max(rawProgress, 0), 1.0)
+                // Ease-out cubic on the advance — face sets off fast
+                // and decelerates onto the icon, reading as a
+                // deliberate "bite" rather than a constant glide.
+                let eased = 1 - pow(1 - CGFloat(progress), 3)
+                drawCursor = CGPoint(
+                    x: start.x + (bonus.x - start.x) * eased,
+                    y: start.y + (bonus.y - start.y) * eased)
+                // Collapse the lag in lock-step with the advance so
+                // the face arrives at the cursor (= bonus) on the
+                // final frame. Constant `lagBase` rather than reading
+                // ChompRenderer's static is fine — both come from the
+                // same `90 * scale` formula and the renderer caps the
+                // override at `>= 0` anyway.
+                let lagBase: CGFloat = 90 * strokeWidth
+                faceLagOverride = lagBase * (1.0 - eased)
+                if progress >= 1.0 && !chompFireBonusEaten {
+                    chompFireBonusEaten = true
+                    // Same beat the cherry / icon-pellet pickups
+                    // use: rainbow corridor flash + arcade-score
+                    // popup floating up from the bonus position.
+                    // Bypassing ChompRenderer's eat detection
+                    // (which only triggers on hash-banded pellets)
+                    // is intentional — the bonus icon is a one-off
+                    // forced pellet, not part of the renderer's
+                    // pellet stream.
+                    cherryFlashStartedAt = CACurrentMediaTime()
+                    let cocoaGlobal = CGPoint(
+                        x: bonus.x + originOffset.x,
+                        y: bonus.y + originOffset.y)
+                    onCherryEatenGlobal?(cocoaGlobal)
+                    kickExitAnimationTick()
+                }
+            }
+            // Keep the chomp cycle alive across the WHOLE post-fire
+            // hold under chomp — through the advance to the bonus
+            // icon AND the idle beat after the bite while the
+            // arcade-score popup floats up. The historical wide-open
+            // freeze (`isFinalHold = true` during `holdingFinal`)
+            // would lock the mouth as soon as the rule fires; the
+            // chomp theme reads better with Pac-Man continuing to
+            // chomp in place, like it's still hungry for the next
+            // pellet. Non-chomp-fire branches fall back to the
+            // historical freeze.
+            let faceFinalHold = chompFireStartedAt != nil
+                ? false
+                : holdingFinal
             let newFaceArc = ChompRenderer.draw(
                 state: ChompRenderer.State(
                     origin: origin,
-                    cursor: cursor,
+                    cursor: drawCursor,
                     corners: corners,
                     rawTrail: rawTrail,
                     lastDir: lastDir,
                     straightenOnTurn: straightenOnTurn,
                     strokeWidth: strokeWidth,
                     valid: valid,
-                    isFinalHold: holdingFinal,
+                    isFinalHold: faceFinalHold,
                     previousFaceArcLength: prevFaceArcLength,
                     onCherryEaten: { [weak self] cherryPt in
                         guard let self = self else { return }
@@ -906,9 +1094,26 @@ private final class TrailView: NSView {
                             y: cherryPt.y + self.originOffset.y)
                         self.onCherryEatenGlobal?(cocoaGlobal)
                     },
-                    originIcon: originIcon),
+                    originIcon: originIcon,
+                    faceLagOverride: faceLagOverride),
                 color: color, outline: chompOutline)
             prevFaceArcLength = newFaceArc
+            // Bonus icon overlay — drawn after the trail/face so it
+            // sits visually on top of the corridor until Chomp eats
+            // it (`chompFireBonusEaten` flips at the eat moment and
+            // the icon stops drawing). Sized at ~1.5 chomp pellets so
+            // it reads as an arcade pickup tile, not a giant overlay.
+            if let bonus = chompFireBonusPos, !chompFireBonusEaten,
+               let icon = originIcon
+            {
+                let iconSize = 14.0 * strokeWidth * 1.5
+                let rect = NSRect(x: bonus.x - iconSize / 2,
+                                   y: bonus.y - iconSize / 2,
+                                   width: iconSize, height: iconSize)
+                icon.draw(in: rect, from: .zero,
+                          operation: .sourceOver, fraction: 1.0,
+                          respectFlipped: true, hints: nil)
+            }
             drawNoMatchBannerIfNeeded(cursor: cursor)
             NSGraphicsContext.restoreGraphicsState()
             return
