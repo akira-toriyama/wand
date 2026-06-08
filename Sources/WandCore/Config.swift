@@ -274,11 +274,13 @@ public struct WandConfig: Sendable {
             cd, section: "cast.overlay.cards")
         let cardsFontSize = clampInt(
             cd, key: "font-size", default: 13, lo: 8, hi: 32)
+        let cardsFiresAppIcon = cd.bool("fires-app-icon", true)
         let cards = GestureOverlayCardsSpec(
             fire: cardsFire, cancel: cardsCancel,
             armed: cardsArmed,
             linePets: cardsLinePets,
-            fontSize: cardsFontSize)
+            fontSize: cardsFontSize,
+            firesAppIcon: cardsFiresAppIcon)
 
         // [cast.overlay.no-match]
         let nm = doc.tables["cast.overlay.no-match"] ?? [:]

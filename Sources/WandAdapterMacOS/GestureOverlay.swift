@@ -154,6 +154,7 @@ public final class GestureOverlay {
         view.effectArmed = ov.cards.armed
         view.cardLinePets = ov.cards.linePets
         view.cardFontSize = CGFloat(ov.cards.fontSize)
+        view.firesAppIcon = ov.cards.firesAppIcon
         view.noMatchBanner = ov.noMatch.kind
         // Card colours come exclusively from the theme palette.
         // Empty palette entries fall back to the hard-coded defaults,
@@ -289,6 +290,13 @@ private final class TrailView: NSView {
     /// the ghost chasing chomp. Empty array = no decoration.
     /// Theme-agnostic — silhouettes carry their own colour.
     var cardLinePets: [LinePet] = []
+    /// `[cast.overlay.cards].fires-app-icon` — prepend the target-
+    /// app icon to the firing card so the "this fires against THIS
+    /// app" cue lives on the firing surface, not just the origin
+    /// badge. Only the firing card uses it; candidate cards keep
+    /// their `arrow → icon → name` layout. Falls through to the
+    /// historical layout when no app icon is resolved.
+    var firesAppIcon: Bool = true
     /// `[cast.overlay.no-match].kind` — banner shown at the cursor
     /// while the in-progress stroke is off every reachable rule.
     /// Decoupled from `[cast].theme` so the GAME OVER cue can pair
@@ -1740,9 +1748,17 @@ private final class TrailView: NSView {
                     text: s, fill: nil))
             }
             if !fires.isEmpty {
+                // The firing card optionally leads with the
+                // cursor-anchored app icon. Falls back to the plain
+                // layout when the icon can't be resolved (Desktop,
+                // menu bar — `originIcon` is nil) so the row stays
+                // flush against the rule icon / name.
+                let firingLeadingIcon: NSImage? =
+                    firesAppIcon ? originIcon : nil
                 let s = cardText(fires,
                                   textMode: cardFiresTextMode
-                                    ?? cardTextMode)
+                                    ?? cardTextMode,
+                                  leadingAppIcon: firingLeadingIcon)
                 let size = cardSize(s)
                 // Fires card fill: accent on its own over blur (alpha
                 // 0.5 lets the frost show through). Without blur the
@@ -2086,8 +2102,16 @@ private final class TrailView: NSView {
     /// past the widest one in this card); name x positions can differ
     /// per row when iconed and iconless rows are mixed, the
     /// deliberate trade-off for tight per-row packing.
+    ///
+    /// `leadingAppIcon` (firing card only) prepends an app-icon
+    /// column at x=0, shifting every subsequent column right by one
+    /// icon's worth. Passing `nil` is the historical layout — the
+    /// firing card just leads with its rule icon (or name, if
+    /// iconless). Candidate cards always pass `nil`; only the firing
+    /// card surfaces the cursor-anchored target's identity.
     fileprivate func cardText(_ rows: [GestureHint.Row],
-                               textMode: TrailColorMode) -> NSAttributedString {
+                               textMode: TrailColorMode,
+                               leadingAppIcon: NSImage? = nil) -> NSAttributedString {
         let arrowFont = Self.mono(cardFontSize + 1, .semibold)
         let nameFont = Self.mono(cardFontSize, .regular)
 
@@ -2132,7 +2156,14 @@ private final class TrailView: NSView {
                                          pointSize: iconBoxSize,
                                          tintColor: iconTint)
         }
-        let arrowColEnd: CGFloat = arrowMax > 0 ? arrowMax + 10 : 0
+        // Shift the whole column structure right by an icon's width
+        // when a leading app icon is present. With `nil` the offset
+        // is zero — every other code path below collapses cleanly to
+        // the original layout.
+        let hasLeading = leadingAppIcon != nil
+        let appIconColEnd: CGFloat = hasLeading ? iconBoxSize + 6 : 0
+        let arrowColEnd: CGFloat = appIconColEnd
+            + (arrowMax > 0 ? arrowMax + 10 : 0)
         let iconColEnd: CGFloat = arrowColEnd + iconBoxSize + 6
 
         let s = NSMutableAttributedString()
@@ -2141,19 +2172,38 @@ private final class TrailView: NSView {
             let lineStart = s.length
             let hasIcon = iconImages[i] != nil
 
+            // Leading app icon — sits at x=0, before everything
+            // else. Drawn per row so it aligns under the same
+            // column when the firing card carries multiple rules;
+            // in practice the firing card almost always has a
+            // single row, so the duplication is cheap.
+            if let appIcon = leadingAppIcon {
+                let att = NSTextAttachment()
+                att.image = appIcon
+                att.bounds = CGRect(x: 0, y: iconYOffset,
+                                     width: iconBoxSize,
+                                     height: iconBoxSize)
+                s.append(NSAttributedString(attachment: att))
+            }
+
             if !r.suffix.isEmpty {
                 // Arrow shares the icon's `labelColor` tint — same
                 // visual weight as the SF Symbol next to it, instead
                 // of inheriting the theme's text colour. Keeps the
                 // glyphs reading as a single "this is a direction +
                 // its icon" cue rather than two competing accents.
+                if hasLeading {
+                    s.append(NSAttributedString(string: "\t"))
+                }
                 s.append(NSAttributedString(string: r.suffix, attributes: [
                     .font: arrowFont, .foregroundColor: iconTint]))
             }
             if hasIcon {
-                // Tab into the icon column only when an arrow
-                // precedes it; firing card icons go at x=0 directly.
-                if arrowMax > 0 {
+                // Tab into the icon column only when something
+                // precedes it (arrow or leading app icon); a
+                // firing-card row with neither places its icon at
+                // x=0 directly.
+                if arrowMax > 0 || hasLeading {
                     s.append(NSAttributedString(string: "\t"))
                 }
                 let att = NSTextAttachment()
@@ -2163,9 +2213,10 @@ private final class TrailView: NSView {
                                      height: iconBoxSize)
                 s.append(NSAttributedString(attachment: att))
             }
-            // Tab into the name column — skipped only when neither
-            // arrow nor icon precedes the name (iconless firing row).
-            let needsNameTab = arrowMax > 0 || hasIcon
+            // Tab into the name column — skipped only when nothing
+            // precedes the name (iconless firing row with no leading
+            // app icon).
+            let needsNameTab = arrowMax > 0 || hasIcon || hasLeading
             if needsNameTab {
                 s.append(NSAttributedString(string: "\t"))
             }
@@ -2178,12 +2229,27 @@ private final class TrailView: NSView {
             let para = NSMutableParagraphStyle()
             para.lineSpacing = 4
             var stops: [NSTextTab] = []
+            if hasLeading {
+                stops.append(NSTextTab(textAlignment: .left,
+                                        location: appIconColEnd))
+            }
             if arrowMax > 0 {
                 stops.append(NSTextTab(textAlignment: .left,
                                         location: arrowColEnd))
             }
             if hasIcon {
-                let nameStop = arrowMax > 0 ? iconColEnd : iconBoxSize + 6
+                // Without an arrow column the icon stop lives at the
+                // first available slot — right after the leading app
+                // icon when one is present, or at x=`iconBoxSize+6`
+                // for the historical firing-card-with-icon case.
+                let nameStop: CGFloat
+                if arrowMax > 0 {
+                    nameStop = iconColEnd
+                } else if hasLeading {
+                    nameStop = appIconColEnd + iconBoxSize + 6
+                } else {
+                    nameStop = iconBoxSize + 6
+                }
                 stops.append(NSTextTab(textAlignment: .left,
                                         location: nameStop))
             }
