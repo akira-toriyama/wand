@@ -2112,13 +2112,29 @@ private final class TrailView: NSView {
     fileprivate func cardText(_ rows: [GestureHint.Row],
                                textMode: TrailColorMode,
                                leadingAppIcon: NSImage? = nil) -> NSAttributedString {
+        // Suffix renders in two styles. The FIRST arrow (`nextArrow*`)
+        // is the direction the user has to draw next — boosted in
+        // size + weight and tinted with the trail's match colour so
+        // it stands out as a single, unambiguous cue. The remaining
+        // arrows stay on the historical `arrowFont` + `labelColor`,
+        // reading as "still to come" without competing for attention.
         let arrowFont = Self.mono(cardFontSize + 1, .semibold)
+        let nextArrowFont = Self.mono(cardFontSize + 3, .bold)
         let nameFont = Self.mono(cardFontSize, .regular)
 
+        // Mixed-font measurement: first char on `nextArrowFont`, the
+        // rest on `arrowFont`. Without this the tab stop reserves the
+        // old (smaller) width and the boosted glyph either overflows
+        // its column or visually clashes with the rule icon.
         var arrowMax: CGFloat = 0
-        for r in rows {
-            let w = (r.suffix as NSString).size(withAttributes: [.font: arrowFont]).width
-            arrowMax = max(arrowMax, w)
+        for r in rows where !r.suffix.isEmpty {
+            let firstChar = String(r.suffix.prefix(1))
+            let restChars = String(r.suffix.dropFirst())
+            let w1 = (firstChar as NSString)
+                .size(withAttributes: [.font: nextArrowFont]).width
+            let w2 = (restChars as NSString)
+                .size(withAttributes: [.font: arrowFont]).width
+            arrowMax = max(arrowMax, w1 + w2)
         }
 
         // Resolve current text colour from the supplied mode —
@@ -2192,11 +2208,26 @@ private final class TrailView: NSView {
                 // of inheriting the theme's text colour. Keeps the
                 // glyphs reading as a single "this is a direction +
                 // its icon" cue rather than two competing accents.
+                // The FIRST arrow is the special case: it's the next
+                // direction the user has to draw, so we boost it to
+                // `nextArrowFont` + trail-match colour to lift it out
+                // of the line.
                 if hasLeading {
                     s.append(NSAttributedString(string: "\t"))
                 }
-                s.append(NSAttributedString(string: r.suffix, attributes: [
-                    .font: arrowFont, .foregroundColor: iconTint]))
+                let nextArrowColor = matchMode.currentColor(
+                    at: CACurrentMediaTime(),
+                    strokeSeed: strokeSeed,
+                    cyclePeriod: colorCyclePeriod)
+                let firstChar = String(r.suffix.prefix(1))
+                let restChars = String(r.suffix.dropFirst())
+                s.append(NSAttributedString(string: firstChar, attributes: [
+                    .font: nextArrowFont,
+                    .foregroundColor: nextArrowColor]))
+                if !restChars.isEmpty {
+                    s.append(NSAttributedString(string: restChars, attributes: [
+                        .font: arrowFont, .foregroundColor: iconTint]))
+                }
             }
             if hasIcon {
                 // Tab into the icon column only when something
