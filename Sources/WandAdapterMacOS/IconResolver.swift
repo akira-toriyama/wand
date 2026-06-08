@@ -75,6 +75,24 @@ enum IconResolver {
             return img
         }
 
+        if IconSetCache.matches(spec) {
+            // External icon-set hit (lucide / phosphor / tabler /
+            // heroicons). Cached hits render immediately; misses
+            // fall through to a generic SF Symbol placeholder and
+            // the calling row kicks the async download. Sized via
+            // `image.size` so the SVG-decoded NSImage matches the
+            // surrounding column's footprint.
+            if let img = IconSetCache.shared.cached(spec: spec) {
+                img.size = NSSize(width: pt, height: pt)
+                return img
+            }
+            let cfg = NSImage.SymbolConfiguration(
+                pointSize: pt, weight: .medium, scale: .large)
+            return NSImage(systemSymbolName: "square.dashed",
+                            accessibilityDescription: nil)?
+                .withSymbolConfiguration(cfg)
+        }
+
         if spec.hasPrefix("favicon:") {
             // Cache hit returns the site icon immediately; misses fall
             // through to the `SF:globe` placeholder below and the
