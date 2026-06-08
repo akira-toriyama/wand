@@ -562,8 +562,11 @@ layout = "list"
 #                black text. Solid black backdrop
 #   "neon"     — electric cyan hover on white rows; deep blue-black
 #                backdrop
-#   "splatoon" — hot-pink hover with a lime outline on dark
-#                charcoal
+#   "splatoon" — Turf-War ink rotation: each hover re-rolls a
+#                random colour from the Splatoon palette (10
+#                saturated hues). Text colour adapts to the
+#                ink's luminance so labels stay legible on
+#                yellow / lime just as well as on sapphire / purple
 #   "mono"     — stark white-on-black; inverted on hover
 #   "vapor"    — synthwave pink hover on Dracula charcoal,
 #                off-white rows

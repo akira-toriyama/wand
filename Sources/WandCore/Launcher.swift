@@ -309,13 +309,15 @@ public enum TomeTheme: String, Sendable, CaseIterable {
                 textColor: "#ffffff",
                 backgroundColor: "#0f0a1f")
         case .splatoon:
-            // Splatoon's per-stroke team-colour rotation isn't a fit
-            // for the menu (which lives across many panel-opens, not
-            // one stroke). Picks the hot-pink/lime canonical pair
-            // statically — same vibe, no flicker.
+            // `"splatoon"` is the dynamic token — the adapter side
+            // re-rolls a random ink from `NSColorParse.splatoonInks`
+            // on every hover so the panel reads as the Turf-War
+            // colour rotation (matching the cast surface's per-
+            // stroke roll, just keyed off the menu's natural
+            // event = mouse-enter on a row).
             return TomeThemePalette(
-                accentColor: "#ff3399",
-                accentTextColor: "#ffffff",
+                accentColor: "splatoon",
+                accentTextColor: "",   // adapter picks black/white per ink luminance
                 textColor: "#ffffff",
                 backgroundColor: "#1a1a1a")
         case .mono:
