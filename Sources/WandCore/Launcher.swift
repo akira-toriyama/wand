@@ -310,11 +310,13 @@ public enum TomeTheme: String, Sendable, CaseIterable {
                 backgroundColor: "#0f0a1f")
         case .splatoon:
             // `"splatoon"` is the dynamic token — the adapter side
-            // re-rolls a random ink from `NSColorParse.splatoonInks`
-            // on every hover so the panel reads as the Turf-War
-            // colour rotation (matching the cast surface's per-
-            // stroke roll, just keyed off the menu's natural
-            // event = mouse-enter on a row).
+            // rolls a random ink from `NSColorParse.splatoonInks`
+            // ONCE per panel-open lifetime, so every hover inside
+            // the same session reads as the same Turf-War team
+            // colour. Dismissing and re-opening the menu re-rolls
+            // (matches "発火中は変えない、閉じたら新しく"). Cast still
+            // re-rolls per stroke; the menu's natural beat is the
+            // open / close, not mouse-enter.
             return TomeThemePalette(
                 accentColor: "splatoon",
                 accentTextColor: "",   // adapter picks black/white per ink luminance

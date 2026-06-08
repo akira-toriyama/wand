@@ -93,32 +93,59 @@ struct TomeColors {
     /// that need a saturated backdrop the blur can't deliver
     /// (chomp / terminal black, mono OLED, etc).
     let background: NSColor?
-    /// When `true`, the hover fill ignores `accent` and re-rolls a
-    /// random ink from `NSColorParse.splatoonInks` on every mouse-
-    /// enter. Set when the palette's `accentColor` is the special
-    /// `"splatoon"` token — gives the menu the same Turf-War
-    /// colour rotation the cast trail uses per-stroke, keyed off
-    /// the panel's natural beat (mouse-entering a row).
-    let accentRandomSplatoon: Bool
 
     static func resolve(_ palette: TomeThemePalette) -> TomeColors {
         let pick: (String) -> NSColor? = { s in
             s.isEmpty ? nil : NSColorParse.nsColor(s)
         }
-        let randomSplatoon = palette.accentColor
+        // `"splatoon"` is the dynamic token — pick a random Turf-
+        // War ink ONCE per panel lifetime. `resolve(...)` runs in
+        // `LauncherPanel.present(...)`, which fires once per
+        // panel-open; the colour stays stable across every hover
+        // inside that session and only re-rolls when the user
+        // dismisses and re-opens the menu. Matches "発火中は変えない、
+        // 閉じたら新しく."
+        let isSplatoonAccent = palette.accentColor
             .trimmingCharacters(in: .whitespaces)
             .lowercased() == "splatoon"
+        let accent: NSColor? = isSplatoonAccent
+            ? NSColorParse.randomSplatoonInk()
+            : pick(palette.accentColor)
+        // Adaptive text for the random-ink case: when the palette
+        // leaves `accentTextColor` empty AND we just rolled an ink,
+        // pick black / white off the ink's luma so labels stay
+        // legible on bright Splatoon hues (yellow / lime). Honour an
+        // explicit setting otherwise.
+        let accentText: NSColor?
+        if let ink = accent, isSplatoonAccent,
+           palette.accentTextColor.isEmpty {
+            accentText = legibleText(on: ink)
+        } else {
+            accentText = pick(palette.accentTextColor)
+        }
         return TomeColors(
-            accent: pick(palette.accentColor),
-            accentText: pick(palette.accentTextColor),
+            accent: accent,
+            accentText: accentText,
             text: pick(palette.textColor),
-            background: pick(palette.backgroundColor),
-            accentRandomSplatoon: randomSplatoon)
+            background: pick(palette.backgroundColor))
     }
 
     static let none = TomeColors(accent: nil, accentText: nil,
-                                  text: nil, background: nil,
-                                  accentRandomSplatoon: false)
+                                  text: nil, background: nil)
+
+    /// Pick black or white text against an arbitrary fill so the
+    /// label stays legible. BT.601 luma gate at 0.55 — the Splatoon
+    /// ink palette has two brights (yellow / lime) where white-on-
+    /// white fails and a 0.5 threshold isn't enough headroom; 0.55
+    /// pushes those two onto black text and leaves the rest on
+    /// white.
+    private static func legibleText(on fill: NSColor) -> NSColor {
+        let c = fill.usingColorSpace(.sRGB) ?? fill
+        let luma = 0.299 * c.redComponent
+                 + 0.587 * c.greenComponent
+                 + 0.114 * c.blueComponent
+        return luma > 0.55 ? .black : .white
+    }
 }
 
 // MARK: - Public entry
@@ -1597,20 +1624,6 @@ private final class ItemRow: NSView {
     private static let idleCornerRadius: CGFloat = 4
     private static let hoverCornerRadius: CGFloat = 5
 
-    /// Pick black or white text against an arbitrary fill so the
-    /// label stays legible. BT.601 luma gate at 0.55 — the Splatoon
-    /// ink palette has two brights (yellow / lime) where white-on-
-    /// white fails and a 0.5 threshold isn't enough headroom; 0.55
-    /// pushes those two onto black text and leaves the rest on
-    /// white.
-    private static func legibleText(on fill: NSColor) -> NSColor {
-        let c = fill.usingColorSpace(.sRGB) ?? fill
-        let luma = 0.299 * c.redComponent
-                 + 0.587 * c.greenComponent
-                 + 0.114 * c.blueComponent
-        return luma > 0.55 ? .black : .white
-    }
-
     private let rawLabel: String
 
     /// Friendly name for `/tmp/wand.log`. In toolbar mode the label
@@ -1883,22 +1896,13 @@ private final class ItemRow: NSView {
     private func applyHoverStyle() {
         // Fully-opaque accent so the hovered row reads as THE
         // selection target, with no risk of being washed out by the
-        // vibrancy underneath. Under the splatoon theme the accent
-        // re-rolls per hover from the Turf-War ink palette; text
-        // colour adapts to the ink's luminance so labels stay
-        // legible against the random pick (white-on-yellow doesn't
-        // happen).
-        let accent: NSColor
-        let accentText: NSColor
-        if themeColors.accentRandomSplatoon {
-            let ink = NSColorParse.randomSplatoonInk()
-            accent = ink
-            accentText = themeColors.accentText
-                ?? Self.legibleText(on: ink)
-        } else {
-            accent = themeColors.accent ?? .controlAccentColor
-            accentText = themeColors.accentText ?? .white
-        }
+        // vibrancy underneath. Under the splatoon theme `accent`
+        // was already rolled once at panel-open (see
+        // `TomeColors.resolve`) so every row inside the same panel
+        // shares the same Turf-War ink — the colour only changes
+        // on the NEXT panel-open.
+        let accent = themeColors.accent ?? .controlAccentColor
+        let accentText = themeColors.accentText ?? .white
         layer?.backgroundColor = accent.cgColor
         layer?.cornerRadius = Self.hoverCornerRadius
         titleField.textColor = accentText
