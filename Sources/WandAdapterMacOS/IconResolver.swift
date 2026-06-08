@@ -82,12 +82,29 @@ enum IconResolver {
             // the calling row kicks the async download. Sized via
             // `image.size` so the SVG-decoded NSImage matches the
             // surrounding column's footprint.
+            //
+            // `tintColor` path: the cached SVG carries `isTemplate =
+            // true` so AppKit can auto-tint it inside an NSImageView
+            // (tome panel). NSTextAttachment doesn't apply that auto-
+            // tint, so for callers that hand us a live colour (cast
+            // HUD card text) we bake the tint into a raster copy.
+            // Without this the icon would render fully transparent
+            // inside the card — phantom whitespace where a glyph
+            // should be.
             if let img = IconSetCache.shared.cached(spec: spec) {
                 img.size = NSSize(width: pt, height: pt)
+                if let tintColor = tintColor {
+                    return tintedRaster(img, pointSize: pt,
+                                          color: tintColor)
+                }
                 return img
             }
-            let cfg = NSImage.SymbolConfiguration(
+            var cfg = NSImage.SymbolConfiguration(
                 pointSize: pt, weight: .medium, scale: .large)
+            if let tintColor = tintColor {
+                cfg = cfg.applying(
+                    NSImage.SymbolConfiguration(paletteColors: [tintColor]))
+            }
             return NSImage(systemSymbolName: "square.dashed",
                             accessibilityDescription: nil)?
                 .withSymbolConfiguration(cfg)
@@ -99,6 +116,12 @@ enum IconResolver {
             // calling row kicks the async fetch. Sizing matches the
             // surrounding column so the rendered NSImage lands at the
             // same footprint as an `app:` or SF Symbol icon.
+            //
+            // Real favicons are full-colour PNGs (no `isTemplate`),
+            // so they render fine through NSTextAttachment without
+            // any tint baking. Only the SF Symbol placeholder needs
+            // the same `paletteColors` trick the `SF:` branch uses
+            // to stay visible in a card.
             if let host = FaviconCache.host(from: spec),
                let img = FaviconCache.shared.cached(host: host) {
                 img.size = NSSize(width: pt, height: pt)
@@ -108,8 +131,12 @@ enum IconResolver {
             // when the fetch fails. Built here (rather than via the
             // SF: branch) so the favicon-specific resize is applied
             // consistently with the eventual real favicon.
-            let cfg = NSImage.SymbolConfiguration(
+            var cfg = NSImage.SymbolConfiguration(
                 pointSize: pt, weight: .medium, scale: .large)
+            if let tintColor = tintColor {
+                cfg = cfg.applying(
+                    NSImage.SymbolConfiguration(paletteColors: [tintColor]))
+            }
             return NSImage(systemSymbolName: "globe",
                             accessibilityDescription: nil)?
                 .withSymbolConfiguration(cfg)
@@ -181,6 +208,58 @@ enum IconResolver {
         }
 
         return textIcon(spec, pointSize: pt, chip: iconChip)
+    }
+
+    /// Bake `color` into a template raster image (lucide / phosphor /
+    /// tabler / heroicons — anything `IconSetCache` returns flagged
+    /// `isTemplate = true`). Returns a fresh, non-template NSImage
+    /// sized to the requested pt box.
+    ///
+    /// Needed for callers that place the icon inside an
+    /// `NSTextAttachment` (cast HUD card text): AppKit's auto-tint
+    /// path only applies to template images drawn through an
+    /// NSImageView / NSButton / NSMenuItem, not through an attachment,
+    /// so without this step the icon renders fully transparent and
+    /// the column collapses to a phantom whitespace.
+    ///
+    /// Tome panel callers don't hit this path — they pass
+    /// `tintColor == nil` and let the row's NSImageView auto-tint the
+    /// template image based on hover state, which is the correct
+    /// behaviour there (the icon needs to flip colour on hover).
+    private static func tintedRaster(_ template: NSImage,
+                                      pointSize pt: CGFloat,
+                                      color: NSColor) -> NSImage {
+        let size = NSSize(width: pt, height: pt)
+        // Resolve dynamic colours (e.g. `NSColor.labelColor`) against
+        // the user's effective appearance BEFORE we step into
+        // `lockFocus`. Inside a fresh NSImage's drawing context
+        // `NSAppearance.current` is unset and the daemon — being
+        // `LSUIElement` without a key window — defaults to the system
+        // (usually light) appearance for colour resolution. The
+        // result is an almost-black tint baked into the raster, which
+        // then disappears against the cast card's dark backdrop. The
+        // cast HUD overlay window already runs in `darkAqua` so its
+        // glyphs and labels look the same regardless of system
+        // appearance; matching that here keeps the icon visible
+        // alongside them.
+        let appearance = NSAppearance(named: .darkAqua)
+            ?? NSApp.effectiveAppearance
+        var resolved: NSColor = color
+        appearance.performAsCurrentDrawingAppearance {
+            resolved = color.usingColorSpace(.deviceRGB) ?? color
+        }
+        let baked = NSImage(size: size)
+        baked.lockFocus()
+        let rect = NSRect(origin: .zero, size: size)
+        template.size = size
+        template.draw(in: rect,
+                      from: .zero,
+                      operation: .sourceOver,
+                      fraction: 1.0)
+        resolved.set()
+        rect.fill(using: .sourceAtop)
+        baked.unlockFocus()
+        return baked
     }
 
     private static func resolvePath(_ spec: String) -> String {
