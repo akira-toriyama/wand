@@ -424,15 +424,18 @@ enum WandApp {
             MainActor.assumeIsolated {
                 overlay?.applyConfig(new)
                 FaviconCache.prewarm(from: new)
+                IconSetCache.prewarm(from: new)
             }
         }
         // Boot-time prewarm: kick off background fetches for every
-        // `favicon:<host>` referenced in the current config before
-        // the first panel open. The cache hits are populated by the
-        // time the user middle-clicks, so the SF:globe placeholder
-        // flash collapses to "happens only on stale cache / network
-        // failure".
+        // remote icon referenced in the current config (favicons
+        // and external icon-set entries — lucide / phosphor /
+        // tabler / heroicons) before the first panel open. The
+        // cache hits are populated by the time the user
+        // middle-clicks, so the placeholder flash collapses to
+        // "happens only on stale cache / network failure".
         FaviconCache.prewarm(from: controller.config)
+        IconSetCache.prewarm(from: controller.config)
 
         // Post-fire fire-moment effects — decal (Splatoon-style
         // splatter/blob/scorch/star) AND trail-end burst (particle

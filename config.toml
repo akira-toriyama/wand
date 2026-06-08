@@ -809,6 +809,19 @@ line-pets = []
 #                                  the request goes to Google's
 #                                  s2 endpoint, so the host you
 #                                  reference is visible to Google.
+#   icon = "lucide:<name>"       — Lucide outline icon (e.g.
+#                                  `lucide:trash-2`). Fetched from
+#                                  jsDelivr's npm CDN on first
+#                                  sight, cached under
+#                                  ~/.cache/wand/icon-sets/lucide/.
+#                                  Auto-tints with the row's label
+#                                  colour (template image), so it
+#                                  adapts to light/dark mode.
+#   icon = "phosphor:<name>"     — Phosphor Icons (regular weight,
+#                                  e.g. `phosphor:rocket`). Same
+#                                  CDN-cache flow as `lucide:`.
+#   icon = "tabler:<name>"       — Tabler outline icon. Same flow.
+#   icon = "heroicons:<name>"    — Heroicons 24 px outline. Same flow.
 #   icon = "~/icons/foo.png"     — tilde-expanded path
 #   icon = "icons/foo.png"       — relative to ~/.config/wand/
 #   icon = "/abs/path.png"       — absolute path
