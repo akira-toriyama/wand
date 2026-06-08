@@ -238,7 +238,7 @@ public struct TomeThemePalette: Sendable, Equatable {
     /// `NSVisualEffectView .menu` frosted blur (vibrancy). Non-empty
     /// **replaces** the blur with a solid colour — required for
     /// themes that need a saturated backdrop the blur can't deliver
-    /// (e.g. pac-man's pure black, terminal's editor-black). Use a
+    /// (e.g. chomp's pure black, terminal's editor-black). Use a
     /// fully-opaque hex; alpha-channel suffixes work but read as
     /// "tinted blur" rather than "themed surface".
     public let backgroundColor: String
@@ -266,9 +266,9 @@ public enum TomeTheme: String, Sendable, CaseIterable {
     case splatoon
     case mono
     case vapor
-    /// Pairs with `[cast].theme = "pac-man"` for a coordinated arcade
+    /// Pairs with `[cast].theme = "chomp"` for a coordinated arcade
     /// look across both surfaces.
-    case pacMan = "pac-man"
+    case chomp = "chomp"
     /// Vivid rainbow palette — white text on a deep violet-black
     /// backdrop, hot-rose hover accent. Static palette: the panel
     /// doesn't redraw per-frame. Pair with
@@ -320,8 +320,8 @@ public enum TomeTheme: String, Sendable, CaseIterable {
                 accentTextColor: "#282a36",
                 textColor: "#f8f8f2",
                 backgroundColor: "#282a36")
-        case .pacMan:
-            return PacMan.tomePalette
+        case .chomp:
+            return Chomp.tomePalette
         case .rainbow:
             // Deep violet-black backdrop, white rows, hot-rose hover.
             // Pairs with `[tome.decoration].border = "rainbow"` for the
@@ -403,7 +403,7 @@ public struct LauncherDecorationSpec: Sendable, Equatable {
     /// read as a fringe on the border decoration. Set `true` to
     /// restore the system menu shadow look.
     public let shadow: Bool
-    /// Pac-man "pets" that walk the panel's rounded outline. Default
+    /// Chomp "pets" that walk the panel's rounded outline. Default
     /// `[]` (no pets). Theme-agnostic — each pet's silhouette is
     /// baked in, so they stand alongside any `[tome].theme`. When
     /// more than one is configured they chase each other in array

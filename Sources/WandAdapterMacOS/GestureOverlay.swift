@@ -98,8 +98,8 @@ public final class GestureOverlay {
         view.originIcon = icon
     }
 
-    /// Called when Pac-Man's face crosses a cherry on the trail
-    /// (`[cast].theme = "pac-man"` only). The point is in Cocoa
+    /// Called when Chomp's face crosses a cherry on the trail
+    /// (`[cast].theme = "chomp"` only). The point is in Cocoa
     /// global screen coordinates (Y-up) — same shape
     /// `ArcadeScoreManager.emit(at:)` and the rest of the App-layer
     /// fire-moment effects expect, so the App layer can wire this
@@ -131,13 +131,13 @@ public final class GestureOverlay {
             : TrailColorMode.parse(ov.trail.colorOutline,
                                     fallback: .black)
         view.colorCyclePeriod = TimeInterval(ov.colorCycleMs) / 1000.0
-        // Pac-Man special theme: scale + straighten come from
-        // `[cast.pac-man]`, not from `[cast.overlay.trail]`.
-        // `cfg.pacMan` is `nil` under every other theme — the
+        // Chomp special theme: scale + straighten come from
+        // `[cast.chomp]`, not from `[cast.overlay.trail]`.
+        // `cfg.chomp` is `nil` under every other theme — the
         // historical width / style / straighten path then applies
         // unchanged.
-        view.pacMan = cfg.pacMan
-        if let pm = cfg.pacMan {
+        view.chomp = cfg.chomp
+        if let pm = cfg.chomp {
             view.strokeWidth = pm.size.scale
             view.straightenOnTurn = true
         } else {
@@ -246,12 +246,12 @@ private final class TrailView: NSView {
     /// (`brush` / `splatoon` / …) are reserved for follow-up PRs of #63
     /// and not represented in this enum yet.
     var trailStyle: TrailStyle = .normal
-    /// `[cast.pac-man]` payload. Non-nil flips the whole
-    /// trail render path to `PacManRenderer` (bypassing the
+    /// `[cast.chomp]` payload. Non-nil flips the whole
+    /// trail render path to `ChompRenderer` (bypassing the
     /// `trailStyle` switch entirely) and locks straighten-on-turn.
-    /// `nil` under every theme other than `.pacMan`, so the
+    /// `nil` under every theme other than `.chomp`, so the
     /// historical `trailStyle` switch is the default path.
-    var pacMan: PacManSpec? = nil
+    var chomp: ChompSpec? = nil
     /// When `true` (default), every committed turn snaps the
     /// just-completed segment onto its axis so the trail reads as a
     /// clean orthogonal polyline — the historical hard-coded
@@ -283,10 +283,10 @@ private final class TrailView: NSView {
     /// the tick loop in `kickExitAnimationTick` so the animation
     /// keeps running even when the cursor holds still mid-gesture.
     var effectArmed: ArmedEffect = .off
-    /// Pac-man "pets" walking the firing card's outline. Each entry
+    /// Chomp "pets" walking the firing card's outline. Each entry
     /// is rendered every frame at a position lagging the previous
-    /// one in the array, so listing `["pac-man", "ghost"]` reads as
-    /// the ghost chasing pac-man. Empty array = no decoration.
+    /// one in the array, so listing `["chomp", "ghost"]` reads as
+    /// the ghost chasing chomp. Empty array = no decoration.
     /// Theme-agnostic — silhouettes carry their own colour.
     var cardLinePets: [LinePet] = []
     /// `[cast.overlay.no-match].kind` — banner shown at the cursor
@@ -337,7 +337,7 @@ private final class TrailView: NSView {
     /// live from `[cast].theme`'s palette via
     /// `cardsFiresBorderColor`. Lets a theme reserve one border
     /// colour for the directional state and a different one for
-    /// the firing state — e.g. pac-man: blue maze-wall border on
+    /// the firing state — e.g. chomp: blue maze-wall border on
     /// directional cards, yellow body-matched border on the firing
     /// tile so the blue stays the "approach" signal.
     var cardFiresBorderMode: TrailColorMode? = nil
@@ -396,7 +396,7 @@ private final class TrailView: NSView {
     private var lastDir: Direction?
     fileprivate var valid = true            // current match state of the trail
     /// Wall-time of the moment the trail's match state transitioned
-    /// from `true` to `false`. Used by the pac-man wall-flash effect:
+    /// from `true` to `false`. Used by the chomp wall-flash effect:
     /// for `noMatchFlashDurationMs` after this timestamp the corridor
     /// walls render in red instead of the theme outline colour,
     /// signalling "you've just fallen off every rule". `nil` outside
@@ -406,16 +406,16 @@ private final class TrailView: NSView {
     fileprivate var noMatchFlashStartedAt: TimeInterval?
     fileprivate static let noMatchFlashDurationMs: Double = 200
     /// Wall-time of the most recent cherry-eaten event under the
-    /// pac-man theme. While within `cherryFlashDurationMs` of this
+    /// chomp theme. While within `cherryFlashDurationMs` of this
     /// timestamp, the corridor walls render as a hue-cycling rainbow
     /// instead of the theme outline — the visible "bonus!" beat when
-    /// Pac-Man catches a cherry along the trail. Set by the
-    /// `onCherryEaten` callback wired into `PacManRenderer.draw`,
+    /// Chomp catches a cherry along the trail. Set by the
+    /// `onCherryEaten` callback wired into `ChompRenderer.draw`,
     /// cleared at stroke end.
     fileprivate var cherryFlashStartedAt: TimeInterval?
     fileprivate static let cherryFlashDurationMs: Double = 450
     /// Face's arc-length from the origin on the previous frame.
-    /// Fed back into `PacManRenderer.draw` so cherry-crossing
+    /// Fed back into `ChompRenderer.draw` so cherry-crossing
     /// detection can compare against a stable reference frame.
     /// Reset to 0 at stroke end.
     fileprivate var prevFaceArcLength: CGFloat = 0
@@ -426,7 +426,7 @@ private final class TrailView: NSView {
     /// exact cherry location.
     var onCherryEatenGlobal: ((CGPoint) -> Void)?
     /// Wall-time of the most recent `true` → `false` transition that
-    /// HASN'T been cleared yet. Drives the pac-man "GAME OVER" arcade
+    /// HASN'T been cleared yet. Drives the chomp "GAME OVER" arcade
     /// overlay rendered above the stroke's origin point. Distinct
     /// from `noMatchFlashStartedAt` (a brief 200 ms wall flash):
     /// `gameOverStartedAt` lingers for the rest of the stroke (or
@@ -575,7 +575,7 @@ private final class TrailView: NSView {
         if self.hint == nil && hint != nil {
             badgeAppearedAt = CACurrentMediaTime()
         }
-        // Detect the true → false transition for the pac-man wall
+        // Detect the true → false transition for the chomp wall
         // flash. Re-armed each time so a re-match → no-match
         // sequence flashes again on the second drop. GAME OVER
         // arcade overlay piggybacks on the same transition but
@@ -648,12 +648,12 @@ private final class TrailView: NSView {
         layoutHUD()
         needsDisplay = true
         hudContent.needsDisplay = true
-        // Pac-man's wall-flash animation needs redraws between
+        // Chomp's wall-flash animation needs redraws between
         // mouse samples — the flash starts the instant `valid`
         // flips false (which can happen on a single sample that
         // also doesn't move the cursor any further), so without
         // the ticker the flash window would never get a second
-        // frame. No-op when nothing pac-man-flavoured is active.
+        // frame. No-op when nothing chomp-flavoured is active.
         kickExitAnimationTick()
     }
 
@@ -828,13 +828,13 @@ private final class TrailView: NSView {
             NSGraphicsContext.current?.cgContext.setAlpha(alpha)
         }
 
-        // Pac-Man special theme: skip the `trailStyle` switch
+        // Chomp special theme: skip the `trailStyle` switch
         // entirely and hand off to the dedicated renderer.
-        // Branching here (rather than carrying a `.pacman` case in
+        // Branching here (rather than carrying a `.chomp` case in
         // `TrailStyle`) keeps style-decoration and theme-identity
         // on separate axes — `trailStyle` is "which dash pattern",
-        // `pacMan` is "the whole render shape is locked".
-        if pacMan != nil {
+        // `chomp` is "the whole render shape is locked".
+        if chomp != nil {
             // Wall colour during the no-match flash window: swap
             // the theme outline (arcade-blue) for hot red so the
             // moment the gesture falls off every rule, the
@@ -843,11 +843,11 @@ private final class TrailView: NSView {
             // `noMatchFlashDurationMs` the override expires and
             // the original `outlineColor` (theme outline) flows
             // through again.
-            var pacManOutline = outlineColor
+            var chompOutline = outlineColor
             if let flashStart = noMatchFlashStartedAt {
                 let elapsedMs = (CACurrentMediaTime() - flashStart) * 1000
                 if elapsedMs < Self.noMatchFlashDurationMs {
-                    pacManOutline = NSColor(
+                    chompOutline = NSColor(
                         srgbRed: 1.00, green: 0.10,
                         blue: 0.10, alpha: 1.0)
                 }
@@ -864,7 +864,7 @@ private final class TrailView: NSView {
                     let cycleHz = 6.0   // ~3 full hue cycles in 450 ms
                     let hue = (now * cycleHz)
                         .truncatingRemainder(dividingBy: 1)
-                    pacManOutline = NSColor(
+                    chompOutline = NSColor(
                         hue: CGFloat(hue),
                         saturation: 1.0,
                         brightness: 1.0,
@@ -873,8 +873,8 @@ private final class TrailView: NSView {
                     cherryFlashStartedAt = nil
                 }
             }
-            let newFaceArc = PacManRenderer.draw(
-                state: PacManRenderer.State(
+            let newFaceArc = ChompRenderer.draw(
+                state: ChompRenderer.State(
                     origin: origin,
                     cursor: cursor,
                     corners: corners,
@@ -898,7 +898,7 @@ private final class TrailView: NSView {
                             y: cherryPt.y + self.originOffset.y)
                         self.onCherryEatenGlobal?(cocoaGlobal)
                     }),
-                color: color, outline: pacManOutline)
+                color: color, outline: chompOutline)
             prevFaceArcLength = newFaceArc
             drawNoMatchBannerIfNeeded(cursor: cursor)
             NSGraphicsContext.restoreGraphicsState()
@@ -934,7 +934,7 @@ private final class TrailView: NSView {
     }
 
     /// Shared dispatch for the `[cast.overlay.no-match]` banner —
-    /// pulled out of the pac-man trail branch so every theme can opt
+    /// pulled out of the chomp trail branch so every theme can opt
     /// in. The banner only renders when the in-progress stroke is
     /// currently off every reachable rule (`gameOverStartedAt != nil`,
     /// re-armed on each fresh true→false match transition).
@@ -1014,14 +1014,14 @@ private final class TrailView: NSView {
     /// Arcade "GAME OVER" banner anchored at the assist-card position
     /// (upper-right diagonal off `cursor` by `gap`) so the message
     /// lands where the firing card would have appeared had a rule
-    /// been reachable. Pac-man theme only — called from the pac-man
+    /// been reachable. Chomp theme only — called from the chomp
     /// branch of `draw`, gated on `gameOverStartedAt != nil`.
     ///
     /// First ~140 ms after appearance: scale-in pop (0.7 → 1.0
     /// ease-out cubic) so the message lands with arcade impact. After
     /// the pop, a 2 Hz alpha blink (1.0 ↔ 0.55) sells the classic
     /// arcade "respawn screen" feel. Colour is hot arcade-red on a
-    /// black backdrop with a yellow outline, matching pac-man's
+    /// black backdrop with a yellow outline, matching chomp's
     /// danger palette.
     private func drawGameOverOverlay(cursor: CGPoint,
                                       startedAt: TimeInterval) {
@@ -1188,9 +1188,9 @@ private final class TrailView: NSView {
             : rawTrail
         guard !pts.isEmpty, interval > 0 else { return }
         // `trimTail` (pt) trims that much distance off the end of the
-        // path before emitting — used by the Pac-Man style to leave a
+        // path before emitting — used by the Chomp style to leave a
         // visible gap between the trailing pellets and the cursor's
-        // face, so it reads as Pac-Man running ahead of the trail.
+        // face, so it reads as Chomp running ahead of the trail.
         // When set, compute total length once and derive the cutoff
         // distance; bail early if there isn't enough path to clear
         // the trim.
@@ -1239,7 +1239,7 @@ private final class TrailView: NSView {
             while t <= segLen {
                 if let cutoff, traveled + t > cutoff {
                     // Reached the trim boundary — emit the exact
-                    // cutoff position so callers (Pac-Man face) can
+                    // cutoff position so callers (Chomp face) can
                     // anchor against it, then stop. The final-sample
                     // emit below is skipped because we never reached
                     // the path end.
@@ -1496,10 +1496,10 @@ private final class TrailView: NSView {
         walkPath(origin: origin, interval: cell * 0.5, step: plot)
     }
 
-    // Pac-Man trail rendering — every pac-man/ghost-specific
-    // constant + helper now lives in `PacManRenderer.swift`. The
+    // Chomp trail rendering — every chomp/ghost-specific
+    // constant + helper now lives in `ChompRenderer.swift`. The
     // `draw(_:)` dispatch hands the relevant TrailView state over
-    // via `PacManRenderer.State`.
+    // via `ChompRenderer.State`.
 
 
     /// Snap `p` onto the axis defined by `dir` and the point `from` —
@@ -1595,7 +1595,7 @@ private final class TrailView: NSView {
     /// dynamic colour modes (`rainbow` / `neon` / `splatoon`) animate
     /// naturally. `outline` (when set) is drawn as a slightly-larger
     /// halo of the same symbol behind the main one — same legibility
-    /// treatment as the pac-man pellet outline. `strokeWidth` is
+    /// treatment as the chomp pellet outline. `strokeWidth` is
     /// re-purposed as a scale multiplier on every dimension.
     private func drawPawsPath(origin: CGPoint, cursor: CGPoint,
                                color: NSColor, outline: NSColor?) {
@@ -1777,7 +1777,7 @@ private final class TrailView: NSView {
                 // Firing card body fill priority:
                 //   1. `cardFiresMode` (palette's `cardsFiresColor`)
                 //      → flash colour explicitly chosen by theme.
-                //   2. `nil` under pac-man when `cardFiresMode` is
+                //   2. `nil` under chomp when `cardFiresMode` is
                 //      empty → the firing card opts out of the
                 //      accent fallback so it lands on the same
                 //      frosted backdrop as the directional cards;
@@ -1792,7 +1792,7 @@ private final class TrailView: NSView {
                         strokeSeed: strokeSeed,
                         cyclePeriod: colorCyclePeriod)
                     firesFill = base.withAlphaComponent(firesAlpha)
-                } else if pacMan != nil {
+                } else if chomp != nil {
                     firesFill = nil
                 } else {
                     firesFill = accent.withAlphaComponent(firesAlpha)
@@ -1912,21 +1912,21 @@ private final class TrailView: NSView {
         // sample arrives or focus changes, so animated effects
         // without their own sample stream rely on this 60fps
         // ticker).
-        let pacManWallFlashActive: Bool = {
-            guard pacMan != nil, let t = noMatchFlashStartedAt
+        let chompWallFlashActive: Bool = {
+            guard chomp != nil, let t = noMatchFlashStartedAt
             else { return false }
             return (CACurrentMediaTime() - t) * 1000
                 < Self.noMatchFlashDurationMs
         }()
-        // Pac-man stroke-active animation tick: the face's chomp
+        // Chomp stroke-active animation tick: the face's chomp
         // cycle, the ghost's skirt + panic-jitter, the rainbow
         // border on the firing card — all of those advance via
         // `CACurrentMediaTime()` lookups in `draw`, so they
         // freeze the moment the mouse stops emitting samples.
-        // Driving a tick while a pac-man stroke is in progress
+        // Driving a tick while a chomp stroke is in progress
         // keeps them moving even when the user holds the button
         // still mid-gesture.
-        let pacManStrokeActive = pacMan != nil
+        let chompStrokeActive = chomp != nil
             && origin != nil
             && !holdingFinal
         // Live armed cue on the firing card needs a steady tick too —
@@ -1941,8 +1941,8 @@ private final class TrailView: NSView {
             && cardLayouts.contains(where: { $0.kind == .fires })
         let needsTick = !exitingCards.isEmpty
             || holdingFinal
-            || pacManWallFlashActive
-            || pacManStrokeActive
+            || chompWallFlashActive
+            || chompStrokeActive
             || armedActive
         guard needsTick, !tickScheduled else { return }
         tickScheduled = true
@@ -1967,15 +1967,15 @@ private final class TrailView: NSView {
         // The trail's fade alpha + face chomp + ghost jitter + wall
         // flash are all sampled per-draw, so the trail needs a
         // redraw on each tick too. Triggers cover: hold window,
-        // wall-flash window, AND any in-progress pac-man stroke
+        // wall-flash window, AND any in-progress chomp stroke
         // (so the face / ghost / rainbow border keep animating
         // even when the user holds the button still mid-gesture).
-        let pacManStrokeActive = pacMan != nil
+        let chompStrokeActive = chomp != nil
             && origin != nil
             && !holdingFinal
         if holdingFinal
             || noMatchFlashStartedAt != nil
-            || pacManStrokeActive
+            || chompStrokeActive
         {
             needsDisplay = true
         }
@@ -2287,7 +2287,7 @@ private final class HUDContentView: NSView {
     /// the CGContext so the entire card fades uniformly; `dx`/`dy`/
     /// `scale` place the rect through the exit animation. `armed`
     /// layers a live "would-fire-on-release" cue on top; `chomp`
-    /// adds a pac-man pellet orbiting the rect, independent of
+    /// adds a chomp pellet orbiting the rect, independent of
     /// `armed` so the two stack. Only the firing card mid-stroke
     /// passes a non-`.off` armed or a non-empty `linePets`.
     private func drawCard(_ c: TrailView.CardLayout,
@@ -2295,16 +2295,16 @@ private final class HUDContentView: NSView {
                           alpha: CGFloat,
                           dx: CGFloat, dy: CGFloat, scale: CGFloat,
                           armed: ArmedEffect, linePets: [LinePet]) {
-        // Pac-man theme thickens every card border (the default
+        // Chomp theme thickens every card border (the default
         // 1pt reads too thin against the neon-blue / rainbow
         // palette this theme uses); standard themes keep the 1pt
         // baseline. Corner radius stays uniform across both card
-        // states — under pac-man the firing card distinguishes
+        // states — under chomp the firing card distinguishes
         // itself via the rainbow border (palette's
         // `cardsFiresBorderColor`) rather than a separate shape
         // treatment.
         let cornerR: CGFloat = 10
-        let borderW: CGFloat = o.pacMan != nil ? 3 : 1
+        let borderW: CGFloat = o.chomp != nil ? 3 : 1
 
         // Armed-cue transform contribution. `pulse` breathes the
         // whole card, `shake` jitters it; the rest decorate around
@@ -2382,7 +2382,7 @@ private final class HUDContentView: NSView {
                             accent: border, now: nowArmed, in: o)
         // Line-pets walk the card's outline, independent of `armed`.
         // Theme-agnostic: each pet's silhouette is its own colour
-        // signature (yellow pac-man / red ghost), so the array
+        // signature (yellow chomp / red ghost), so the array
         // renders the same under any `[cast].theme`. Pets chase each
         // other in array order — first leads, the rest trail by a
         // fixed `petChaseGapPt` so the listing reads as a chase
@@ -2490,7 +2490,7 @@ private final class HUDContentView: NSView {
         _ = o   // currently no kind needs the owner ref; held for future
     }
 
-    /// Pac-man "pets" walking the firing card's outline. Mirrors the
+    /// Chomp "pets" walking the firing card's outline. Mirrors the
     /// tome-side `TomePetsView.draw` shape — first entry leads, each
     /// follower trails by a fixed pt-along-the-perimeter gap. The
     /// pellet's centre traces the rect's outer edge directly, so its
@@ -2523,7 +2523,7 @@ private final class HUDContentView: NSView {
             tx.rotate(byRadians: rot)
             tx.concat()
             switch pet {
-            case .pacMan: drawCardPacMan(now: now, petScale: petScale)
+            case .chomp: drawCardChomp(now: now, petScale: petScale)
             case .ghost:  drawCardGhost(now: now, petScale: petScale)
             }
             NSGraphicsContext.restoreGraphicsState()
@@ -2552,12 +2552,12 @@ private final class HUDContentView: NSView {
         }
     }
 
-    /// Yellow pac-man wedge with the mouth chomp on a ~0.25 s cycle,
+    /// Yellow chomp wedge with the mouth chomp on a ~0.25 s cycle,
     /// drawn centred on the current transform origin. Matches the
     /// tome-side variant verbatim so both surfaces' pellets read as
     /// the same character. `petScale` keeps it proportional to the
     /// card's font size.
-    private func drawCardPacMan(now: CFTimeInterval,
+    private func drawCardChomp(now: CFTimeInterval,
                                  petScale: CGFloat) {
         let r: CGFloat = 7 * petScale
         let chompPhase = 0.5 - 0.5 * cos(now * (2 * .pi / 0.25))

@@ -36,7 +36,7 @@ public struct CastThemePalette: Sendable, Equatable {
     /// `cardsBorderColor` (the historical behaviour, where the
     /// firing card shares its border treatment with the directional
     /// cards). Themes that want different border colours per card
-    /// state (e.g. pac-man: neon-blue maze-wall border on
+    /// state (e.g. chomp: neon-blue maze-wall border on
     /// directional cards but yellow body-matched border on the
     /// firing tile) set this to a non-empty value.
     public let cardsFiresBorderColor: String
@@ -83,11 +83,11 @@ public struct CastThemePalette: Sendable, Equatable {
 /// **Standard vs special themes.** Most cases are "standard" — they
 /// only supply a colour palette, and the trail's `style` / `width` /
 /// `straighten-on-turn` knobs under `[cast.overlay.trail]` stay
-/// independent. `pacMan` (and any future arcade-flavour theme) is a
+/// independent. `chomp` (and any future arcade-flavour theme) is a
 /// **special theme**: picking it locks the trail's render shape to
-/// the arcade-Pac-Man wedge + corridor, forces `straighten-on-turn
+/// the arcade-Chomp wedge + corridor, forces `straighten-on-turn
 /// = true`, and ignores `width` in favour of its own
-/// `[cast.pac-man].size = S | M | L` knob. The override path
+/// `[cast.chomp].size = S | M | L` knob. The override path
 /// is centralised in `WandConfig.parse` so the rest of the codebase
 /// doesn't have to know about the distinction.
 public enum CastTheme: String, Sendable, CaseIterable {
@@ -99,9 +99,9 @@ public enum CastTheme: String, Sendable, CaseIterable {
     case mono
     case vapor
     /// **Special theme** — see the comment above. Locks the trail's
-    /// shape + straighten-on-turn and exposes `[cast.pac-man].size`
+    /// shape + straighten-on-turn and exposes `[cast.chomp].size`
     /// instead of `[cast.overlay.trail].width`.
-    case pacMan = "pac-man"
+    case chomp = "chomp"
 
     public var palette: CastThemePalette {
         switch self {
@@ -171,8 +171,8 @@ public enum CastTheme: String, Sendable, CaseIterable {
                 cardsBodyColor: "#282a36",
                 cardsTextColor: "#f8f8f2",
                 badgeBackgroundColor: "#282a36")
-        case .pacMan:
-            return PacMan.castPalette
+        case .chomp:
+            return Chomp.castPalette
         }
     }
 }
@@ -231,7 +231,7 @@ public struct GestureOverlayTrailSpec: Sendable, Equatable {
     /// (`rainbow` / `neon` / `splatoon`). The exact rendering is
     /// style-specific — bezier styles get a wider underlay stroke,
     /// pixel / rainbow-road get a 1pt frame inset into each cell,
-    /// ascii gets a glyph stroke. Under `[cast].theme = "pac-man"`
+    /// ascii gets a glyph stroke. Under `[cast].theme = "chomp"`
     /// the outline becomes the corridor's flanking wall colour
     /// (the theme palette already supplies neon-arcade blue).
     public let colorOutline: String
@@ -305,7 +305,7 @@ public struct GestureOverlayCardsSpec: Sendable, Equatable {
     /// at button-up) — `armed` is a continuous, looping cue layered
     /// on top of the existing rainbow-border firing signal.
     public let armed: ArmedEffect
-    /// Pac-man "pets" walking the firing card's rounded outline.
+    /// Chomp "pets" walking the firing card's rounded outline.
     /// Empty `[]` (default) draws nothing. Theme-agnostic — each
     /// pet's silhouette is its own colour signature, so they
     /// stand alongside any `[cast].theme`. When more than one is
