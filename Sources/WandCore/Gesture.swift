@@ -102,6 +102,19 @@ public enum CastTheme: String, Sendable, CaseIterable {
     /// shape + straighten-on-turn and exposes `[cast.chomp].size`
     /// instead of `[cast.overlay.trail].width`.
     case chomp = "chomp"
+    // Static dark-editor palettes — same shape as the existing
+    // dark themes (no dynamic accent, no per-stroke rotation).
+    // Picked because facet ships the same named themes, so a user
+    // setting `theme = "nord"` in both tools gets a coordinated
+    // look across surfaces. Step 1 of issue #62 — `[theme]`
+    // unification + accent rotation + `[border]` block land
+    // separately.
+    case nord
+    case dracula
+    case gruvbox
+    case catppuccin
+    case rosepine
+    case onedark
 
     public var palette: CastThemePalette {
         switch self {
@@ -173,6 +186,74 @@ public enum CastTheme: String, Sendable, CaseIterable {
                 badgeBackgroundColor: "#282a36")
         case .chomp:
             return Chomp.castPalette
+        case .nord:
+            // Arctic-blue Frost accent on Polar Night backdrop;
+            // Aurora red as the no-match. Sampled from the
+            // canonical Nord palette.
+            return CastThemePalette(
+                trailColor: "#88c0d0",
+                trailColorNoMatch: "#bf616a",
+                trailColorOutline: "#2e3440",
+                cardsBorderColor: "#88c0d0",
+                cardsBodyColor: "#2e3440",
+                cardsTextColor: "#eceff4",
+                badgeBackgroundColor: "#2e3440")
+        case .dracula:
+            // Purple accent on the canonical dracula background.
+            // Differs from `vapor` (same bg, but pink accent and
+            // green no-match) — dracula is the "default" pairing.
+            return CastThemePalette(
+                trailColor: "#bd93f9",
+                trailColorNoMatch: "#ff5555",
+                trailColorOutline: "#282a36",
+                cardsBorderColor: "#bd93f9",
+                cardsBodyColor: "#282a36",
+                cardsTextColor: "#f8f8f2",
+                badgeBackgroundColor: "#282a36")
+        case .gruvbox:
+            // Warm retro: gruvbox-dark yellow accent on the
+            // medium bg, with the canonical red as no-match.
+            return CastThemePalette(
+                trailColor: "#d79921",
+                trailColorNoMatch: "#cc241d",
+                trailColorOutline: "#1d2021",
+                cardsBorderColor: "#d79921",
+                cardsBodyColor: "#282828",
+                cardsTextColor: "#ebdbb2",
+                badgeBackgroundColor: "#282828")
+        case .catppuccin:
+            // Pastel mauve (Mocha flavour) on the base surface;
+            // pink-toned no-match keeps the same soft register.
+            return CastThemePalette(
+                trailColor: "#cba6f7",
+                trailColorNoMatch: "#f38ba8",
+                trailColorOutline: "#1e1e2e",
+                cardsBorderColor: "#cba6f7",
+                cardsBodyColor: "#313244",
+                cardsTextColor: "#cdd6f4",
+                badgeBackgroundColor: "#1e1e2e")
+        case .rosepine:
+            // Muted moonlit rose on the canonical base; the
+            // brighter `love` hue handles no-match.
+            return CastThemePalette(
+                trailColor: "#ebbcba",
+                trailColorNoMatch: "#eb6f92",
+                trailColorOutline: "#191724",
+                cardsBorderColor: "#ebbcba",
+                cardsBodyColor: "#1f1d2e",
+                cardsTextColor: "#e0def4",
+                badgeBackgroundColor: "#191724")
+        case .onedark:
+            // Atom One Dark blue accent on the editor backdrop;
+            // canonical red as no-match.
+            return CastThemePalette(
+                trailColor: "#61afef",
+                trailColorNoMatch: "#e06c75",
+                trailColorOutline: "#282c34",
+                cardsBorderColor: "#61afef",
+                cardsBodyColor: "#282c34",
+                cardsTextColor: "#abb2bf",
+                badgeBackgroundColor: "#282c34")
         }
     }
 }
