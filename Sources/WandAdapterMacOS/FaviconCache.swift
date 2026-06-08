@@ -19,9 +19,9 @@ import AppKit
 import WandCore
 
 @MainActor
-final class FaviconCache {
+public final class FaviconCache {
 
-    static let shared = FaviconCache()
+    public static let shared = FaviconCache()
 
     /// Memory cache keyed by host. Populated on disk-cache load and
     /// on successful fetch. Reads are O(1) so this is the path
@@ -60,7 +60,7 @@ final class FaviconCache {
     /// the caller responsible for sizing it via `image.size = ...`);
     /// misses return `nil` so the caller can show a placeholder while
     /// the async fetch lands.
-    func cached(host: String) -> NSImage? {
+    public func cached(host: String) -> NSImage? {
         if let img = memCache[host] { return img }
         guard let img = loadFromDisk(host: host) else { return nil }
         memCache[host] = img
@@ -73,7 +73,7 @@ final class FaviconCache {
     /// `completion` on the main actor once it finishes (or fails).
     /// Concurrent calls for the same host coalesce — only one
     /// network round-trip per host per "burst".
-    func loadOrFetch(host: String,
+    public func loadOrFetch(host: String,
                       completion: @escaping @MainActor (NSImage?) -> Void) {
         if let img = cached(host: host) {
             completion(img)
@@ -107,13 +107,36 @@ final class FaviconCache {
         }
     }
 
+    /// Walk every icon spec in `config` and kick off a background
+    /// fetch for each unique `favicon:<host>`. Completion is a no-op
+    /// — the network response lands in `memCache` + disk-cache
+    /// passively, so subsequent `IconResolver.resolve(...)` calls
+    /// (when a tome panel opens or a cast assist card lays out) see
+    /// the favicon immediately rather than the `SF:globe`
+    /// placeholder. Safe to call at startup AND on every config
+    /// reload; the per-host `inFlight` coalesce ensures repeated
+    /// calls for the same host don't trigger duplicate network
+    /// requests, and disk-cached hits skip the network entirely.
+    public static func prewarm(from config: WandConfig) {
+        var hosts: Set<String> = []
+        for item in config.launcher.items {
+            if let h = host(from: item.icon) { hosts.insert(h) }
+        }
+        for rule in config.rules {
+            if let h = host(from: rule.icon) { hosts.insert(h) }
+        }
+        for h in hosts {
+            shared.loadOrFetch(host: h) { _ in }
+        }
+    }
+
     /// Normalise a `favicon:` spec to a bare host. Accepts:
     ///   - `favicon:github.com`
     ///   - `favicon:https://github.com/whatever?x=1` → `github.com`
     ///   - `favicon:gist.github.com` (subdomain kept distinct)
     /// Returns `nil` for malformed specs (empty host, scheme-only)
     /// so the caller can fall through to no icon.
-    static func host(from spec: String) -> String? {
+    public static func host(from spec: String) -> String? {
         guard spec.hasPrefix("favicon:") else { return nil }
         var raw = String(spec.dropFirst("favicon:".count))
         // Strip `//` after the scheme if a full URL was passed.
