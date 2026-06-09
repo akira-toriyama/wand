@@ -34,7 +34,9 @@ public struct WandConfig: Sendable {
     /// `[exclude].apps` — global bundle-id exclusion list. Applies
     /// to both gesture rules and launcher items.
     public var excludeApps: [String]
-    /// `[[cast.rule]]` — gesture pattern → action mappings.
+    /// `[[cast.cursor.rule]]` + `[[cast.focused.rule]]` — gesture
+    /// pattern → action mappings, tagged with their activation
+    /// context (`RuleContext.cursor` / `.focused`).
     public var rules: [Rule]
     /// `[cast.overlay]` and sub-blocks — trail + badge + cards.
     public var overlay: GestureOverlaySpec
@@ -81,7 +83,7 @@ public struct WandConfig: Sendable {
         return parse(text)
     }
 
-    /// Parse a TOML document containing `[[tome.item]]` entries
+    /// Parse a TOML document containing `[[tome.cursor.item]]` entries
     /// (and optionally `[tome].layout`) — the schema `wand
     /// --show-menu --items <PATH>` expects. Same row-level
     /// validation as `[tome]` items in the main config (drop on
@@ -93,12 +95,17 @@ public struct WandConfig: Sendable {
     /// call — independent of `~/.config/wand/config.toml`'s
     /// `[tome].layout` (which only applies to the native middle-
     /// click trigger). Default `.list` when missing or unknown.
+    ///
+    /// The legacy `[[tome.item]]` header logs + drops; the user must
+    /// rename to `[[tome.cursor.item]]` (the namespace explicit form
+    /// that pairs symmetrically with `[[cast.cursor.rule]]`).
     public static func parseItems(_ text: String) -> LauncherItemsFile {
         let doc = parseTOMLSubset(text)
         let lr = doc.tables["tome"] ?? [:]
         let layout: LauncherLayout = parseEnum(
             lr, key: "layout", section: "tome", default: .list)
-        let items: [LauncherItem] = (doc.arrays["tome.item"] ?? []).enumerated()
+        warnLegacyTomeItem(doc, scope: "--items file")
+        let items: [LauncherItem] = (doc.arrays["tome.cursor.item"] ?? []).enumerated()
             .compactMap { idx, row in parseItem(row, idx: idx) }
         warnToolbarOnlyFields(items: items, layout: layout)
         return LauncherItemsFile(layout: layout, items: items)
@@ -401,10 +408,14 @@ public struct WandConfig: Sendable {
             }
         }
 
-        // [[tome.item]] — launcher rows. Same drop-on-typo
-        // policy as [[cast.rule]]: bad rows surface in the log
-        // with their position.
-        let items: [LauncherItem] = (doc.arrays["tome.item"] ?? []).enumerated()
+        // [[tome.cursor.item]] — launcher rows. Same drop-on-typo
+        // policy as [[cast.cursor.rule]]: bad rows surface in the log
+        // with their position. Legacy `[[tome.item]]` header is
+        // detected and warned out via `warnLegacyTomeItem` so users
+        // notice the breaking rename instead of silently losing every
+        // menu row.
+        warnLegacyTomeItem(doc, scope: "config")
+        let items: [LauncherItem] = (doc.arrays["tome.cursor.item"] ?? []).enumerated()
             .compactMap { idx, row in parseItem(row, idx: idx) }
         warnToolbarOnlyFields(items: items, layout: launcherLayout)
 
@@ -439,57 +450,20 @@ public struct WandConfig: Sendable {
             decoration: launcherDecoration,
             theme: launcherTheme)
 
-        // [[cast.rule]] — cast pattern → action mappings.
-        // Log every dropped rule with its position + reason so
-        // `--validate` and the daemon log both surface them.
-        let rules: [Rule] = (doc.arrays["cast.rule"] ?? []).enumerated()
-            .compactMap { idx, row in
-                let label = "[[cast.rule]][\(idx)]"
-                    + (row.string("name").isEmpty
-                       ? "" : " \(row.string("name"))")
-                let pattern = row.string("pattern")
-                if let issue = Recognition.patternIssue(pattern) {
-                    Log.line("config: dropped \(label) — \(issue)")
-                    return nil
-                }
-                guard let action = parseAction(row) else {
-                    Log.line("config: dropped \(label) — invalid or missing "
-                             + "action (need action-type + matching "
-                             + "action-keys / action-verb / action-cmd / "
-                             + "action-url)")
-                    return nil
-                }
-                let name = row.string("name")
-                let apps = row.strings("apps")
-                let focusedFallback = row.bool("focused-fallback", false)
-                let resolvedApps = apps.isEmpty ? ["*"] : apps
-                // Opt-in safety warning: a focused-fallback rule
-                // with `apps = ["*"]` (or empty → ["*"]) will fire
-                // against whichever app happens to be frontmost when
-                // the stroke lands on a non-AX surface — surprising
-                // by design, but the user opted in. Don't reject /
-                // clamp; just surface it in `--validate` + the daemon
-                // log so the trade-off is visible.
-                if focusedFallback,
-                   resolvedApps.contains("*") {
-                    let label = name.isEmpty ? pattern : name
-                    Log.line("config: cast.rule \"\(label)\" has "
-                             + "`focused-fallback = true` with "
-                             + "`apps = [\"*\"]` — this rule will "
-                             + "dispatch to whichever app happens to "
-                             + "be frontmost on a non-AX surface. "
-                             + "Tighten `apps` to specific bundle "
-                             + "ids for predictable targeting.")
-                }
-                return Rule(name: name.isEmpty ? pattern : name,
-                            pattern: pattern,
-                            apps: resolvedApps,
-                            icon: row.string("icon"),
-                            filterTitle: row.string("filter-title"),
-                            filterShell: row.string("filter-shell"),
-                            focusedFallback: focusedFallback,
-                            action: action)
-            }
+        // [[cast.cursor.rule]] / [[cast.focused.rule]] — cast pattern
+        // → action mappings, split by activation context (target-
+        // resolution regime). Legacy `[[cast.rule]]` and the
+        // `focused-fallback = true` flag both log + drop so the
+        // user notices the breaking rename instead of silently losing
+        // their rules at recognition time.
+        warnLegacyCastRule(doc)
+        let cursorRules = parseCastRules(
+            doc.arrays["cast.cursor.rule"] ?? [],
+            context: .cursor)
+        let focusedRules = parseCastRules(
+            doc.arrays["cast.focused.rule"] ?? [],
+            context: .focused)
+        let rules = cursorRules + focusedRules
 
         // [failsafe] — mandatory; absence signalled via
         // `failsafeBlockPresent`. See CLAUDE.md "Safety invariants".
@@ -531,6 +505,113 @@ public struct WandConfig: Sendable {
     ///     action-verb = "close"         # for type=ax
     ///     action-cmd  = "open ..."      # for type=shell
     ///     action-url  = "https://..."   # for type=url
+
+    /// Parse a homogeneous batch of cast rule rows from the given
+    /// array-of-tables, tagging each with the supplied `context`.
+    /// Same drop-on-typo / loud-log policy applied per row.
+    ///
+    /// The legacy `focused-fallback` field is detected here and the
+    /// row is dropped with a warning telling the user to move it to
+    /// `[[cast.focused.rule]]` — the boolean no longer exists on the
+    /// `Rule` model; activation context is exclusively a namespace
+    /// concern.
+    private static func parseCastRules(
+        _ rows: [[String: TOMLValue]], context: RuleContext
+    ) -> [Rule] {
+        let header: String
+        switch context {
+        case .cursor:  header = "cast.cursor.rule"
+        case .focused: header = "cast.focused.rule"
+        }
+        return rows.enumerated().compactMap { idx, row in
+            let label = "[[\(header)]][\(idx)]"
+                + (row.string("name").isEmpty
+                   ? "" : " \(row.string("name"))")
+            if row["focused-fallback"] != nil {
+                Log.line("config: dropped \(label) — the "
+                         + "`focused-fallback` flag has been removed."
+                         + " Move this row to `[[cast.focused.rule]]`"
+                         + " (the dedicated namespace for"
+                         + " frontmost-app fallback rules) and delete"
+                         + " the `focused-fallback` line.")
+                return nil
+            }
+            let pattern = row.string("pattern")
+            if let issue = Recognition.patternIssue(pattern) {
+                Log.line("config: dropped \(label) — \(issue)")
+                return nil
+            }
+            guard let action = parseAction(row) else {
+                Log.line("config: dropped \(label) — invalid or missing "
+                         + "action (need action-type + matching "
+                         + "action-keys / action-verb / action-cmd / "
+                         + "action-url)")
+                return nil
+            }
+            let name = row.string("name")
+            let apps = row.strings("apps")
+            let resolvedApps = apps.isEmpty ? ["*"] : apps
+            // Opt-in safety warning: a `[[cast.focused.rule]]` row
+            // with `apps = ["*"]` (or empty → ["*"]) dispatches to
+            // whichever app happens to be frontmost when the stroke
+            // lands on a non-AX surface — surprising by design, but
+            // the user opted in by placing the row in this namespace.
+            // Don't reject / clamp; surface in `--validate` + the
+            // daemon log so the trade-off is visible.
+            if context == .focused, resolvedApps.contains("*") {
+                let nameForLog = name.isEmpty ? pattern : name
+                Log.line("config: cast.focused.rule \"\(nameForLog)\" "
+                         + "has `apps = [\"*\"]` — this rule will "
+                         + "dispatch to whichever app happens to be "
+                         + "frontmost on a non-AX surface. Tighten "
+                         + "`apps` to specific bundle ids for "
+                         + "predictable targeting.")
+            }
+            return Rule(name: name.isEmpty ? pattern : name,
+                        pattern: pattern,
+                        apps: resolvedApps,
+                        icon: row.string("icon"),
+                        filterTitle: row.string("filter-title"),
+                        filterShell: row.string("filter-shell"),
+                        context: context,
+                        action: action)
+        }
+    }
+
+    /// Detect the legacy `[[cast.rule]]` header (and the obsolete
+    /// `focused-fallback` flag if it shows up there) and emit a loud
+    /// warning per row — every row is dropped (we never load the
+    /// legacy array). Users must rename to `[[cast.cursor.rule]]`
+    /// (default) or `[[cast.focused.rule]]` (non-AX fallback).
+    private static func warnLegacyCastRule(_ doc: TOMLDocument) {
+        guard let rows = doc.arrays["cast.rule"], !rows.isEmpty
+        else { return }
+        Log.line("config: [[cast.rule]] is no longer supported "
+                 + "(\(rows.count) row(s) dropped). Rename each row "
+                 + "to either `[[cast.cursor.rule]]` (default cursor-"
+                 + "anchored target) or `[[cast.focused.rule]]` "
+                 + "(frontmost-app fallback on Desktop / Dock / menu "
+                 + "bar — the former `focused-fallback = true` "
+                 + "opt-in). The `focused-fallback` field itself is "
+                 + "removed; activation context is the section "
+                 + "header now.")
+    }
+
+    /// Detect the legacy `[[tome.item]]` header and emit a loud
+    /// warning per row — every row is dropped. Users must rename to
+    /// `[[tome.cursor.item]]`. `scope` is "config" for the main
+    /// daemon config and "--items file" for `--show-menu --items`.
+    private static func warnLegacyTomeItem(_ doc: TOMLDocument,
+                                            scope: String) {
+        guard let rows = doc.arrays["tome.item"], !rows.isEmpty
+        else { return }
+        Log.line("config: [[tome.item]] is no longer supported "
+                 + "in the \(scope) (\(rows.count) row(s) dropped). "
+                 + "Rename each row to `[[tome.cursor.item]]` — the "
+                 + "namespace-explicit form that pairs symmetrically "
+                 + "with `[[cast.cursor.rule]]` and leaves room for "
+                 + "future `[[tome.<modifier>.item]]` namespaces.")
+    }
 
     /// Parse a `line-pet = [...]` field shared by `[cast.overlay.cards]`
     /// and `[tome.decoration]`. Unknown entries log + drop with the
@@ -688,7 +769,7 @@ public struct WandConfig: Sendable {
             // entirely (so `state = "on"` / `state = "shell:..."`
             // never produces a checkmark or runs the shell).
             //
-            // `[[cast.rule]]` drops + logs on bad action; the
+            // `[[cast.cursor.rule]]` drops + logs on bad action; the
             // dynamic-launcher parent keeps working but tells the
             // user exactly which lines are dead.
             var strayDynamicFields: [String] = [

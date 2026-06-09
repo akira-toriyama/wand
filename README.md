@@ -76,21 +76,21 @@ while picking a row with the mouse. Submenus open on hover as an
 adjacent child panel (`group = ["..."]`). Click outside or press
 Esc to dismiss. The panel is anchored to the **window under the
 cursor at button-down** — same invariant as the cast path. Each
-`[[tome.item]]` is one row:
+`[[tome.cursor.item]]` is one row:
 
 ```toml
 [tome]
 enabled = true
 button = "middle"                 # or "side1" / "side2" / "right"
 
-[[tome.item]]
+[[tome.cursor.item]]
 name = "New Tab"
 icon = "🌐"                        # emoji / SF:<name> / file path
 apps = ["*chrome*", "*safari*"]
 action-type = "key"
 action-keys = "cmd+t"
 
-[[tome.item]]
+[[tome.cursor.item]]
 name = "By Name"
 icon = "SF:textformat.abc"         # macOS SF Symbol
 group = ["Sort"]                   # nests this row inside a "Sort" submenu
@@ -119,7 +119,7 @@ shell command and provide `template-*` fields; each stdout line
 becomes one child item with `{line}` substituted in the template:
 
 ```toml
-[[tome.item]]
+[[tome.cursor.item]]
 name = "Switch Branch"
 icon = "SF:point.3.connected.trianglepath.dotted"
 dynamic = 'cd ~/repo && git branch --format="%(refname:short)"'
@@ -137,7 +137,7 @@ shell commands — the line content is untrusted.
 Items can also carry a **checkmark state** via `state`:
 
 ```toml
-[[tome.item]]
+[[tome.cursor.item]]
 name = "Dark Mode"
 state = "shell:defaults read -g AppleInterfaceStyle 2>/dev/null | grep -q Dark"
 action-type = "shell"
@@ -163,7 +163,7 @@ focused app doesn't expose AX selection. Use it for translate /
 search / send-to-app workflows:
 
 ```toml
-[[tome.item]]
+[[tome.cursor.item]]
 name = "Translate"
 icon = "SF:globe"
 action-type = "shell"
@@ -180,10 +180,10 @@ is **untrusted** in the same sense `WAND_TARGET_TITLE` is.
 **`filter-title`** narrows that with a window-title glob, and
 **`filter-shell`** is an escape hatch — a `/bin/sh -c` predicate
 that decides at match time whether the row applies. Both work on
-`[[cast.rule]]` and `[[tome.item]]`:
+`[[cast.cursor.rule]]` and `[[tome.cursor.item]]`:
 
 ```toml
-[[tome.item]]
+[[tome.cursor.item]]
 name = "Open as PR"
 icon = "SF:arrow.triangle.pull"
 apps = ["*chrome*"]
@@ -191,7 +191,7 @@ filter-title = "*github.com*/issues/*"      # only on a GitHub issue
 action-type = "url"
 action-url = "..."
 
-[[tome.item]]
+[[tome.cursor.item]]
 name = "Late-night ping"
 filter-shell = "test $(date +%H) -ge 22"    # only after 22:00
 action-type = "shell"
@@ -246,7 +246,7 @@ explicitly with `wand --validate`.
 A rule looks like this:
 
 ```toml
-[[cast.rule]]
+[[cast.cursor.rule]]
 name = "close tab"
 icon = "SF:xmark.square"              # optional — drawn next to `name` in the assist card
 pattern = "DR"                        # down → right
@@ -255,7 +255,7 @@ action-type = "key"
 action-keys = "cmd+w"
 ```
 
-`icon` mirrors `[[tome.item]].icon` syntax — SF Symbols
+`icon` mirrors `[[tome.cursor.item]].icon` syntax — SF Symbols
 (`"SF:globe"`), emoji / text glyphs (`"🌐"`), installed app icons
 (`"app:com.apple.Safari"`), or a file path. Empty / omitted = no
 icon (the assist card just shows arrow + name).
@@ -362,12 +362,12 @@ WAND_DEBUG=1 wand       # verbose log to /tmp/wand.log + stderr
 
 wand --validate         # parse config.toml, exit 0/2.  Warnings
                           # (clamps, collisions, typos) print to stderr.
-wand --validate --items <PATH>   # also validate an [[tome.item]] file
+wand --validate --items <PATH>   # also validate an [[tome.cursor.item]] file
                                   # intended for --show-menu
 wand --doctor           # health check: Accessibility, config, daemon, tap
 wand --test DR [app]    # dry-run: which rule fires for a pattern
 wand --record           # interactive recorder — draw a gesture, get a
-                          # paste-ready [[cast.rule]] snippet on stdout
+                          # paste-ready [[cast.cursor.rule]] snippet on stdout
 
 wand --status           # rule count, trigger, last gesture
 wand --reload           # re-read config.toml (also automatic on save)
@@ -379,7 +379,7 @@ wand --resign           # re-sign the installed Wand.app with the
 wand --show-menu --items <PATH> --at <X> <Y> [--selection <TEXT>] \
                  [--title <TEXT>]
                         # external trigger: pop the tome with a
-                          # caller-supplied [[tome.item]] file at <X> <Y>
+                          # caller-supplied [[tome.cursor.item]] file at <X> <Y>
                           # (Cocoa screen coords, Y-up).  Used by
                           # event-driven daemons (eventfx etc).
                           # --selection populates $SELECTION for

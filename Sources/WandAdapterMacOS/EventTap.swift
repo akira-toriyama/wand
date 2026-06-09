@@ -25,9 +25,9 @@ public struct TrailSample {
     public let cancelled: Bool     // scribble-cancelled (latched)
     /// `true` when the bundleID above was synthesised from the
     /// frontmost-app fallback (cursor over Desktop / Dock / menu
-    /// bar). The overlay can use this to filter the assist
-    /// tooltips down to focused-fallback rules so the HUD only
-    /// hints at strokes that can actually fire from here.
+    /// bar). The overlay uses this to filter the assist tooltips
+    /// down to `[[cast.focused.rule]]` rows so the HUD only hints
+    /// at strokes that can actually fire from here.
     public let isFocusedFallback: Bool
 
     public init(point: CGPoint, pattern: String, bundleID: String,
@@ -340,9 +340,9 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
         // walk + CG fallback both failed (Desktop / Dock / menu bar),
         // synthesise a `Target` from `NSWorkspace.frontmostApplication`
         // and mark it `isFocusedFallback = true`. The Matcher uses
-        // that flag to keep only rules that opted into the fallback
-        // (`focused-fallback = true`), so every existing rule stays
-        // strict against the original spine.
+        // that flag to fire only `[[cast.focused.rule]]` rows here;
+        // `[[cast.cursor.rule]]` rows still treat a missing spine as
+        // a hard "drop the gesture" signal.
         if currentTarget == nil,
            let frontmost = NSWorkspace.shared.frontmostApplication,
            let bid = frontmost.bundleIdentifier, !bid.isEmpty {
@@ -371,8 +371,8 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
                 Log.line("event-tap: down at \(cg) → focused-fallback "
                          + "→ \(t.bundleID) (pid \(t.pid)) — "
                          + "cursor was on a non-AX surface; only "
-                         + "rules with `focused-fallback = true` "
-                         + "are eligible to fire")
+                         + "[[cast.focused.rule]] rows are eligible "
+                         + "to fire")
             } else {
                 Log.line("event-tap: down at \(cg) → \(t.bundleID) "
                          + "(pid \(t.pid), wid \(t.windowID))")

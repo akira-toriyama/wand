@@ -49,7 +49,12 @@
 #                                      [cast].theme = "chomp")
 #   [cast.fire.burst]               — fire-moment particle burst
 #   [cast.fire.decal]               — post-fire ink decal
-#   [[cast.rule]]                   — one cast pattern → action
+#   [[cast.cursor.rule]]            — default: one cursor-anchored
+#                                     pattern → action rule
+#   [[cast.focused.rule]]           — frontmost-app fallback variant
+#                                     (fires when the cursor sits on
+#                                     a non-AX surface — Desktop /
+#                                     Dock / menu bar)
 #
 #   [tome]                          — tome trigger (middle-click pops
 #                                     a contextual menu — your
@@ -58,7 +63,7 @@
 #   [tome.row]                      — per-row visual cosmetics
 #   [tome.animation]                — panel open / close animations
 #   [tome.decoration]               — static panel decoration
-#   [[tome.item]]                   — one menu row
+#   [[tome.cursor.item]]            — one menu row (cursor-anchored)
 
 
 # -----------------------------------------------------------------
@@ -542,8 +547,9 @@ size = 60
 # it does NOT take keyboard focus, so the user keeps typing in the
 # underlying app while picking a row with the mouse. Submenus
 # (`group = ["..."]`) open on hover as adjacent child panels. Click
-# outside or press Esc to dismiss. Each `[[tome.item]]` is one
-# row with the same action-type vocabulary as `[[cast.rule]]`.
+# outside or press Esc to dismiss. Each `[[tome.cursor.item]]` is
+# one row with the same action-type vocabulary as
+# `[[cast.cursor.rule]]`.
 #
 # The cursor-anchored target is captured at button-down, exactly
 # like the cast path, so the chosen item dispatches against the
@@ -616,10 +622,10 @@ theme = "default"
 
 
 # Per-row visual conventions that apply uniformly to every
-# `[[tome.item]]`.
+# `[[tome.cursor.item]]`.
 [tome.row]
 
-# Title font size (points) for every `[[tome.item]]` row. Scales the
+# Title font size (points) for every `[[tome.cursor.item]]` row. Scales the
 # row's icon size and height proportionally so a larger font gets a
 # larger panel rather than truncated text. Default 13 matches macOS'
 # menu baseline. Clamped 11..32.
@@ -729,14 +735,17 @@ line-pets = []
 # -----------------------------------------------------------------
 # Items (tome) and rules (cast) — shared field reference
 # -----------------------------------------------------------------
-# Both `[[cast.rule]]` and `[[tome.item]]` use the same
-# action-* vocabulary and app-filter syntax. Differences:
+# Both `[[cast.cursor.rule]]` (and its `[[cast.focused.rule]]`
+# sibling) and `[[tome.cursor.item]]` use the same action-*
+# vocabulary and app-filter syntax. Differences:
 #
-#   [[cast.rule]]    needs `pattern` (LURD sequence); supports
-#                        optional `icon`
-#   [[tome.item]]    needs `name` (menu label); supports
-#                        icon / group / separator-before / state /
-#                        dynamic / template-* for richer menu UI
+#   [[cast.cursor.rule]]    needs `pattern` (LURD sequence);
+#                           supports optional `icon`
+#   [[cast.focused.rule]]   same shape — fires only on non-AX
+#                           surfaces against the frontmost app
+#   [[tome.cursor.item]]    needs `name` (menu label); supports
+#                           icon / group / separator-before / state /
+#                           dynamic / template-* for richer menu UI
 #
 # Pattern alphabet (cast rules):
 #   L  = left      U  = up
@@ -776,21 +785,25 @@ line-pets = []
 #   filter-shell = "test $(date +%H) -ge 17"   # only after 5pm
 #   filter-shell = "scripts/is_github_pr.sh"   # external predicate
 #
-# `focused-fallback = true` — cast-rule-only opt-in. By default a
+# Activation context — `[[cast.cursor.rule]]` vs
+# `[[cast.focused.rule]]`. By default (the `cursor` namespace), a
 # cast stroke that lands on a non-AX surface (Desktop / Dock /
 # menu bar) is dropped entirely — there's no cursor-anchored
-# target to dispatch to, and the spine refuses to guess. Setting
-# this on a single rule allows it to fire even on those surfaces,
-# routed to `NSWorkspace.frontmostApplication` (typically the
-# focused app). `apps` is then matched against the frontmost app's
-# bundle id, so a rule scoped to `apps = ["com.apple.finder"]`
-# only fires when Finder is the frontmost app — predictable and
-# narrow. Tome items aren't affected (they have a separate
-# Desktop-friendly sentinel). Setting `apps = ["*"]` + this flag
-# logs a warning at startup — it's powerful but the trade-off
-# (any frontmost app receives the action) is on you.
+# target to dispatch to, and the spine refuses to guess. Declaring
+# a row under `[[cast.focused.rule]]` opts that row into the
+# fallback path: it fires ONLY on non-AX surfaces, routed to
+# `NSWorkspace.frontmostApplication` (typically the focused app).
+# `apps` is then matched against the frontmost app's bundle id, so
+# a focused-rule scoped to `apps = ["com.apple.finder"]` only
+# fires when Finder is frontmost — predictable and narrow.
 #
-#   focused-fallback = true
+# The two namespaces are strictly partitioned (not a superset): a
+# rule that should fire in both regimes must be declared in both.
+# Tome items aren't affected — they ship a single
+# `[[tome.cursor.item]]` namespace with its own Desktop-friendly
+# sentinel. A `[[cast.focused.rule]]` with `apps = ["*"]` logs a
+# warning at startup — it's powerful but the trade-off (any
+# frontmost app receives the action) is on you.
 #
 # Action shapes (decomposed across dotted-style keys — the minimal
 # TOML parser doesn't support inline tables):
@@ -813,7 +826,8 @@ line-pets = []
 #                          send-to-app workflows. Untrusted — same
 #                          quoting caveat as WAND_TARGET_TITLE.
 #
-# `icon` (both `[[cast.rule]]` and `[[tome.item]]`) — optional icon
+# `icon` (`[[cast.cursor.rule]]` / `[[cast.focused.rule]]` /
+# `[[tome.cursor.item]]`) — optional icon
 # drawn to the left of the rule name (cast) or menu label (tome).
 # Recognised syntax:
 #
@@ -861,7 +875,7 @@ line-pets = []
 # the name.
 # -----------------------------------------------------------------
 
-[[cast.rule]]
+[[cast.cursor.rule]]
 name = "close tab"
 icon = "SF:xmark.square"
 pattern = "DR"
@@ -869,7 +883,7 @@ apps = ["*chrome*", "*safari*"]
 action-type = "key"
 action-keys = "cmd+w"
 
-[[cast.rule]]
+[[cast.cursor.rule]]
 name = "reopen tab"
 icon = "SF:arrow.uturn.left.square"
 pattern = "UR"
@@ -877,7 +891,7 @@ apps = ["*chrome*", "*safari*"]
 action-type = "key"
 action-keys = "cmd+shift+t"
 
-[[cast.rule]]
+[[cast.cursor.rule]]
 name = "close window"
 icon = "SF:xmark.circle"
 pattern = "DRU"
@@ -885,13 +899,27 @@ apps = ["*"]
 action-type = "ax"
 action-verb = "close"
 
-[[cast.rule]]
+[[cast.cursor.rule]]
 name = "minimize"
 icon = "SF:minus.circle"
 pattern = "L"
 apps = ["*"]
 action-type = "ax"
 action-verb = "minimize"
+
+# `[[cast.focused.rule]]` — frontmost-app fallback. Only fires when
+# the stroke lands on a non-AX surface (Desktop / Dock / menu bar);
+# `apps` matches the frontmost app's bundle id. Sample below opens
+# Spotlight when you stroke `R` over the desktop — uncomment to
+# enable.
+#
+# [[cast.focused.rule]]
+# name = "spotlight"
+# icon = "SF:magnifyingglass"
+# pattern = "R"
+# apps = ["*"]
+# action-type = "key"
+# action-keys = "cmd+space"
 
 
 # -----------------------------------------------------------------
@@ -900,7 +928,7 @@ action-verb = "minimize"
 # -----------------------------------------------------------------
 
 # # Basic row:
-# [[tome.item]]
+# [[tome.cursor.item]]
 # name = "New Tab"
 # icon = "🌐"
 # apps = ["*chrome*", "*safari*"]
@@ -908,7 +936,7 @@ action-verb = "minimize"
 # action-keys = "cmd+t"
 #
 # # Separator before this row + SF Symbol icon:
-# [[tome.item]]
+# [[tome.cursor.item]]
 # name = "Reload"
 # icon = "SF:arrow.clockwise"
 # apps = ["*chrome*", "*safari*"]
@@ -921,7 +949,7 @@ action-verb = "minimize"
 # # identically-named items. Empty subtitle keeps the single-line row
 # # height. Only renders in list layout (toolbar variants ignore it).
 # # `{line}` substitution works on dynamic-item templates too.
-# [[tome.item]]
+# [[tome.cursor.item]]
 # name = "Translate"
 # subtitle = "選択テキストを日本語へ"
 # icon = "SF:globe"
@@ -930,7 +958,7 @@ action-verb = "minimize"
 #
 # # App icon — `icon = "app:<bundle-id>"` pulls the actual icon of an
 # # installed app (running OR installed-but-inactive).
-# [[tome.item]]
+# [[tome.cursor.item]]
 # name = "Open Chrome"
 # icon = "app:com.google.Chrome"
 # action-type = "shell"
@@ -939,7 +967,7 @@ action-verb = "minimize"
 # # Tint — palette-colour an SF Symbol icon. Same colour grammar as
 # # the trail's `color`: named ("systemRed" / "red" / "orange" / …,
 # # "accent" for the system accent), or hex.
-# [[tome.item]]
+# [[tome.cursor.item]]
 # name = "Move to Trash"
 # icon = "SF:trash"
 # tint = "systemRed"
@@ -948,7 +976,7 @@ action-verb = "minimize"
 #
 # # Multi-colour palette — `tint-colors = [...]` applies SF Symbol's
 # # hierarchical / multicolor palette. Wins over a single `tint`.
-# [[tome.item]]
+# [[tome.cursor.item]]
 # name = "Battery Low"
 # icon = "SF:battery.25.fill"
 # tint-colors = ["red", "orange"]
@@ -957,7 +985,7 @@ action-verb = "minimize"
 #
 # # Icon animation (macOS 14+) — `icon-anim` fires an SF Symbol effect
 # # on the icon when the row is hovered. Supported: "bounce" / "pulse".
-# [[tome.item]]
+# [[tome.cursor.item]]
 # name = "Notifications"
 # icon = "SF:bell.fill"
 # icon-anim = "bounce"
@@ -967,7 +995,7 @@ action-verb = "minimize"
 # # Nested submenu — `group = ["..."]` is the path to the parent
 # # submenu. The folder is created on first reference; subsequent
 # # items with the same group land inside it.
-# [[tome.item]]
+# [[tome.cursor.item]]
 # name = "By Name"
 # group = ["Sort"]
 # action-type = "shell"
@@ -976,7 +1004,7 @@ action-verb = "minimize"
 # # Inline section header — `header = "..."` draws a small-caps band
 # # above any item whose `header` value differs from the previous
 # # one's. Items with empty `header` inherit the current section.
-# [[tome.item]]
+# [[tome.cursor.item]]
 # header = "Editing"
 # name = "Copy"
 # icon = "SF:doc.on.doc"
@@ -991,7 +1019,7 @@ action-verb = "minimize"
 # # SECURITY: `{line}` carries untrusted text. When the line ends up
 # # in a shell command, quote it: 'git switch "{line}"', not
 # # 'git switch {line}'.
-# [[tome.item]]
+# [[tome.cursor.item]]
 # name = "Switch Branch"
 # icon = "SF:point.3.connected.trianglepath.dotted"
 # dynamic = 'cd ~/repo && git branch --format="%(refname:short)"'
@@ -1004,7 +1032,7 @@ action-verb = "minimize"
 # # native ✓ / dash indicator. Static values: "on" / "off" / "mixed".
 # # Dynamic: "shell:<cmd>" → evaluated at menu-open, exit 0 → ✓.
 # # 100ms timeout (state should be a cheap check).
-# [[tome.item]]
+# [[tome.cursor.item]]
 # name = "Dark Mode"
 # state = "shell:defaults read -g AppleInterfaceStyle 2>/dev/null | grep -q Dark"
 # action-type = "shell"

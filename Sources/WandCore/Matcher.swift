@@ -16,19 +16,16 @@ public enum Matcher {
                              rules: [Rule],
                              evalShell: ShellFilterEval = defaultShellFilterEval)
         -> Rule? {
+        // Strict partition by activation context: a synthetic target
+        // from `NSWorkspace.frontmostApplication` (cursor over
+        // Desktop / Dock / menu bar) only fires `[[cast.focused.rule]]`
+        // rows; a resolved cursor-anchored target only fires
+        // `[[cast.cursor.rule]]` rows. The previous "focused-fallback
+        // is a superset" semantic is gone — a rule that should fire
+        // in both regimes must be declared in both namespaces.
+        let want: RuleContext = target.isFocusedFallback ? .focused : .cursor
         for r in rules {
-            guard r.pattern == pattern else { continue }
-            // Focused-fallback gate: a synthetic target from
-            // `NSWorkspace.frontmostApplication` (cursor over
-            // Desktop / Dock / menu bar) only fires rules that
-            // opted into the fallback. Cursor-anchored targets
-            // (`isFocusedFallback == false`) match every rule
-            // including `focusedFallback = true` ones, since
-            // opting into the fallback is a superset, not a
-            // replacement.
-            if target.isFocusedFallback && !r.focusedFallback {
-                continue
-            }
+            guard r.pattern == pattern, r.context == want else { continue }
             if passesFilter(apps: r.apps,
                             filterTitle: r.filterTitle,
                             filterShell: r.filterShell,
@@ -49,18 +46,20 @@ public enum Matcher {
     ///
     /// `isFocusedFallback` mirrors the `Target.isFocusedFallback`
     /// gate on `match` — when the live target was synthesised from
-    /// the frontmost-app fallback (cursor over Desktop / Dock /
-    /// menu bar), the assist HUD only hints rules that opted into
-    /// the fallback, so the tooltips don't promise strokes that the
-    /// gate will reject at button-up.
+    /// the frontmost-app fallback, the assist HUD only hints
+    /// `[[cast.focused.rule]]` rows; on a resolved cursor target it
+    /// only hints `[[cast.cursor.rule]]` rows. Strict partition,
+    /// matching the `match` regime so the tooltip can't promise a
+    /// stroke the gate will reject at button-up.
     public static func candidates(prefix: String, bundleID: String,
                                   rules: [Rule],
                                   isFocusedFallback: Bool = false) -> [Rule] {
         guard !prefix.isEmpty else { return [] }
         let bid = bundleID.lowercased()
+        let want: RuleContext = isFocusedFallback ? .focused : .cursor
         return rules.filter {
             $0.pattern.hasPrefix(prefix)
-                && (!isFocusedFallback || $0.focusedFallback)
+                && $0.context == want
                 && appsAllow($0.apps, bundleID: bid)
         }
     }
