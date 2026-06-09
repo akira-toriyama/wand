@@ -143,7 +143,7 @@ final class ConfigTests: XCTestCase {
             "[cast.overlay.badge]\nsize = 4").overlay.badge.size, 32)
     }
 
-    // MARK: - [[cast.rule]]
+    // MARK: - [[cast.cursor.rule]]
 
     func testConfigParsesArrayOfTables() {
         let toml = """
@@ -154,14 +154,14 @@ final class ConfigTests: XCTestCase {
         [cast.recognition]
         min-stroke-px = 20
 
-        [[cast.rule]]
+        [[cast.cursor.rule]]
         name = "close tab"
         pattern = "DR"
         apps = ["*chrome*", "*safari*"]
         action-type = "key"
         action-keys = "cmd+w"
 
-        [[cast.rule]]
+        [[cast.cursor.rule]]
         name = "minimize"
         pattern = "L"
         apps = ["*"]
@@ -186,12 +186,12 @@ final class ConfigTests: XCTestCase {
         // Typo'd verb drops at parse time (visible to --validate)
         // rather than loading and silently no-op'ing at dispatch.
         let toml = """
-        [[cast.rule]]
+        [[cast.cursor.rule]]
         pattern = "L"
         action-type = "ax"
         action-verb = "clsoe"
 
-        [[cast.rule]]
+        [[cast.cursor.rule]]
         pattern = "R"
         action-type = "ax"
         action-verb = "ZOOM"
@@ -206,7 +206,7 @@ final class ConfigTests: XCTestCase {
 
     func testRuleNameDefaultsToPattern() {
         let toml = """
-        [[cast.rule]]
+        [[cast.cursor.rule]]
         pattern = "DR"
         action-type = "key"
         action-keys = "cmd+w"
@@ -222,12 +222,12 @@ final class ConfigTests: XCTestCase {
         // pattern like `DRR` can never fire. Parser drops it loudly
         // rather than letting it load and silently no-op.
         let toml = """
-        [[cast.rule]]
+        [[cast.cursor.rule]]
         pattern = "DRR"
         action-type = "key"
         action-keys = "cmd+w"
 
-        [[cast.rule]]
+        [[cast.cursor.rule]]
         pattern = "DR"
         action-type = "key"
         action-keys = "cmd+w"
@@ -241,22 +241,22 @@ final class ConfigTests: XCTestCase {
         // All three should drop: empty pattern, missing action-keys
         // for type=key, unknown action-type.
         let toml = """
-        [[cast.rule]]
+        [[cast.cursor.rule]]
         pattern = ""
         action-type = "key"
         action-keys = "cmd+w"
 
-        [[cast.rule]]
+        [[cast.cursor.rule]]
         pattern = "L"
         action-type = "key"
         action-keys = ""
 
-        [[cast.rule]]
+        [[cast.cursor.rule]]
         pattern = "R"
         action-type = "thing"
         action-keys = "cmd+w"
 
-        [[cast.rule]]
+        [[cast.cursor.rule]]
         pattern = "U"
         action-type = "key"
         action-keys = "cmd+r"
@@ -268,7 +268,7 @@ final class ConfigTests: XCTestCase {
 
     func testRuleShellAction() {
         let toml = """
-        [[cast.rule]]
+        [[cast.cursor.rule]]
         pattern = "L"
         action-type = "shell"
         action-cmd = "open -a Terminal"
@@ -278,5 +278,123 @@ final class ConfigTests: XCTestCase {
         if case .shell(let c) = cfg.rules[0].action {
             XCTAssertEqual(c, "open -a Terminal")
         } else { XCTFail("expected .shell") }
+    }
+
+    // MARK: - Namespace schema (v8 / cursor + focused)
+
+    func testCursorAndFocusedRulesParseWithContext() {
+        // Both namespaces parse into the same `cfg.rules` array, each
+        // tagged with its `RuleContext`. Order within the array is
+        // cursor-first then focused (current implementation detail —
+        // Matcher gates on `context` so order is not load-bearing for
+        // matching, but the test pins it so an accidental reshuffle is
+        // visible).
+        let toml = """
+        [[cast.cursor.rule]]
+        pattern = "DR"
+        action-type = "key"
+        action-keys = "cmd+w"
+
+        [[cast.focused.rule]]
+        pattern = "R"
+        apps = ["com.apple.finder"]
+        action-type = "key"
+        action-keys = "cmd+space"
+        """
+        let cfg = WandConfig.parse(toml)
+        XCTAssertEqual(cfg.rules.count, 2)
+        XCTAssertEqual(cfg.rules[0].pattern, "DR")
+        XCTAssertEqual(cfg.rules[0].context, .cursor)
+        XCTAssertEqual(cfg.rules[1].pattern, "R")
+        XCTAssertEqual(cfg.rules[1].context, .focused)
+    }
+
+    func testLegacyCastRuleHeaderDrops() {
+        // `[[cast.rule]]` is the pre-v8 header and is no longer
+        // accepted — every row is dropped with a warning so the user
+        // notices the breaking rename rather than silently losing the
+        // rule at recognition time.
+        let toml = """
+        [[cast.rule]]
+        pattern = "DR"
+        action-type = "key"
+        action-keys = "cmd+w"
+
+        [[cast.cursor.rule]]
+        pattern = "L"
+        action-type = "ax"
+        action-verb = "minimize"
+        """
+        let cfg = WandConfig.parse(toml)
+        XCTAssertEqual(cfg.rules.count, 1)
+        XCTAssertEqual(cfg.rules[0].pattern, "L")
+        XCTAssertEqual(cfg.rules[0].context, .cursor)
+    }
+
+    func testFocusedFallbackFlagDropsRow() {
+        // The `focused-fallback = true` boolean is removed — activation
+        // context is now a namespace concern. A row that still carries
+        // the flag drops loudly so the user moves it to
+        // `[[cast.focused.rule]]` instead of silently dispatching as a
+        // cursor rule.
+        let toml = """
+        [[cast.cursor.rule]]
+        pattern = "DR"
+        focused-fallback = true
+        action-type = "key"
+        action-keys = "cmd+w"
+
+        [[cast.cursor.rule]]
+        pattern = "L"
+        action-type = "ax"
+        action-verb = "minimize"
+        """
+        let cfg = WandConfig.parse(toml)
+        XCTAssertEqual(cfg.rules.count, 1)
+        XCTAssertEqual(cfg.rules[0].pattern, "L")
+    }
+
+    func testLegacyTomeItemHeaderDrops() {
+        // `[[tome.item]]` is the pre-v8 header and is no longer
+        // accepted. Same drop-with-warning policy as `[[cast.rule]]`.
+        let toml = """
+        [tome]
+        enabled = true
+
+        [[tome.item]]
+        name = "Old"
+        action-type = "key"
+        action-keys = "cmd+t"
+
+        [[tome.cursor.item]]
+        name = "New"
+        action-type = "key"
+        action-keys = "cmd+n"
+        """
+        let cfg = WandConfig.parse(toml)
+        XCTAssertEqual(cfg.launcher.items.count, 1)
+        XCTAssertEqual(cfg.launcher.items[0].name, "New")
+    }
+
+    func testParseItemsRespectsCursorNamespace() {
+        // The standalone --show-menu items file also uses
+        // `[[tome.cursor.item]]`. Legacy `[[tome.item]]` drops here too.
+        let toml = """
+        [tome]
+        layout = "list"
+
+        [[tome.item]]
+        name = "Legacy"
+        action-type = "key"
+        action-keys = "cmd+l"
+
+        [[tome.cursor.item]]
+        name = "Modern"
+        action-type = "key"
+        action-keys = "cmd+m"
+        """
+        let file = WandConfig.parseItems(toml)
+        XCTAssertEqual(file.items.count, 1)
+        XCTAssertEqual(file.items[0].name, "Modern")
     }
 }

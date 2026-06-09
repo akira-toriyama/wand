@@ -54,22 +54,25 @@ final class TOMLTests: XCTestCase {
     }
 
     func testTOMLMultipleArrayOfTables() {
-        // Three `[[cast.rule]]` rows in order, no key bleed between rows
-        // (each row is a fresh dictionary).
+        // Three `[[cast.cursor.rule]]` rows in order, no key bleed
+        // between rows (each row is a fresh dictionary). Also exercises
+        // the parser's dotted-path support on array-of-tables headers,
+        // which the new schema relies on for `cast.cursor.rule` /
+        // `cast.focused.rule` / `tome.cursor.item`.
         let doc = parseTOMLSubset("""
-        [[cast.rule]]
+        [[cast.cursor.rule]]
         pattern = "A"
         action-keys = "cmd+1"
 
-        [[cast.rule]]
+        [[cast.cursor.rule]]
         pattern = "B"
         action-keys = "cmd+2"
 
-        [[cast.rule]]
+        [[cast.cursor.rule]]
         pattern = "C"
         action-keys = "cmd+3"
         """)
-        let rows = doc.arrays["cast.rule"] ?? []
+        let rows = doc.arrays["cast.cursor.rule"] ?? []
         XCTAssertEqual(rows.count, 3)
         XCTAssertEqual(rows[0]["pattern"], .string("A"))
         XCTAssertEqual(rows[0]["action-keys"], .string("cmd+1"))

@@ -58,10 +58,32 @@ public enum Modifier: String, Sendable, Hashable, CaseIterable {
     case cmd, opt, ctrl, shift, fn
 }
 
-/// One row in `[[cast.rule]]`. `apps` matches the **cursor-anchored
-/// target** window's bundle id, not the focused app — the whole point
-/// of the project. Wildcards `*` / `?`; entries starting with `!`
-/// exclude (e.g. `!com.apple.dt.Xcode`).
+/// Activation context for a cast rule — which target-resolution
+/// regime the rule belongs to. The TOML namespace the row was declared
+/// under (`[[cast.cursor.rule]]` vs `[[cast.focused.rule]]`) maps
+/// 1-to-1 onto this enum, so the rule's behaviour at match time is
+/// visible from the section header alone — no per-row boolean
+/// scattered through the file.
+public enum RuleContext: Sendable, Hashable {
+    /// `[[cast.cursor.rule]]` — the default. Fires only when the
+    /// cursor-anchored AX walk resolves a target (the spine
+    /// guarantee). On non-AX surfaces (Desktop / Dock / menu bar) the
+    /// stroke is dropped entirely.
+    case cursor
+    /// `[[cast.focused.rule]]` — frontmost-app fallback. Fires only
+    /// when the cursor-anchored AX walk FAILED and EventTap
+    /// synthesised a target from `NSWorkspace.frontmostApplication`.
+    /// `apps` is matched against that frontmost bundle id, so a rule
+    /// scoped to a specific app stays predictable. A rule that should
+    /// fire in both regimes must be declared in both namespaces.
+    case focused
+}
+
+/// One row in `[[cast.cursor.rule]]` or `[[cast.focused.rule]]`.
+/// `apps` matches the **cursor-anchored target** window's bundle id
+/// (cursor rules) or the **frontmost app's** bundle id (focused
+/// rules) — see `RuleContext`. Wildcards `*` / `?`; entries starting
+/// with `!` exclude (e.g. `!com.apple.dt.Xcode`).
 public struct Rule: Sendable, Equatable {
     public let name: String
     public let pattern: String
@@ -81,22 +103,19 @@ public struct Rule: Sendable, Equatable {
     /// rule fires. The `WAND_TARGET_*` env vars carry the target
     /// identity into the shell, same shape as `Action.shell`.
     public let filterShell: String
-    /// Opt-in flag (`[[cast.rule]].focused-fallback`) that lets this
-    /// rule fire even when the cursor-anchored AX target resolution
-    /// failed (cursor over Desktop / Dock / menu bar). When true and
-    /// the stroke lands on a non-AX surface, EventTap synthesises a
-    /// `Target.isFocusedFallback` from `NSWorkspace.frontmostApplication`
-    /// and the Matcher only keeps rules where this flag is set. Every
-    /// other rule keeps the historical "no spine, no fire" behaviour
-    /// so existing configs stay untouched.
-    public let focusedFallback: Bool
+    /// Which TOML namespace this row came from — `.cursor` for
+    /// `[[cast.cursor.rule]]`, `.focused` for `[[cast.focused.rule]]`.
+    /// Matcher gates each stroke on this so cursor rules fire only on
+    /// resolved AX targets and focused rules fire only on the
+    /// frontmost-app fallback — strict partition, not a superset.
+    public let context: RuleContext
     public let action: Action
 
     public init(name: String, pattern: String, apps: [String],
                 icon: String = "",
                 filterTitle: String = "",
                 filterShell: String = "",
-                focusedFallback: Bool = false,
+                context: RuleContext = .cursor,
                 action: Action) {
         self.name = name
         self.pattern = pattern
@@ -104,7 +123,7 @@ public struct Rule: Sendable, Equatable {
         self.icon = icon
         self.filterTitle = filterTitle
         self.filterShell = filterShell
-        self.focusedFallback = focusedFallback
+        self.context = context
         self.action = action
     }
 }
@@ -371,12 +390,11 @@ public struct Target: Sendable, Equatable {
     /// `true` when this target was synthesised from
     /// `NSWorkspace.frontmostApplication` because the cursor-anchored
     /// AX walk + CGWindowList fallback both came back empty (cursor
-    /// over Desktop / Dock / menu bar). Routed to the Matcher so
-    /// only rules with `focusedFallback = true` are eligible to fire
-    /// — every other rule still treats a missing target as a hard
-    /// "drop the gesture" signal. Default `false` keeps the historical
-    /// "no spine, no fire" invariant for code paths that don't know
-    /// about the fallback.
+    /// over Desktop / Dock / menu bar). Routed to the Matcher so only
+    /// `[[cast.focused.rule]]` rules fire here; `[[cast.cursor.rule]]`
+    /// rules treat a synthesised target as "no spine, no fire" and
+    /// drop the stroke. Default `false` keeps the strict cursor-rule
+    /// regime for code paths that don't know about the fallback.
     public let isFocusedFallback: Bool
     public init(pid: Int32, bundleID: String, title: String,
                 frame: CGRect, windowID: UInt32 = 0,
