@@ -15,6 +15,7 @@
 // fallback (`nsColor(...) ?? .systemBlue` etc).
 
 import AppKit
+import Effects
 
 public enum NSColorParse {
 
@@ -89,18 +90,18 @@ public enum NSColorParse {
         splatoonInks.randomElement() ?? .systemBlue
     }
 
-    /// Facet-derived neon palette — high-saturation electric hues
-    /// borrowed from facet's `[border] effect = "neon"` (Tokyo-Night-
-    /// adjacent accents). Used by `TrailColorMode.neon` as the
-    /// rotation source.
-    public static let neonInks: [NSColor] = [
-        NSColor(srgbRed: 0x00/255.0, green: 0xE5/255.0, blue: 0xFF/255.0, alpha: 1),   // #00E5FF
-        NSColor(srgbRed: 0xFF/255.0, green: 0x00/255.0, blue: 0xFF/255.0, alpha: 1),   // #FF00FF
-        NSColor(srgbRed: 0x39/255.0, green: 0xFF/255.0, blue: 0x14/255.0, alpha: 1),   // #39FF14
-        NSColor(srgbRed: 0xFE/255.0, green: 0x01/255.0, blue: 0x9A/255.0, alpha: 1),   // #FE019A
-        NSColor(srgbRed: 0x04/255.0, green: 0xD9/255.0, blue: 0xFF/255.0, alpha: 1),   // #04D9FF
-        NSColor(srgbRed: 0xBC/255.0, green: 0x13/255.0, blue: 0xFE/255.0, alpha: 1),   // #BC13FE
-    ]
+    /// Neon palette for `TrailColorMode.neon` — the shared electric
+    /// hue set, DERIVED from sill's `EffectSpec.neon.flash` instead of a
+    /// hand-copied literal (atelier block-6 dedup; the old wand array
+    /// was a byte-match to facet's `[border] effect = "neon"`, which
+    /// sill now owns). One source of truth means a sill neon tweak
+    /// reaches wand's trail automatically. wand keeps its own per-frame
+    /// `cycle()` interpolation engine — only the DATA is shared.
+    public static let neonInks: [NSColor] = EffectSpec.neon.flash.map { rgb in
+        NSColor(srgbRed: CGFloat((rgb >> 16) & 0xFF) / 255,
+                green:    CGFloat((rgb >> 8) & 0xFF) / 255,
+                blue:     CGFloat(rgb & 0xFF) / 255, alpha: 1)
+    }
 }
 
 /// Dynamic colour mode for the cast trail. Resolved from

@@ -4,6 +4,7 @@
 // never break recognition.
 
 import Foundation
+import Palette
 
 public struct WandConfig: Sendable {
     /// `[cast]` — the gesture trigger (button + modifiers). Other
@@ -17,17 +18,17 @@ public struct WandConfig: Sendable {
     /// inline at the gesture level (next to button / modifiers)
     /// because moving it into either sub-block would mislead about
     /// the scope.
-    public var intensity: Intensity
-    /// `[cast].theme` — coordinated colour palette for trail +
-    /// cards. Individual colour keys still win when explicitly set
-    /// in the TOML (non-empty string).
-    public var theme: CastTheme
-    /// `[cast.chomp]` — only populated when `theme ==
-    /// .chomp` (the chomp "special theme"). `nil` under every
-    /// other theme. The adapter reads this single field to decide
-    /// whether to route the trail through `ChompRenderer` and
-    /// what scale to use; the rest of the codebase doesn't need to
-    /// know `CastTheme` has a special case.
+    public var intensity: EffectIntensity
+    /// `[cast].theme` — the canonical theme name (sill's catalog +
+    /// wand's `neon` / `splatoon` engine themes). The cast HUD palette
+    /// is derived from it via `wandCastPalette`; individual colour keys
+    /// still win when explicitly set in the TOML (non-empty string).
+    public var theme: String
+    /// `[cast.chomp]` — only populated when `theme == "chomp"` (the
+    /// chomp "special theme"). `nil` under every other theme. The
+    /// adapter reads this single field to decide whether to route the
+    /// trail through `ChompRenderer` and what scale to use; the rest of
+    /// the codebase doesn't need to know `chomp` is a special case.
     public var chomp: ChompSpec?
     /// `[cast.recognition]` — sample → direction tuning.
     public var recognition: GestureRecognitionSpec
@@ -55,7 +56,7 @@ public struct WandConfig: Sendable {
     public static let `default` = WandConfig(
         trigger: Trigger(button: .right, modifiers: []),
         intensity: .normal,
-        theme: .default,
+        theme: wandDefaultThemeName,
         chomp: nil,
         recognition: .default,
         excludeApps: [],
@@ -131,15 +132,15 @@ public struct WandConfig: Sendable {
         // `[cast].intensity` — cast-wide effect multiplier. Scope
         // spans both [cast.overlay] cards and [cast.fire] burst, so
         // it lives at the cast-family level (not under either).
-        let intensity: Intensity = parseEnum(
+        let intensity: EffectIntensity = parseEnum(
             g, key: "intensity", section: "cast", default: .normal)
 
-        // `[cast].theme` — coordinated colour palette supplying
-        // defaults for trail + cards colour fields. Individual
-        // keys still win when explicitly non-empty in the TOML.
-        let theme: CastTheme = parseEnum(
-            g, key: "theme", section: "cast", default: .default)
-        let palette = theme.palette
+        // `[cast].theme` — the canonical theme name (sill catalog +
+        // wand engine themes), derived to a cast palette that supplies
+        // defaults for trail + cards colour fields. Individual keys
+        // still win when explicitly non-empty in the TOML.
+        let theme = parseTheme(g, key: "theme", section: "cast")
+        let palette = wandCastPalette(theme)
 
         // [cast.recognition] — sample → direction tuning.
         let rec = doc.tables["cast.recognition"] ?? [:]
@@ -169,10 +170,10 @@ public struct WandConfig: Sendable {
         // [cast.overlay.trail]
         let tr = doc.tables["cast.overlay.trail"] ?? [:]
         // Theme inheritance: explicit non-empty user value wins,
-        // else the active theme's palette value supplies the default.
-        // `theme = "default"` reproduces the historical hard-coded
-        // values, so existing configs that never set `theme` behave
-        // unchanged.
+        // else the active theme's palette (derived from sill) supplies
+        // the default. An unset `[cast].theme` resolves to the native
+        // `system` theme (OS control-accent trail + frosted vibrancy),
+        // NOT the pre-migration hard-coded blue — a deliberate change.
         let trailColor = { let c = tr.string("color")
             return c.isEmpty ? palette.trailColor : c }()
         let trailColorNoMatch = { let c = tr.string("color-no-match")
@@ -199,7 +200,7 @@ public struct WandConfig: Sendable {
         // tells the user exactly which lines are dead.
         let chompTable = doc.tables["cast.chomp"] ?? [:]
         let chomp: ChompSpec?
-        if theme == .chomp {
+        if theme == "chomp" {
             let size: ChompSize = parseEnum(
                 chompTable, key: "size",
                 section: "cast.chomp", default: .m)
@@ -232,7 +233,7 @@ public struct WandConfig: Sendable {
             if sizeForCheck != ChompSpec.default.size {
                 Log.line("config: [cast.chomp].size = "
                     + "\"\(sizeForCheck.rawValue)\" is set but"
-                    + " [cast].theme = \"\(theme.rawValue)\" — this"
+                    + " [cast].theme = \"\(theme)\" — this"
                     + " knob only applies when [cast].theme ="
                     + " \"chomp\". Either switch themes or remove"
                     + " the line to silence this warning.")
@@ -342,10 +343,10 @@ public struct WandConfig: Sendable {
         // their own `[tome].layout`. Default `.list`.
         let launcherLayout: LauncherLayout = parseEnum(
             lr, key: "layout", section: "tome", default: .list)
-        // `[tome].theme` — coordinated colour palette for the tome
-        // panel. Independent of `[cast].theme`.
-        let launcherTheme: TomeTheme = parseEnum(
-            lr, key: "theme", section: "tome", default: .default)
+        // `[tome].theme` — canonical theme name for the tome panel,
+        // resolved to a tome palette via `wandTomePalette`. Independent
+        // of `[cast].theme`.
+        let launcherTheme = parseTheme(lr, key: "theme", section: "tome")
 
         // [tome.row] — per-row visual cosmetics.
         let lrow = doc.tables["tome.row"] ?? [:]
@@ -710,6 +711,23 @@ public struct WandConfig: Sendable {
         Log.line("config: [\(section)].\(key) = \"\(raw)\" not recognised "
                  + "— falling back to \"\(def.rawValue)\" (valid: \(valid))")
         return def
+    }
+
+    /// Resolve a `[section].theme` value to a canonical theme name
+    /// (sill's catalog + wand's `neon` / `splatoon` engine themes),
+    /// clamping an unknown name to the native `system` default with a
+    /// loud log. Mirrors `parseEnum`'s typo discipline, but the valid
+    /// name set lives in sill (`wandCanonicalThemeName`) so there is no
+    /// duplicated theme-name list. `random` resolves to a concrete name
+    /// inside `wandCanonicalThemeName`.
+    private static func parseTheme(_ table: [String: TOMLValue],
+                                   key: String, section: String) -> String {
+        let raw = table.string(key).trimmingCharacters(in: .whitespaces)
+        if raw.isEmpty { return wandDefaultThemeName }
+        if let name = wandCanonicalThemeName(raw) { return name }
+        Log.line("config: [\(section)].\(key) = \"\(raw)\" not recognised "
+                 + "— falling back to \"\(wandDefaultThemeName)\"")
+        return wandDefaultThemeName
     }
 
     /// Same as `clampInt`, but treats `<= 0` as "feature off" rather

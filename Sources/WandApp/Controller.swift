@@ -218,7 +218,7 @@ public final class Controller: @unchecked Sendable {
             borderWidth: cfg.launcher.decoration.borderWidth,
             shadow: cfg.launcher.decoration.shadow,
             linePets: cfg.launcher.decoration.linePets,
-            palette: cfg.launcher.theme.palette
+            palette: wandTomePalette(cfg.launcher.theme)
         ) { [weak self] item, target in
             self?.counterLauncherDispatched += 1
             Log.line("controller: → tome entry \"\(item.name)\"")
@@ -302,7 +302,7 @@ public final class Controller: @unchecked Sendable {
             borderWidth: cfg.launcher.decoration.borderWidth,
             shadow: cfg.launcher.decoration.shadow,
             linePets: cfg.launcher.decoration.linePets,
-            palette: cfg.launcher.theme.palette
+            palette: wandTomePalette(cfg.launcher.theme)
         ) { [weak self] item, target in
             self?.counterShowMenuDispatched += 1
             Log.line("controller: → show-menu item \"\(item.name)\"")

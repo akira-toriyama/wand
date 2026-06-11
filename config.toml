@@ -152,42 +152,38 @@ intensity = "normal"
 # (Decal is intentionally not themed — it always uses the Splatoon
 # multi-team ink palette; that's the identity of the effect.)
 #
-#   "default"  — blue trail / red no-match / no outline
-#   "terminal" — Tokyo-Night green-on-black with amber no-match
-#   "neon"     — cycling neon palette on near-black cards;
-#                hot-pink no-match
-#   "splatoon" — per-stroke random team colour ink, white outline,
-#                black no-match
-#   "rainbow"  — full-spectrum animated trail + cards; white
-#                outline, very dark no-match
-#   "mono"     — white trail / black outline / red no-match only
-#                — failure stays loud, everything else monochrome
-#   "vapor"    — synthwave: pink trail, lime no-match, slate
-#                outline, Dracula-style dark card
-#   "nord"     — Arctic-blue Frost accent on Polar Night;
-#                Aurora red as no-match
-#   "dracula"  — Dracula purple trail / classic red no-match
-#                (same backdrop as "vapor" with a different
-#                accent register)
-#   "gruvbox"  — gruvbox-dark yellow on warm-brown bg, red
-#                no-match
-#   "catppuccin" — Mocha pastel mauve on the canonical base,
-#                  pink no-match
-#   "rosepine" — muted moonlit rose on the canonical base;
-#                brighter "love" hue for no-match
-#   "onedark"  — Atom One Dark blue accent on the editor
-#                backdrop
-#   "chomp"  — ★ SPECIAL THEME. Picks the full arcade Chomp
-#                look — yellow Chomp wedge chasing along a
-#                black corridor flanked by neon-blue maze walls,
-#                with red-ghost no-match. Locks the trail render
-#                shape: `style`, `width`, and `straighten-on-turn`
-#                under [cast.overlay.trail] are IGNORED. Replaces
-#                `width` with `[cast.chomp].size = "s" | "m" |
-#                "l"` (see that block below for tuning).
+#   "system"   — native look: OS control-accent trail on the system
+#                frosted blur (the default)
+#   "terminal" — classic phosphor green-on-near-black, amber secondary
+#   "chomp"    — ★ SPECIAL THEME. Arcade Chomp: yellow wedge chasing a
+#                black corridor flanked by neon-blue maze walls, with
+#                red-ghost no-match. Locks the trail render shape —
+#                `style`, `width`, `straighten-on-turn` under
+#                [cast.overlay.trail] are IGNORED. Replaces `width`
+#                with `[cast.chomp].size = "s" | "m" | "l"` (below).
+#   "rainbow"  — full-spectrum animated trail + cards
+#   "cobalt2"  — deep cobalt-blue, bright-gold accent
+#   "shades-of-purple" — purple-indigo, golden-yellow accent
+#   "tokyo-hack"       — midnight-indigo, red-orange chrome
+#   "github-dark"      — link-blue on near-black, green secondary
+#   "dracula"          — vivid dark purple, pink secondary
+#   "catppuccin-mocha" — soft pastel dark mauve
+#   "gruvbox"          — retro warm dark, orange accent
+#   "github-light"     — clean daytime white, link-blue (LIGHT)
+#   "catppuccin-latte" — warm-grey lavender (LIGHT)
 #
-# Unknown names clamp to "default". Validate with `wand --validate`.
-theme = "default"
+# wand-only dynamic engine themes (no sill palette):
+#   "neon"     — per-frame cycling electric neon trail on violet cards
+#   "splatoon" — per-stroke random Turf-War ink, white outline
+#
+#   "random"   — pick a concrete theme at launch
+#
+# Themes derive from the shared sill catalog (one source across the
+# facet / perch / wand family): trail <- primary, no-match <- error,
+# text <- foreground, cards / outline / badge <- background. Individual
+# [cast.overlay.*] colour keys still override per field.
+# Unknown names clamp to "system". Validate with `wand --validate`.
+theme = "system"
 
 
 # -----------------------------------------------------------------
@@ -574,51 +570,37 @@ layout = "list"
 
 # Coordinated colour palette for the tome panel — sets the hover
 # accent, idle row text, AND the panel backdrop. Themes other than
-# "default" REPLACE the system frosted blur with a solid colour.
+# "system" REPLACE the system frosted blur with a solid colour.
 # The panel rim is **not** a theme axis — pick
 # `[tome.decoration].border` for an outline. Independent of
 # `[cast].theme` — pair them freely or run different looks per
 # trigger family.
 #
-#   "default"  — frosted-glass system blur, controlAccent hover,
-#                .labelColor rows
-#   "terminal" — Tokyo-Night green-on-black; green hover with
-#                black text. Solid black backdrop
-#   "neon"     — electric cyan hover on white rows; deep blue-black
-#                backdrop
-#   "splatoon" — Turf-War ink rotation: each row rolls its own
-#                random colour from the Splatoon palette (10
-#                saturated hues) at panel-open and holds it for
-#                the panel's lifetime, so neighbouring rows light
-#                up in different inks but the same row stays the
-#                same colour while the menu is open. Dismissing
-#                and re-opening rerolls every row. Text colour
-#                adapts to each ink's luminance so labels stay
-#                legible on bright (yellow / lime) and dark
-#                (sapphire / purple) inks alike
-#   "mono"     — stark white-on-black; inverted on hover
-#   "vapor"    — synthwave pink hover on Dracula charcoal,
-#                off-white rows
-#   "chomp"  — yellow accent on black with yellow rows; pairs
-#                with `[cast].theme = "chomp"` for a coordinated
-#                arcade look across both surfaces
-#   "rainbow"  — vivid rainbow palette: white rows on deep violet-
-#                black, hot-rose hover. Pair with
-#                `[tome.decoration].border = "rainbow"` for the
+#   "system"   — frosted-glass system blur, OS control-accent hover,
+#                .labelColor rows (the default)
+#   "terminal" — phosphor green hover (black text) on solid black
+#   "chomp"    — yellow accent on black with yellow rows; pairs with
+#                `[cast].theme = "chomp"` for a coordinated arcade look
+#   "rainbow"  — white rows on deep violet-black, hot-rose hover. Pair
+#                with `[tome.decoration].border = "rainbow"` for the
 #                animated spectrum outline
-#   "aurora"   — polar-lights variant: deep navy backdrop, pastel-
-#                mint hover, off-white rows. Calmer counterpart to
-#                "rainbow"
-#   "nord"     — Arctic-blue Frost hover on Polar Night backdrop
-#   "dracula"  — purple hover on the canonical Dracula bg, off-
-#                white rows
-#   "gruvbox"  — gruvbox-dark yellow hover on warm-brown bg
-#   "catppuccin" — Mocha pastel mauve hover on the canonical base
-#   "rosepine" — muted moonlit rose hover on the canonical base
-#   "onedark"  — Atom One Dark blue hover on the editor backdrop
+#   "cobalt2" / "shades-of-purple" / "tokyo-hack" / "github-dark" /
+#   "dracula" / "catppuccin-mocha" / "gruvbox" / "github-light" /
+#   "catppuccin-latte" — the shared sill catalog (hover <- primary,
+#                rows <- foreground, panel <- background). github-light
+#                and catppuccin-latte are LIGHT themes.
 #
-# Unknown names clamp to "default". Validate with `wand --validate`.
-theme = "default"
+# wand-only dynamic engine themes (no sill palette):
+#   "neon"     — electric cyan hover on white rows, blue-black backdrop
+#   "splatoon" — Turf-War ink rotation: each row rolls its own random
+#                ink at panel-open and holds it for the panel's life
+#
+#   "random"   — pick a concrete theme at launch
+#
+# Solid-backdrop themes REPLACE the system frosted blur. The panel rim
+# is NOT a theme axis — pick `[tome.decoration].border` for an outline.
+# Independent of `[cast].theme`. Unknown names clamp to "system".
+theme = "system"
 
 
 # Per-row visual conventions that apply uniformly to every

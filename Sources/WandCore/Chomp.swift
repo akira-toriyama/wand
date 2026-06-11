@@ -9,6 +9,7 @@
 
 import CoreGraphics
 import Foundation
+import Palette
 
 /// Scale tier for the `chomp` cast theme. Replaces
 /// `[cast.overlay.trail].width` when `[cast].theme = "chomp"` is
@@ -57,17 +58,25 @@ public struct ChompSpec: Sendable, Equatable {
 /// and the tome panel. Keeping the constants in one namespace prevents
 /// the two surfaces from drifting visually.
 public enum Chomp {
-    /// Arcade Chomp yellow.
-    public static let pellet: String = "#ffea00"
-    /// Red Blinky ghost.
-    public static let ghost: String = "#ff0000"
+    /// sill's canonical `chomp` palette — the single source of the
+    /// arcade constants below (atelier block-6). The four hues are a
+    /// byte-match to wand's historical literals (pellet/ghost/wall/
+    /// backdrop = primary/error/secondary/background), so deriving them
+    /// from sill is a no-op visually while killing the duplication.
+    private static let spec = paletteFor("chomp")
+
+    /// Arcade Chomp yellow — sill `chomp` primary (0xFFEA00).
+    public static let pellet: String = themeHex(spec.primary)
+    /// Red Blinky ghost — sill `chomp` error (0xFF0000).
+    public static let ghost: String = themeHex(spec.error)
     /// Arcade maze wall — neon blue. Drives the cast trail's corridor
     /// flanks AND the directional cards' border (both surfaces share
-    /// this signature blue).
-    public static let wall: String = "#2121ff"
+    /// this signature blue). sill `chomp` secondary (0x2121FF).
+    public static let wall: String = themeHex(spec.secondary ?? HexColor(0x2121FF))
     /// Arcade backdrop — pure black, used as both the cast cards' body
-    /// and the tome panel's solid backdrop.
-    public static let backdrop: String = "#000000"
+    /// and the tome panel's solid backdrop. sill `chomp` background
+    /// (0x000000).
+    public static let backdrop: String = themeHex(spec.background ?? HexColor(0x000000))
 
     /// `CastThemePalette` for `[cast].theme = "chomp"`. Card scheme
     /// is "uniform body, border tells the state":

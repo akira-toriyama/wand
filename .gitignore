@@ -1,7 +1,8 @@
 # SwiftPM
 .build/
 .swiftpm/
-Package.resolved
+# Package.resolved IS tracked since the sill dependency (atelier) — it
+# locks the exact sill commit so CI / brew builds are reproducible.
 *.xcodeproj/
 *.xcworkspace/
 

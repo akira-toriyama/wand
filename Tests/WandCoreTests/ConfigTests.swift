@@ -102,7 +102,9 @@ final class ConfigTests: XCTestCase {
     func testOverlayDefaultsWhenAbsent() {
         let cfg = WandConfig.parse("[cast]\nbutton = \"right\"")
         XCTAssertTrue(cfg.overlay.enabled)
-        XCTAssertEqual(cfg.overlay.trail.color, "#3b82f6")
+        // No [cast].theme → the native `system` theme; its trail uses the
+        // OS control-accent token, and `error` (#ef4444) for no-match.
+        XCTAssertEqual(cfg.overlay.trail.color, "accent")
         XCTAssertEqual(cfg.overlay.trail.colorNoMatch, "#ef4444")
         XCTAssertEqual(cfg.overlay.trail.width, 3)
     }

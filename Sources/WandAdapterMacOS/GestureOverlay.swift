@@ -7,6 +7,7 @@
 
 import AppKit
 import CoreGraphics
+import Palette
 import WandCore
 
 /// What the overlay shows next to the cursor: the shape drawn so far
@@ -121,7 +122,7 @@ public final class GestureOverlay {
     /// the next flip back.
     public func applyConfig(_ cfg: WandConfig) {
         let ov = cfg.overlay
-        let palette = cfg.theme.palette
+        let palette = wandCastPalette(cfg.theme)
         view.matchMode = TrailColorMode.parse(
             ov.trail.color, fallback: .systemBlue)
         view.noMatchMode = TrailColorMode.parse(
@@ -157,8 +158,8 @@ public final class GestureOverlay {
         view.firesAppIcon = ov.cards.firesAppIcon
         view.noMatchBanner = ov.noMatch.kind
         // Card colours come exclusively from the theme palette.
-        // Empty palette entries fall back to the hard-coded defaults,
-        // preserving the `theme = "default"` look.
+        // Empty palette entries fall back to the system semantic colour,
+        // preserving the native `system` theme look.
         view.cardBorderMode = TrailColorMode.parse(
             palette.cardsBorderColor,
             fallback: NSColor.white.withAlphaComponent(0.18))
@@ -185,7 +186,7 @@ public final class GestureOverlay {
         view.badgeBackgroundColor = palette.badgeBackgroundColor.isEmpty
             ? nil
             : NSColorParse.nsColor(palette.badgeBackgroundColor)
-        view.effectIntensity = cfg.intensity.multiplier
+        view.effectIntensity = CGFloat(cfg.intensity.multiplier)
         view.minStrokePx = CGFloat(cfg.recognition.minStrokePx)
         view.finalHoldDuration = TimeInterval(ov.trail.finalHoldMs) / 1000.0
         if ov.enabled {

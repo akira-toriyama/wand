@@ -502,7 +502,7 @@ enum WandApp {
                     burstManager.emit(
                         at: cocoaPoint, color: burstColor,
                         kind: burstSpec.kind,
-                        intensity: cfg.intensity.multiplier)
+                        intensity: CGFloat(cfg.intensity.multiplier))
                     arcadeScoreManager.emit(
                         at: cocoaPoint, color: burstColor,
                         kind: burstSpec.kind)
