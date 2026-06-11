@@ -45,12 +45,11 @@ let package = Package(
         // WandAdapterMacOS additionally takes `Effects` for the shared
         // neon flash data. Like perch, wand does NOT link PaletteKit (it
         // has its own NSColorParse and never uses `pal` / `resolve`).
-        // DURING the block-6 migration this is a path dep so sill +
-        // wand edit atomically; the release commit swaps it for the URL
-        // form below (sill 0.4.0 ships EffectIntensity).
-        .package(path: "../sill"),
-        // .package(url: "https://github.com/akira-toriyama/sill.git",
-        //          .upToNextMinor(from: "0.4.0")),
+        // sill 0.4.0 ships EffectIntensity + the WCAG bestForeground fix
+        // wand's bridge relies on. Pinned to the next-minor range like
+        // the other family apps; Package.resolved locks the exact commit.
+        .package(url: "https://github.com/akira-toriyama/sill.git",
+                 .upToNextMinor(from: "0.4.0")),
     ],
     targets: [
         .target(
