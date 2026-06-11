@@ -570,7 +570,7 @@ layout = "list"
 
 # Coordinated colour palette for the tome panel — sets the hover
 # accent, idle row text, AND the panel backdrop. Themes other than
-# "default" REPLACE the system frosted blur with a solid colour.
+# "system" REPLACE the system frosted blur with a solid colour.
 # The panel rim is **not** a theme axis — pick
 # `[tome.decoration].border` for an outline. Independent of
 # `[cast].theme` — pair them freely or run different looks per

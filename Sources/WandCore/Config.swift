@@ -170,10 +170,10 @@ public struct WandConfig: Sendable {
         // [cast.overlay.trail]
         let tr = doc.tables["cast.overlay.trail"] ?? [:]
         // Theme inheritance: explicit non-empty user value wins,
-        // else the active theme's palette value supplies the default.
-        // `theme = "default"` reproduces the historical hard-coded
-        // values, so existing configs that never set `theme` behave
-        // unchanged.
+        // else the active theme's palette (derived from sill) supplies
+        // the default. An unset `[cast].theme` resolves to the native
+        // `system` theme (OS control-accent trail + frosted vibrancy),
+        // NOT the pre-migration hard-coded blue — a deliberate change.
         let trailColor = { let c = tr.string("color")
             return c.isEmpty ? palette.trailColor : c }()
         let trailColorNoMatch = { let c = tr.string("color-no-match")

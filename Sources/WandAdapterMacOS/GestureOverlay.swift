@@ -158,8 +158,8 @@ public final class GestureOverlay {
         view.firesAppIcon = ov.cards.firesAppIcon
         view.noMatchBanner = ov.noMatch.kind
         // Card colours come exclusively from the theme palette.
-        // Empty palette entries fall back to the hard-coded defaults,
-        // preserving the `theme = "default"` look.
+        // Empty palette entries fall back to the system semantic colour,
+        // preserving the native `system` theme look.
         view.cardBorderMode = TrailColorMode.parse(
             palette.cardsBorderColor,
             fallback: NSColor.white.withAlphaComponent(0.18))
