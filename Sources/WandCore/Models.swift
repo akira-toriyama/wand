@@ -210,25 +210,11 @@ public enum ArmedEffect: String, Sendable, Hashable, CaseIterable {
     case marching
 }
 
-/// Overall size of the chosen `Effect`s. Multiplier is read by the
-/// adapter to scale translation distance, scale delta, vibration
-/// amplitude, and particle birth-rate / velocity. Lives in Core so the
-/// parsing layer can store a typed value instead of a raw string.
-public enum Intensity: String, Sendable, Hashable, CaseIterable {
-    case subtle
-    case normal
-    case bold
-    case wild
-
-    public var multiplier: CGFloat {
-        switch self {
-        case .subtle: return 0.6
-        case .normal: return 1.0
-        case .bold:   return 1.6
-        case .wild:   return 2.5
-        }
-    }
-}
+// `Intensity` (subtle/normal/bold/wild magnitude knob) was promoted to
+// sill's `Palette` module as `EffectIntensity` (atelier block-6 — wand
+// and perch hand-copied the identical 0.6/1.0/1.6/2.5 vocabulary). The
+// config now stores `EffectIntensity`; its `.multiplier` returns a
+// `Double`, so adapter sites that want `CGFloat` wrap at the use site.
 
 /// Trail-end burst — fire-moment effect emitted at the cursor
 /// position when a gesture rule fires. Independent of the static
@@ -265,7 +251,7 @@ public enum LinePet: String, Sendable, Hashable, CaseIterable {
 /// `.rainbow` strokes the panel's rounded rect with a continuously
 /// hue-rotating colour cycle. The remaining cases are **static
 /// signature-colour rims** that each pair visually with the same-named
-/// `TomeTheme` but are independent of it, so users can mix-and-match
+/// `[tome].theme` but are independent of it, so users can mix-and-match
 /// (e.g. `[tome].theme = "rainbow"` + `[tome.decoration].border =
 /// "neon"`).
 public enum LauncherBorder: String, Sendable, Hashable, CaseIterable {

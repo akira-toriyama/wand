@@ -38,9 +38,31 @@ let package = Package(
         .executable(name: "wand", targets: ["WandApp"]),
         .library(name: "WandCore", targets: ["WandCore"]),
     ],
+    dependencies: [
+        // sill — the shared theme foundation (atelier). WandCore takes
+        // the pure `Palette` module (ThemeSpec → wand's String-token
+        // CastThemePalette / TomeThemePalette bridge + EffectIntensity);
+        // WandAdapterMacOS additionally takes `Effects` for the shared
+        // neon flash data. Like perch, wand does NOT link PaletteKit (it
+        // has its own NSColorParse and never uses `pal` / `resolve`).
+        // DURING the block-6 migration this is a path dep so sill +
+        // wand edit atomically; the release commit swaps it for the URL
+        // form below (sill 0.4.0 ships EffectIntensity).
+        .package(path: "../sill"),
+        // .package(url: "https://github.com/akira-toriyama/sill.git",
+        //          .upToNextMinor(from: "0.4.0")),
+    ],
     targets: [
-        .target(name: "WandCore"),
-        .target(name: "WandAdapterMacOS", dependencies: ["WandCore"]),
+        .target(
+            name: "WandCore",
+            dependencies: [.product(name: "Palette", package: "sill")]),
+        .target(
+            name: "WandAdapterMacOS",
+            dependencies: [
+                "WandCore",
+                .product(name: "Palette", package: "sill"),
+                .product(name: "Effects", package: "sill"),
+            ]),
         .target(name: "WandAdapterTest", dependencies: ["WandCore"]),
         .executableTarget(
             name: "WandApp",
