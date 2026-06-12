@@ -539,13 +539,13 @@ size = 60
 # Off by default. Set `enabled = true` to install the tome tap
 # alongside the cast tap; both coexist on the same daemon.
 #
-# The tome renders as a non-activating panel (PopClip parity) —
-# it does NOT take keyboard focus, so the user keeps typing in the
-# underlying app while picking a row with the mouse. Submenus
-# (`group = ["..."]`) open on hover as adjacent child panels. Click
-# outside or press Esc to dismiss. Each `[[tome.cursor.item]]` is
-# one row with the same action-type vocabulary as
-# `[[cast.cursor.rule]]`.
+# The tome renders as a non-activating panel that keeps the source
+# app focused: it does NOT take keyboard focus, so the user keeps
+# typing in the underlying app while picking a row with the mouse.
+# Submenus (`group = ["..."]`) open on hover as adjacent child
+# panels. Click outside or press Esc to dismiss. Each
+# `[[tome.cursor.item]]` is one row with the same action-type
+# vocabulary as `[[cast.cursor.rule]]`.
 #
 # The cursor-anchored target is captured at button-down, exactly
 # like the cast path, so the chosen item dispatches against the
@@ -562,7 +562,7 @@ modifiers = []                 # e.g. ["ctrl"] to require ctrl + middle
 
 # Visual orientation of the panel:
 #   "list"            — vertical rows (default; full feature set)
-#   "toolbar"         — horizontal icon-only buttons (PopClip vibe)
+#   "toolbar"         — horizontal icon-only buttons (toolbar-style)
 #   "labeled-toolbar" — horizontal icon + label "pill" buttons
 # Toolbar variants ignore `header` / `subtitle` / `separator-before`
 # / `[tome.row].shortcut-badge`; only `.list` shows every feature.

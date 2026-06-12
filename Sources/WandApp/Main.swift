@@ -45,10 +45,11 @@ enum WandApp {
           wand --show-menu           ask the daemon to pop the tome
             --items <PATH>             menu at a screen point with the
             --at <X> <Y>               given [[tome.item]] file. Cocoa
-            [--selection <TEXT>]       coords (Y-up). For event-driven
-            [--title <TEXT>]           triggers (eventfx text-selection
-                                       etc).  $SELECTION is exported to
-                                       shell actions if --selection given.
+            [--selection <TEXT>]       coords (Y-up). For an upstream
+            [--title <TEXT>]           trigger (a chord hotkey, or a
+                                       text-selection observer).
+                                       $SELECTION is exported to shell
+                                       actions if --selection given.
                                        --title overrides AX-fetched
                                        focused-window title for
                                        $WAND_TARGET_TITLE (default:
@@ -920,8 +921,9 @@ enum WandApp {
         }
         let selection = valueAfter("--selection", in: argv) ?? ""
         // --title: caller-supplied window title to override the
-        // daemon's AX fetch. Used by event triggers (eventfx) that
-        // already know the source window at fire time and want it
+        // daemon's AX fetch. Used by an upstream trigger (a chord
+        // hotkey, or a text-selection observer) that
+        // already knows the source window at fire time and wants it
         // surfaced verbatim — avoids racing the daemon's AX lookup
         // against window-switch latency.
         let title = valueAfter("--title", in: argv) ?? ""

@@ -1,7 +1,7 @@
 // The launcher UI surface. A non-activating NSPanel that does NOT
 // take keyboard focus from the underlying app — the user keeps typing
-// in their editor while picking an item with the mouse (PopClip
-// parity). Used for both the native middle-click trigger and the
+// in their editor while picking an item with the mouse. Used for
+// both the native middle-click trigger and the
 // `wand --show-menu` external trigger.
 //
 // Behaviour notes:

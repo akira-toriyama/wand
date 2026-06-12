@@ -120,7 +120,8 @@ class Wand < Formula
         wand --reload      re-read config.toml live
         wand --quit        terminate the running daemon
         wand --show-menu   external-trigger entry to the launcher menu
-                           (for `eventfx` text-selection observers etc.)
+                           (for an upstream trigger: a chord hotkey,
+                           or a text-selection observer)
 
       Auto-start on login:
         brew services start wand

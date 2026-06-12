@@ -183,7 +183,7 @@ public struct LauncherItem: Sendable, Equatable {
 ///                        submenus and dynamic items, scales
 ///                        naturally for menu-like usage.
 /// - `.toolbar`         — horizontal row of icon-only buttons
-///                        (PopClip style). The item's `name` becomes
+///                        (toolbar-style). The item's `name` becomes
 ///                        a tooltip. Best for short, focused command
 ///                        sets (text-selection actions, ~6-8 items).
 /// - `.labeledToolbar`  — horizontal row of icon + label "pill"

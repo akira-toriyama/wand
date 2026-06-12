@@ -27,12 +27,13 @@ for event-driven daemons to share the same tome UI:
   draw a shape with the cursor; the recogniser turns it into a
   `LURD` string; rules fire actions.
 - **tome** (middle-click, opt-in via `[tome].enabled`):
-  pops a **non-activating NSPanel** near the cursor (PopClip parity
-  — does NOT take keyboard focus); each `[[tome.cursor.item]]` is
-  one row with the same action-type vocabulary. Submenus
-  (`group = ["..."]`) open as adjacent child panels on hover.
-- **`wand --show-menu`** (external trigger CLI): other daemons
-  (`eventfx` text-selection / focus observers, …) post a
+  pops a **non-activating NSPanel** near the cursor that does NOT
+  take keyboard focus, so the source app stays focused; each
+  `[[tome.cursor.item]]` is one row with the same action-type
+  vocabulary. Submenus (`group = ["..."]`) open as adjacent child
+  panels on hover.
+- **`wand --show-menu`** (external trigger CLI): an upstream trigger
+  (a chord hotkey, or a text-selection observer) posts a
   Distributed Notification carrying items + cursor + selection;
   the daemon pops the same `LauncherPanel` against the frontmost
   app. **Spine exception** — no button-down moment, see the
@@ -251,10 +252,10 @@ Everything below depends on this contract:
   `WAND_TARGET_TITLE`, `WAND_TARGET_FRAME`) — the user's
   command can decide what to do with that information.
 - **`wand --show-menu` is the documented spine exception.**
-  External event-driven daemons (the planned `eventfx`, which
-  observes things like text-selection notifications and has no
-  button-down moment to anchor against) post `show-menu` over the
-  existing DNC channel with `userInfo = [items, x, y, selection]`.
+  An upstream trigger (a chord hotkey, or a text-selection
+  observer — there is no button-down moment to anchor against)
+  posts `show-menu` over the existing DNC channel with
+  `userInfo = [items, x, y, selection]`.
   The Controller resolves the target via
   `NSWorkspace.frontmostApplication` instead of `AXTarget.
   resolveAt(point:)` — text-selection-anchored, not cursor-
