@@ -34,6 +34,7 @@
 //   - `RowKind` / `ItemRow`   — row view + its state machine
 
 import AppKit
+import Effects   // drawLinePets (shared line-pet drawing; re-exports Palette)
 import Foundation
 import WandCore
 
@@ -1338,159 +1339,13 @@ private final class TomePetsView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         let now = CACurrentMediaTime() - startedAt
-        let path = bgFrameInView
-        guard path.width > 0, path.height > 0, !pets.isEmpty
-        else { return }
-        let perim = 2 * (path.width + path.height)
-        // Leader's traversed distance, wrapped to the perimeter.
-        let leader = CGFloat(now).truncatingRemainder(
-            dividingBy: perim / Self.petSpeedPtPerSec
-        ) * Self.petSpeedPtPerSec
-        // Chase gap also scales with `petScale` so the trailing pet
-        // doesn't get tangled into the leader at large sizes.
-        let chaseGap: CGFloat = 28 * petScale
-        for (i, pet) in pets.enumerated() {
-            // Lag each follower by the chase gap (mod the perimeter
-            // so a wrapped value lands cleanly on the path).
-            var pos = leader - CGFloat(i) * chaseGap
-            pos = pos.truncatingRemainder(dividingBy: perim)
-            if pos < 0 { pos += perim }
-            let (px, py, rot) = positionOnPerimeter(rect: path,
-                                                     distance: pos)
-            NSGraphicsContext.saveGraphicsState()
-            let tx = NSAffineTransform()
-            tx.translateX(by: px, yBy: py)
-            tx.rotate(byRadians: rot)
-            tx.concat()
-            switch pet {
-            case .chomp: drawChomp(now: now)
-            case .ghost:  drawGhost(now: now)
-            }
-            NSGraphicsContext.restoreGraphicsState()
-        }
+        // Shared sill drawing. The tome rim runs a brisker 160 pt/s and a
+        // looser 28*petScale chase than the cast card's defaults; both are
+        // passed explicitly so the dedup preserves the prior look exactly.
+        drawLinePets(pets, on: bgFrameInView, now: now, scale: petScale,
+                     speed: Self.petSpeedPtPerSec, chaseGap: 28 * petScale)
     }
 
-    /// Walk `rect`'s perimeter linearly (top → right → bottom → left)
-    /// and return the centre + facing rotation at the given distance.
-    /// Rotation is the local +x axis direction (= direction of
-    /// travel), so per-pet draw code can stay in a canonical
-    /// "facing-right" frame and the transform supplies the lap-aware
-    /// orientation.
-    private func positionOnPerimeter(rect r: CGRect,
-                                      distance t: CGFloat)
-        -> (x: CGFloat, y: CGFloat, rot: CGFloat) {
-        let topLen = r.width
-        let rightLen = r.height
-        let bottomLen = r.width
-        if t < topLen {
-            return (r.minX + t, r.maxY, 0)
-        } else if t < topLen + rightLen {
-            return (r.maxX, r.maxY - (t - topLen), -.pi / 2)
-        } else if t < topLen + rightLen + bottomLen {
-            return (r.maxX - (t - topLen - rightLen), r.minY, .pi)
-        } else {
-            return (r.minX,
-                    r.minY + (t - topLen - rightLen - bottomLen),
-                    .pi / 2)
-        }
-    }
-
-    /// Yellow chomp wedge with the mouth opening / closing on a
-    /// ~0.25 s cycle, drawn centred on the current transform origin.
-    /// Geometry mirrors the cast-overlay variant.
-    private func drawChomp(now: CFTimeInterval) {
-        let r: CGFloat = 7 * petScale
-        let chompPhase = 0.5 - 0.5 * cos(now * (2 * .pi / 0.25))
-        let openRad = chompPhase * (35.0 * .pi / 180.0)
-        let yellow = NSColor(calibratedRed: 1.0, green: 0.85,
-                             blue: 0.0, alpha: 1.0)
-        let p = NSBezierPath()
-        p.move(to: .zero)
-        p.appendArc(withCenter: .zero, radius: r,
-                     startAngle: CGFloat(openRad * 180 / .pi),
-                     endAngle: CGFloat(360 - openRad * 180 / .pi),
-                     clockwise: false)
-        p.close()
-        yellow.setFill(); p.fill()
-        NSColor.black.withAlphaComponent(0.35).setStroke()
-        p.lineWidth = 0.5; p.stroke()
-    }
-
-    /// Red Blinky-style ghost: rounded dome over a rectangular body
-    /// with a 3-wave scalloped skirt, two white eyes with blue
-    /// pupils pointing along the travel direction (= local +x).
-    /// Baseline silhouette is 14 × 16 pt at `petScale = 1`; multiplied
-    /// by `petScale` so a larger panel gets a larger ghost.
-    private func drawGhost(now: CFTimeInterval) {
-        let w: CGFloat = 14 * petScale
-        let h: CGFloat = 16 * petScale
-        // Skirt waves bob on a ~0.4 s cycle so the ghost reads as
-        // moving rather than stamped on the rim. Phase is the same
-        // for every ghost on the panel (one timer / one `now`).
-        // Amplitude scales with `petScale` so the bob stays
-        // proportional to the larger silhouette.
-        let bob = CGFloat(sin(now * (2 * .pi / 0.4))) * 0.6 * petScale
-
-        let halfW = w / 2
-        let halfH = h / 2
-        // Use the standing-still arcade ghost as the canonical
-        // orientation (dome on top, eyes facing local +x).
-        let red = NSColor(calibratedRed: 1.0, green: 0.0,
-                          blue: 0.10, alpha: 1.0)
-
-        // Outline path: dome (top half) → right side → 3-wave skirt
-        // → left side, closed.
-        let body = NSBezierPath()
-        body.move(to: CGPoint(x: -halfW, y: 0))
-        body.appendArc(withCenter: CGPoint(x: 0, y: 0),
-                        radius: halfW,
-                        startAngle: 180, endAngle: 0,
-                        clockwise: false)
-        body.line(to: CGPoint(x: halfW, y: -halfH + bob))
-        // 3 waves across the skirt.
-        let segments = 3
-        let segW = w / CGFloat(segments)
-        let waveDepth: CGFloat = 1.5 * petScale
-        for i in (0..<segments).reversed() {
-            let startX = -halfW + CGFloat(i + 1) * segW
-            let endX = -halfW + CGFloat(i) * segW
-            let midX = (startX + endX) / 2
-            body.curve(to: CGPoint(x: endX, y: -halfH + bob),
-                        controlPoint1: CGPoint(x: midX,
-                                               y: -halfH - waveDepth - bob),
-                        controlPoint2: CGPoint(x: midX,
-                                               y: -halfH - waveDepth - bob))
-        }
-        body.line(to: CGPoint(x: -halfW, y: 0))
-        body.close()
-        red.setFill(); body.fill()
-        NSColor.black.withAlphaComponent(0.35).setStroke()
-        body.lineWidth = 0.5 * petScale; body.stroke()
-
-        // Two eyes — white sclera + blue pupil, both nudged toward
-        // local +x to telegraph the chase direction. All sizes /
-        // offsets scale with `petScale` so the proportions stay
-        // identical to the baseline.
-        let eyeR: CGFloat = 2.0 * petScale
-        let pupilR: CGFloat = 1.0 * petScale
-        let eyeY: CGFloat = halfH * 0.35
-        let eyeDx: CGFloat = 2.6 * petScale
-        let pupilOffset: CGFloat = 0.7 * petScale
-        let eyeShift: CGFloat = 1.0 * petScale
-        for sign in [-1.0, 1.0] {
-            let cx = CGFloat(sign) * eyeDx + eyeShift  // both nudged +x
-            let sclera = NSBezierPath(ovalIn: CGRect(
-                x: cx - eyeR, y: eyeY - eyeR,
-                width: 2 * eyeR, height: 2 * eyeR))
-            NSColor.white.setFill(); sclera.fill()
-            let pupil = NSBezierPath(ovalIn: CGRect(
-                x: cx - pupilR + pupilOffset, y: eyeY - pupilR,
-                width: 2 * pupilR, height: 2 * pupilR))
-            NSColor(calibratedRed: 0.10, green: 0.18,
-                    blue: 0.95, alpha: 1.0).setFill()
-            pupil.fill()
-        }
-    }
 }
 
 // MARK: - Row view

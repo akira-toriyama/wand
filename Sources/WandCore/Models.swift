@@ -232,20 +232,10 @@ public enum TrailEndKind: String, Sendable, Hashable, CaseIterable {
     case arcadeScore = "arcade-score"
 }
 
-/// One of the small chomp "pets" that walk the tome panel's
-/// rounded outline when configured under
-/// `[tome.decoration].line-pet`. Multiple pets ride the same path —
-/// when more than one is configured they chase each other around the
-/// rim in array order (first leads, the rest trail at a fixed gap).
-/// Theme-agnostic: each pet's colours are baked into its silhouette.
-public enum LinePet: String, Sendable, Hashable, CaseIterable {
-    /// Classic yellow chomping chomp wedge.
-    case chomp = "chomp"
-    /// Red Blinky-style ghost — dome top, two eyes, scalloped skirt.
-    /// Sized larger than chomp so the silhouette stays readable
-    /// despite the small footprint.
-    case ghost
-}
+// `LinePet` (the chomp / ghost pets walking a surface outline) lives in
+// sill's `Palette` since 0.6.0 — pure (no-AppKit) so Core can validate it,
+// and the drawing (`Effects.drawLinePets`) is shared family-wide. Imported
+// from `Palette`, not redefined here (was a wand-local duplicate).
 
 /// Tome panel border decoration. Default `.off` (no border).
 /// `.rainbow` strokes the panel's rounded rect with a continuously

@@ -8,6 +8,7 @@
 // `[[cast.rule]]` minus `pattern` plus `group` for nesting.
 
 import Foundation
+import Palette   // LinePet (shared pet vocabulary)
 
 /// One row of the tome menu. Same target / app-filter / action
 /// semantics as `Rule`, minus the cast pattern, plus presentation
