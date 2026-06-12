@@ -39,13 +39,14 @@ public let wandDefaultThemeName = "system"
 /// `canonicalThemeNames` so a typo is still rejected.
 public let wandLocalThemeNames = ["neon", "splatoon"]
 
-/// Validate a raw `[cast].theme` / `[tome].theme` / `--theme=` value
-/// against sill's `canonicalThemeNames` (+ wand's local engine themes),
-/// returning the canonical name or `nil` for an unknown name so the
-/// caller can clamp + log (wand's loud-typo discipline — sill's
-/// `paletteFor` is silent and would mask a typo as `terminal`).
-/// `random` resolves HERE to a concrete name (excluding `system`) so the
-/// chosen theme is stable for the session.
+/// Validate a raw `[cast].theme` / `[tome].theme` / `--theme=` value —
+/// sill's shared `canonical(_:)` mechanism wrapped with wand's local
+/// engine themes (neon / splatoon, which sill doesn't know), returning
+/// the canonical name or `nil` for an unknown name so the caller can
+/// clamp + log (wand's loud-typo discipline — sill's `paletteFor` is
+/// silent and would mask a typo as `terminal`). `random` resolves HERE
+/// to a concrete name (excluding `system`) so the chosen theme is
+/// stable for the session.
 public func wandCanonicalThemeName(_ raw: String) -> String? {
     let t = raw.trimmingCharacters(in: .whitespaces).lowercased()
     if t.isEmpty { return nil }
@@ -55,7 +56,33 @@ public func wandCanonicalThemeName(_ raw: String) -> String? {
         return pool.randomElement() ?? "terminal"
     }
     if wandLocalThemeNames.contains(t) { return t }
-    return canonicalThemeNames.contains(t) ? t : nil
+    // Membership + normalization delegate to sill (`random` was
+    // intercepted above, so canonical's passthrough is unreachable).
+    return canonical(t)
+}
+
+/// "Did you mean" hint for an unknown theme name — sill's `suggest(_:)`
+/// plus wand's local engine themes (a near-miss like "splatoo" should
+/// hint "splatoon", which sill can't know). `nil` when nothing is close.
+public func wandThemeNameSuggestion(_ raw: String) -> String? {
+    let t = raw.trimmingCharacters(in: .whitespaces).lowercased()
+    // Cheap local pass first: prefix/edit-adjacency against the two
+    // engine names, mirroring suggest's intent without duplicating its
+    // distance machinery.
+    if let local = wandLocalThemeNames.first(where: {
+        $0.hasPrefix(t) || t.hasPrefix($0) || levenshteinClose(t, $0)
+    }) { return local }
+    return suggest(raw)
+}
+
+/// True when `a` and `b` are within edit distance 2 for short names —
+/// just enough for the two local engine themes; sill's `suggest` covers
+/// the full catalog.
+private func levenshteinClose(_ a: String, _ b: String) -> Bool {
+    if abs(a.count - b.count) > 2 { return false }
+    // For names this short a simple common-prefix + tail check suffices:
+    let common = zip(a, b).prefix(while: { $0 == $1 }).count
+    return max(a.count, b.count) - common <= 2
 }
 
 // MARK: - Cast HUD palette

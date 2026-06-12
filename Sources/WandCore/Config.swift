@@ -725,8 +725,10 @@ public struct WandConfig: Sendable {
         let raw = table.string(key).trimmingCharacters(in: .whitespaces)
         if raw.isEmpty { return wandDefaultThemeName }
         if let name = wandCanonicalThemeName(raw) { return name }
+        let hint = wandThemeNameSuggestion(raw)
+            .map { " (did you mean \"\($0)\"?)" } ?? ""
         Log.line("config: [\(section)].\(key) = \"\(raw)\" not recognised "
-                 + "— falling back to \"\(wandDefaultThemeName)\"")
+                 + "— falling back to \"\(wandDefaultThemeName)\"" + hint)
         return wandDefaultThemeName
     }
 
