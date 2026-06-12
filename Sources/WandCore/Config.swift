@@ -622,7 +622,7 @@ public struct WandConfig: Sendable {
         table.strings("line-pets").compactMap { raw in
             let v = raw.lowercased()
             if let pet = LinePet(rawValue: v) { return pet }
-            let valid = LinePet.allCases.map(\.rawValue)
+            let valid = canonicalLinePetNames
                 .sorted().joined(separator: ", ")
             Log.line("config: [\(section)].line-pets contains"
                      + " unrecognised entry \"\(raw)\" — dropped"

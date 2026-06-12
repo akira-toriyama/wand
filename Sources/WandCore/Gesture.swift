@@ -7,6 +7,7 @@
 
 import CoreGraphics
 import Foundation
+import Palette   // LinePet (shared pet vocabulary)
 
 // MARK: - Theme
 

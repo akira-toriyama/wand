@@ -7,6 +7,7 @@
 
 import AppKit
 import CoreGraphics
+import Effects   // drawLinePets (shared line-pet drawing; re-exports Palette)
 import Palette
 import WandCore
 
@@ -2696,8 +2697,12 @@ private final class HUDContentView: NSView {
         // the card grows.
         if !linePets.isEmpty {
             let petScale = max(1.0, o.cardFontSize / 13.0)
-            drawCardLinePets(linePets, on: c.rect, now: nowArmed,
-                              petScale: petScale)
+            // Shared sill drawing. `insetBy(-1)` keeps the pet riding ON
+            // the card border (just outside it); cast runs a calmer 110
+            // pt/s than the tome rim; chaseGap omitted = sill's 24*scale
+            // default (== wand's prior `24 * petScale`).
+            drawLinePets(linePets, on: c.rect.insetBy(dx: -1, dy: -1),
+                         now: nowArmed, scale: petScale, speed: 110)
         }
         NSGraphicsContext.restoreGraphicsState()
     }
@@ -2792,150 +2797,6 @@ private final class HUDContentView: NSView {
             path.stroke()
         }
         _ = o   // currently no kind needs the owner ref; held for future
-    }
-
-    /// Chomp "pets" walking the firing card's outline. Mirrors the
-    /// tome-side `TomePetsView.draw` shape — first entry leads, each
-    /// follower trails by a fixed pt-along-the-perimeter gap. The
-    /// pellet's centre traces the rect's outer edge directly, so its
-    /// visible half rides on top of the card border.
-    private func drawCardLinePets(_ pets: [LinePet],
-                                   on rect: CGRect,
-                                   now: CFTimeInterval,
-                                   petScale: CGFloat) {
-        // Travel just outside the card edge so the pet sits ON TOP
-        // of the border, not under it.
-        let path = rect.insetBy(dx: -1, dy: -1)
-        guard path.width > 0, path.height > 0 else { return }
-        let perim = 2 * (path.width + path.height)
-        let speed: CGFloat = 110  // pt/s — calmer than the tome
-                                   // rim so a small card doesn't
-                                   // look like the pet is sprinting
-        let leader = CGFloat(now).truncatingRemainder(
-            dividingBy: perim / speed
-        ) * speed
-        let chaseGap: CGFloat = 24 * petScale  // ~2× ghost width
-        for (i, pet) in pets.enumerated() {
-            var pos = leader - CGFloat(i) * chaseGap
-            pos = pos.truncatingRemainder(dividingBy: perim)
-            if pos < 0 { pos += perim }
-            let (px, py, rot) = positionOnRect(rect: path,
-                                                 distance: pos)
-            NSGraphicsContext.saveGraphicsState()
-            let tx = NSAffineTransform()
-            tx.translateX(by: px, yBy: py)
-            tx.rotate(byRadians: rot)
-            tx.concat()
-            switch pet {
-            case .chomp: drawCardChomp(now: now, petScale: petScale)
-            case .ghost:  drawCardGhost(now: now, petScale: petScale)
-            }
-            NSGraphicsContext.restoreGraphicsState()
-        }
-    }
-
-    /// Walk `rect`'s perimeter linearly (top → right → bottom → left)
-    /// and return the centre + travel-direction rotation. Each pet's
-    /// draw code can stay in a "facing-right" canonical frame; the
-    /// transform handles lap orientation.
-    private func positionOnRect(rect r: CGRect, distance t: CGFloat)
-        -> (x: CGFloat, y: CGFloat, rot: CGFloat) {
-        let topLen = r.width
-        let rightLen = r.height
-        let bottomLen = r.width
-        if t < topLen {
-            return (r.minX + t, r.maxY, 0)
-        } else if t < topLen + rightLen {
-            return (r.maxX, r.maxY - (t - topLen), -.pi / 2)
-        } else if t < topLen + rightLen + bottomLen {
-            return (r.maxX - (t - topLen - rightLen), r.minY, .pi)
-        } else {
-            return (r.minX,
-                    r.minY + (t - topLen - rightLen - bottomLen),
-                    .pi / 2)
-        }
-    }
-
-    /// Yellow chomp wedge with the mouth chomp on a ~0.25 s cycle,
-    /// drawn centred on the current transform origin. Matches the
-    /// tome-side variant verbatim so both surfaces' pellets read as
-    /// the same character. `petScale` keeps it proportional to the
-    /// card's font size.
-    private func drawCardChomp(now: CFTimeInterval,
-                                 petScale: CGFloat) {
-        let r: CGFloat = 7 * petScale
-        let chompPhase = 0.5 - 0.5 * cos(now * (2 * .pi / 0.25))
-        let openRad = chompPhase * (35.0 * .pi / 180.0)
-        let yellow = NSColor(calibratedRed: 1.0, green: 0.85,
-                             blue: 0.0, alpha: 1.0)
-        let p = NSBezierPath()
-        p.move(to: .zero)
-        p.appendArc(withCenter: .zero, radius: r,
-                     startAngle: CGFloat(openRad * 180 / .pi),
-                     endAngle: CGFloat(360 - openRad * 180 / .pi),
-                     clockwise: false)
-        p.close()
-        yellow.setFill(); p.fill()
-        NSColor.black.withAlphaComponent(0.35).setStroke()
-        p.lineWidth = 0.5; p.stroke()
-    }
-
-    /// Red Blinky-style ghost: dome + 3-wave skirt + eyes pointing
-    /// along travel direction. Same geometry as `TomePetsView`'s
-    /// ghost so both surfaces ship identical silhouettes.
-    private func drawCardGhost(now: CFTimeInterval,
-                                petScale: CGFloat) {
-        let w: CGFloat = 14 * petScale
-        let h: CGFloat = 16 * petScale
-        let bob = CGFloat(sin(now * (2 * .pi / 0.4))) * 0.6 * petScale
-        let halfW = w / 2
-        let halfH = h / 2
-        let red = NSColor(calibratedRed: 1.0, green: 0.0,
-                          blue: 0.10, alpha: 1.0)
-        let body = NSBezierPath()
-        body.move(to: CGPoint(x: -halfW, y: 0))
-        body.appendArc(withCenter: CGPoint(x: 0, y: 0),
-                        radius: halfW,
-                        startAngle: 180, endAngle: 0,
-                        clockwise: false)
-        body.line(to: CGPoint(x: halfW, y: -halfH + bob))
-        let segments = 3
-        let segW = w / CGFloat(segments)
-        let waveDepth: CGFloat = 1.5 * petScale
-        for i in (0..<segments).reversed() {
-            let startX = -halfW + CGFloat(i + 1) * segW
-            let endX = -halfW + CGFloat(i) * segW
-            let midX = (startX + endX) / 2
-            body.curve(to: CGPoint(x: endX, y: -halfH + bob),
-                        controlPoint1: CGPoint(x: midX,
-                                               y: -halfH - waveDepth - bob),
-                        controlPoint2: CGPoint(x: midX,
-                                               y: -halfH - waveDepth - bob))
-        }
-        body.line(to: CGPoint(x: -halfW, y: 0))
-        body.close()
-        red.setFill(); body.fill()
-        NSColor.black.withAlphaComponent(0.35).setStroke()
-        body.lineWidth = 0.5 * petScale; body.stroke()
-        let eyeR: CGFloat = 2.0 * petScale
-        let pupilR: CGFloat = 1.0 * petScale
-        let eyeY: CGFloat = halfH * 0.35
-        let eyeDx: CGFloat = 2.6 * petScale
-        let pupilOffset: CGFloat = 0.7 * petScale
-        let eyeShift: CGFloat = 1.0 * petScale
-        for sign in [-1.0, 1.0] {
-            let cx = CGFloat(sign) * eyeDx + eyeShift
-            let sclera = NSBezierPath(ovalIn: CGRect(
-                x: cx - eyeR, y: eyeY - eyeR,
-                width: 2 * eyeR, height: 2 * eyeR))
-            NSColor.white.setFill(); sclera.fill()
-            let pupil = NSBezierPath(ovalIn: CGRect(
-                x: cx - pupilR + pupilOffset, y: eyeY - pupilR,
-                width: 2 * pupilR, height: 2 * pupilR))
-            NSColor(calibratedRed: 0.10, green: 0.18,
-                    blue: 0.95, alpha: 1.0).setFill()
-            pupil.fill()
-        }
     }
 
     /// Per-effect transform + alpha for an exiting card at `progress`
