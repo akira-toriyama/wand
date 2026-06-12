@@ -69,14 +69,14 @@ variables.
 wand also ships a **middle-click contextual menu** as a second
 trigger. Off by default — set `[tome].enabled = true` in your
 config and the daemon installs a second event tap alongside the
-cast one. The tome renders as a **non-activating panel**
-(PopClip parity): it floats above the underlying app *without*
-stealing keyboard focus, so you can keep typing in your editor
-while picking a row with the mouse. Submenus open on hover as an
-adjacent child panel (`group = ["..."]`). Click outside or press
-Esc to dismiss. The panel is anchored to the **window under the
-cursor at button-down** — same invariant as the cast path. Each
-`[[tome.cursor.item]]` is one row:
+cast one. The tome renders as a **non-activating panel** that
+keeps the source app focused: it floats above the underlying app
+*without* stealing keyboard focus, so you can keep typing in your
+editor while picking a row with the mouse. Submenus open on hover
+as an adjacent child panel (`group = ["..."]`). Click outside or
+press Esc to dismiss. The panel is anchored to the **window
+under the cursor at button-down** — same invariant as the cast
+path. Each `[[tome.cursor.item]]` is one row:
 
 ```toml
 [tome]
@@ -381,7 +381,8 @@ wand --show-menu --items <PATH> --at <X> <Y> [--selection <TEXT>] \
                         # external trigger: pop the tome with a
                           # caller-supplied [[tome.cursor.item]] file at <X> <Y>
                           # (Cocoa screen coords, Y-up).  Used by
-                          # event-driven daemons (eventfx etc).
+                          # an upstream trigger (a chord hotkey, or
+                          # a text-selection observer).
                           # --selection populates $SELECTION for
                           # shell items; --title overrides the
                           # frontmost window title for

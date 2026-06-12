@@ -228,7 +228,8 @@ public final class Controller: @unchecked Sendable {
     }
 
     /// External-trigger entry point. Wired in by `--show-menu` —
-    /// `eventfx` (or any other event-driven daemon) posts a DNC
+    /// an upstream trigger (a chord hotkey, or a text-selection
+    /// observer) posts a DNC
     /// notification carrying an items-TOML path, a Cocoa screen
     /// point, and an optional selection text. We resolve the target
     /// via `NSWorkspace.frontmostApplication` (the **cursor-anchored
@@ -425,7 +426,7 @@ public final class Controller: @unchecked Sendable {
             : "\ntome=off"
         // `show-menu` line surfaces only after the external trigger
         // has fired at least once — keeps `--status` quiet for users
-        // who haven't wired an external daemon (eventfx).
+        // who haven't wired an external trigger.
         let showMenuLine = counterShowMenuShown > 0
             ? "\nshow-menu: shown=\(counterShowMenuShown), "
               + "dispatched=\(counterShowMenuDispatched)"

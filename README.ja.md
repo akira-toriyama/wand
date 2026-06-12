@@ -65,7 +65,7 @@ explode / vibrate / fireworks / confetti(花火・紙吹雪)。
 wand は **中ボタンクリックで出るコンテキストメニュー** も第二の
 トリガーとして持っている。既定で off。`[tome].enabled = true`
 にすると、cast 用 event tap と別にもう一つの tap を立ち上げる。
-tome は **non-activating panel** で描画される(PopClip 同等):
+tome は **non-activating panel** で描画される(フォーカスを奪わない):
 下のアプリの**キーボードフォーカスを奪わず**に上に浮かぶので、エディタ
 で typing を続けたままマウスで行を選べる。サブメニュー(`group =
 ["..."]`)は hover で隣に child panel として開く。外をクリック / Esc
@@ -366,8 +366,9 @@ wand --show-menu --items <PATH> --at <X> <Y> [--selection <TEXT>] \
                  [--title <TEXT>]
                         # 外部トリガー: 任意の [[tome.cursor.item]] ファイルで
                           # tome を <X> <Y>(Cocoa 座標、Y-up)
-                          # に出す。eventfx のようなイベント駆動デーモン
-                          # 用のエントリ。--selection で $SELECTION を
+                          # に出す。トリガー（chord のホットキーや
+                          # テキスト選択監視など）用のエントリ。
+                          # --selection で $SELECTION を
                           # shell アクションへ注入、--title でフロント
                           # ウィンドウタイトル($WAND_TARGET_TITLE)を
                           # 上書き。
