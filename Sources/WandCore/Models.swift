@@ -242,7 +242,7 @@ public enum TrailEndKind: String, Sendable, Hashable, CaseIterable {
 /// hue-rotating colour cycle. The remaining cases are **static
 /// signature-colour rims** that each pair visually with the same-named
 /// `[tome].theme` but are independent of it, so users can mix-and-match
-/// (e.g. `[tome].theme = "rainbow"` + `[tome.decoration].border =
+/// (e.g. `[tome].theme = "rainbow"` + `[tome.decoration.border].effect =
 /// "neon"`).
 public enum LauncherBorder: String, Sendable, Hashable, CaseIterable {
     case off
