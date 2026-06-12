@@ -63,6 +63,8 @@
 #   [tome.row]                      — per-row visual cosmetics
 #   [tome.animation]                — panel open / close animations
 #   [tome.decoration]               — static panel decoration
+#   [tome.decoration.border]        — decorative border rim
+#                                     (effect / width / cycle)
 #   [[tome.cursor.item]]            — one menu row (cursor-anchored)
 
 
@@ -98,7 +100,7 @@ apps = []
 # stuck states and external HID layers (Karabiner-Elements,
 # Logitech Options, KVMs) that drop the real up event.
 # Clamped 5..300.
-mouse-hold-timeout-sec = 30
+mouse-hold-timeout-seconds = 30
 
 # Emergency release key. Observed via NSEvent global monitor —
 # passively, so the underlying app still receives the key (Esc still
@@ -572,7 +574,7 @@ layout = "list"
 # accent, idle row text, AND the panel backdrop. Themes other than
 # "system" REPLACE the system frosted blur with a solid colour.
 # The panel rim is **not** a theme axis — pick
-# `[tome.decoration].border` for an outline. Independent of
+# `[tome.decoration.border].effect` for an outline. Independent of
 # `[cast].theme` — pair them freely or run different looks per
 # trigger family.
 #
@@ -582,7 +584,7 @@ layout = "list"
 #   "chomp"    — yellow accent on black with yellow rows; pairs with
 #                `[cast].theme = "chomp"` for a coordinated arcade look
 #   "rainbow"  — white rows on deep violet-black, hot-rose hover. Pair
-#                with `[tome.decoration].border = "rainbow"` for the
+#                with `[tome.decoration.border].effect = "rainbow"` for the
 #                animated spectrum outline
 #   "cobalt2" / "shades-of-purple" / "tokyo-hack" / "github-dark" /
 #   "dracula" / "catppuccin-mocha" / "gruvbox" / "github-light" /
@@ -598,7 +600,7 @@ layout = "list"
 #   "random"   — pick a concrete theme at launch
 #
 # Solid-backdrop themes REPLACE the system frosted blur. The panel rim
-# is NOT a theme axis — pick `[tome.decoration].border` for an outline.
+# is NOT a theme axis — pick `[tome.decoration.border].effect` for an outline.
 # Independent of `[cast].theme`. Unknown names clamp to "system".
 theme = "system"
 
@@ -654,44 +656,9 @@ close = "off"
 
 
 # Static panel decoration — paints once and stays still. Distinct
-# from `[tome.animation]` (which moves in time).
+# from `[tome.animation]` (which moves in time). The border rim is its
+# own concern under `[tome.decoration.border]` below.
 [tome.decoration]
-
-# Decorative panel border. Sits on the colour-decoration axis.
-# Inherited by child panels for visual consistency. Independent of
-# `[tome].theme` — mix freely (`theme = "rainbow"` +
-# `border = "neon"` is fair game).
-#
-#   "off"      — no border (default)
-#   "rainbow"  — animated hue-rotating outline cycling around the
-#                panel's rounded rect (period configurable via
-#                `color-cycle-ms` below)
-#   "terminal" — static green rim (#22c55e)
-#   "neon"     — static electric cyan rim (#22d3ee)
-#   "splatoon" — static lime rim (#bfff00)
-#   "mono"     — static white rim
-#   "vapor"    — static synthwave pink rim (#ff79c6)
-#   "chomp"  — static arcade yellow rim (#ffea00)
-border = "off"
-
-# Cycle period (ms) for any animated `border` kind — currently only
-# `"rainbow"`. Smaller = faster strobe; larger = slower drift.
-# Static border kinds ignore this value. Clamped 500..10000.
-#
-#   500   — strobing (very fast hue churn)
-#   1000  — flicker
-#   4000  — default; smooth visible cycle over a typical panel session
-#   8000  — slow drift, almost-solid feel
-color-cycle-ms = 4000
-
-# Border stroke width in points. Clamped 1..10. Ignored when
-# `border = "off"`.
-#
-#   1     — hairline (thin rim, very subtle)
-#   2     — default; reads as a clean panel edge
-#   4     — bold ribbon
-#   8+    — chunky / arcade-pixel feel; pairs well with chomp / mono
-border-width = 2
 
 # macOS window drop shadow under the panel. Default `false`: macOS
 # draws a thin dark halo just outside any panel with `hasShadow =
@@ -712,6 +679,44 @@ shadow = false
 # proportionally larger pets — the ghost stays readable at any
 # font-size. `outer-margin` is auto-managed to match.
 line-pets = []
+
+
+# Decorative panel border rim — one block, one concern (same shape as
+# facet/halo `[border]` and perch `[overlay.border]`). Inherited by
+# child panels for visual consistency. Independent of `[tome].theme` —
+# mix freely (`theme = "rainbow"` + `effect = "neon"` is fair game).
+[tome.decoration.border]
+
+# Border effect / colour. `"off"` = no border (default).
+#
+#   "rainbow"  — animated hue-rotating outline cycling around the
+#                panel's rounded rect (period via `color-cycle-ms`)
+#   "terminal" — static green rim (#22c55e)
+#   "neon"     — static electric cyan rim (#22d3ee)
+#   "splatoon" — static lime rim (#bfff00)
+#   "mono"     — static white rim
+#   "vapor"    — static synthwave pink rim (#ff79c6)
+#   "chomp"    — static arcade yellow rim (#ffea00)
+effect = "off"
+
+# Cycle period (ms) for any animated `effect` kind — currently only
+# `"rainbow"`. Smaller = faster strobe; larger = slower drift.
+# Static kinds ignore this value. Clamped 500..10000.
+#
+#   500   — strobing (very fast hue churn)
+#   1000  — flicker
+#   4000  — default; smooth visible cycle over a typical panel session
+#   8000  — slow drift, almost-solid feel
+color-cycle-ms = 4000
+
+# Border stroke width in points. Clamped 1..10. Ignored when
+# `effect = "off"`.
+#
+#   1     — hairline (thin rim, very subtle)
+#   2     — default; reads as a clean panel edge
+#   4     — bold ribbon
+#   8+    — chunky / arcade-pixel feel; pairs well with chomp / mono
+width = 2
 
 
 # -----------------------------------------------------------------

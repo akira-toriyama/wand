@@ -343,7 +343,7 @@ private enum PanelLayout {
         bg.layer?.cornerRadius = cornerRadius
         bg.layer?.masksToBounds = true
         bg.translatesAutoresizingMaskIntoConstraints = false
-        // Panel rim is solely a `[tome.decoration].border` concern —
+        // Panel rim is solely a `[tome.decoration.border]` concern —
         // a theme-supplied static frame here would overlap (and
         // visually swallow) the animated rim drawn by
         // `PanelController.installBorderDecoration`.

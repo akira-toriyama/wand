@@ -365,14 +365,18 @@ public struct WandConfig: Sendable {
         let launcherAnimation = LauncherAnimationSpec(
             open: launcherAnimOpen, close: launcherAnimClose)
 
-        // [tome.decoration]
+        // [tome.decoration] — panel-level statics (shadow, line-pets);
+        // the border rim is its own concern under [tome.decoration.border]
+        // (effect / width / color-cycle-ms), per the family block shape
+        // shared with facet/halo [border] and perch [overlay.border].
         let ld = doc.tables["tome.decoration"] ?? [:]
+        let ldb = doc.tables["tome.decoration.border"] ?? [:]
         let launcherDecorBorder: LauncherBorder = parseEnum(
-            ld, key: "border", section: "tome.decoration", default: .off)
+            ldb, key: "effect", section: "tome.decoration.border", default: .off)
         let launcherDecorCycleMs = clampInt(
-            ld, key: "color-cycle-ms", default: 4000, lo: 500, hi: 10000)
+            ldb, key: "color-cycle-ms", default: 4000, lo: 500, hi: 10000)
         let launcherDecorBorderWidth = clampInt(
-            ld, key: "border-width", default: 2, lo: 1, hi: 10)
+            ldb, key: "width", default: 2, lo: 1, hi: 10)
         let launcherDecorShadow = ld.bool("shadow", false)
         let launcherDecorLinePets: [LinePet] = parseLinePets(
             ld, section: "tome.decoration")
@@ -398,7 +402,7 @@ public struct WandConfig: Sendable {
                 nonDefault.append("[tome.animation].close = \"\(launcherAnimClose.rawValue)\"")
             }
             if launcherDecorBorder != .off {
-                nonDefault.append("[tome.decoration].border = \"\(launcherDecorBorder.rawValue)\"")
+                nonDefault.append("[tome.decoration.border].effect = \"\(launcherDecorBorder.rawValue)\"")
             }
             if !nonDefault.isEmpty {
                 Log.line("config: \(nonDefault.joined(separator: ", "))"
@@ -470,7 +474,7 @@ public struct WandConfig: Sendable {
         // `failsafeBlockPresent`. See CLAUDE.md "Safety invariants".
         let fs = doc.tables["failsafe"] ?? [:]
         let mouseHoldTimeoutSec = clampInt(
-            fs, key: "mouse-hold-timeout-sec",
+            fs, key: "mouse-hold-timeout-seconds",
             default: 30, lo: 5, hi: 300)
         let emergencyReleaseKey: String = {
             let raw = fs.string("emergency-release-key").lowercased()
