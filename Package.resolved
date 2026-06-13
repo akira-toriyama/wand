@@ -1,13 +1,13 @@
 {
-  "originHash" : "dac9fcc3261c85c732ed570d2f0028607aa9fe6f260d08769bc52e6a937ca1d4",
+  "originHash" : "272d13b5b9052a7d8717c88d14c9bb525ac7187658788e09b7822020930f6f4b",
   "pins" : [
     {
       "identity" : "sill",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/akira-toriyama/sill.git",
       "state" : {
-        "revision" : "13b175f1f2a26dcd53f7aff22ebd32c31d3e8b7b",
-        "version" : "0.6.0"
+        "revision" : "8411abeab44e1fd13d86e513a6fde5529d2f0b9c",
+        "version" : "0.7.1"
       }
     }
   ],

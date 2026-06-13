@@ -48,15 +48,23 @@ let package = Package(
         // `resolve`). sill 0.6.0 moves the pure `LinePet` vocabulary into
         // `Palette` (so a no-AppKit Core can validate it) and adds
         // `drawLinePets(…chaseGap:)` — both consumed by wand's line-pets
-        // dedup. Pinned to the next-minor range like the other family
+        // dedup. Since 0.7.0 WandCore also takes the `Toml` module — the
+        // family's ONE hand-rolled TOML subset parser (wand's in-tree
+        // TOML.swift folded into sill in atelier Phase 1.6). wand reads
+        // config via `Toml.parseFlat`, whose `Document{tables,arrays}` is
+        // the exact shape wand's old `TOMLDocument` had, so the swap is
+        // mechanical. Pinned to the next-minor range like the other family
         // apps; Package.resolved locks the exact commit.
         .package(url: "https://github.com/akira-toriyama/sill.git",
-                 .upToNextMinor(from: "0.6.0")),
+                 .upToNextMinor(from: "0.7.1")),
     ],
     targets: [
         .target(
             name: "WandCore",
-            dependencies: [.product(name: "Palette", package: "sill")]),
+            dependencies: [
+                .product(name: "Palette", package: "sill"),
+                .product(name: "Toml", package: "sill"),
+            ]),
         .target(
             name: "WandAdapterMacOS",
             dependencies: [

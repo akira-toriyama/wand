@@ -5,6 +5,16 @@
 
 import Foundation
 import Palette
+import Toml
+
+// wand's four-case TOML model + flat document folded into sill's shared
+// `Toml` module in atelier Phase 1.6. `Toml.Document` has the exact
+// `{tables, arrays}` shape wand's old `TOMLDocument` had, and `Toml.Value`
+// is a superset of the old `TOMLValue` (adds .double/.array/.table/AoT),
+// so these aliases keep every signature and `if case .string(...)` read
+// site unchanged. Values are read through the accessor extension below.
+private typealias TOMLValue = Toml.Value
+private typealias TOMLDocument = Toml.Document
 
 public struct WandConfig: Sendable {
     /// `[cast]` — the gesture trigger (button + modifiers). Other
@@ -101,7 +111,7 @@ public struct WandConfig: Sendable {
     /// rename to `[[tome.cursor.item]]` (the namespace explicit form
     /// that pairs symmetrically with `[[cast.cursor.rule]]`).
     public static func parseItems(_ text: String) -> LauncherItemsFile {
-        let doc = parseTOMLSubset(text)
+        let doc = Toml.parseFlat(text)
         let lr = doc.tables["tome"] ?? [:]
         let layout: LauncherLayout = parseEnum(
             lr, key: "layout", section: "tome", default: .list)
@@ -113,7 +123,7 @@ public struct WandConfig: Sendable {
     }
 
     static func parse(_ text: String) -> WandConfig {
-        let doc = parseTOMLSubset(text)
+        let doc = Toml.parseFlat(text)
 
         // ── [exclude] ─────────────────────────────────────────
         // Bundle ids where wand is fully disabled. Applies to BOTH
@@ -939,19 +949,21 @@ public struct WandConfig: Sendable {
 // never throw on a typo).
 private extension [String: TOMLValue] {
     func string(_ key: String, _ fallback: String = "") -> String {
-        if case .string(let s) = self[key] { return s }
-        return fallback
+        self[key]?.asString ?? fallback
     }
     func int(_ key: String, _ fallback: Int) -> Int {
-        if case .int(let i) = self[key] { return i }
-        return fallback
+        // sill stores ints as Int64; `asInt` narrows to wand's field
+        // width and (deliberately) does NOT coerce a `.double`, so a
+        // fractional value falls back exactly like the old skip-on-typo.
+        self[key]?.asInt ?? fallback
     }
     func bool(_ key: String, _ fallback: Bool) -> Bool {
-        if case .bool(let b) = self[key] { return b }
-        return fallback
+        self[key]?.asBool ?? fallback
     }
     func strings(_ key: String, _ fallback: [String] = []) -> [String] {
-        if case .stringArray(let a) = self[key] { return a }
-        return fallback
+        // Old wand had a dedicated `.stringArray` case; sill stores a
+        // generic `.array` and projects to strings on read (non-strings
+        // dropped — same net result as the old string-only array parse).
+        self[key]?.asStringArray ?? fallback
     }
 }
