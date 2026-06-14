@@ -27,7 +27,7 @@ jobs:
     uses: akira-toriyama/.github/.github/workflows/release.yml@main
     with:
       app: Wand
-      smoke: true
+      smoke-cmd: "config --validate"
       dry-run: ${{ github.event.inputs.dry_run == 'true' }}
       install-notes: |
         ## Install
@@ -53,5 +53,6 @@ jobs:
         Privacy & Security → Accessibility). Start with `wand` (or
         `WAND_DEBUG=1 wand` to mirror logs to stderr). See
         [README](https://github.com/akira-toriyama/wand#readme)
-        for the rule schema and the `--reload` / `--quit` /
-        `--record` flags.
+        for the rule schema and the yabai-style
+        `wand <domain> --<verb>` CLI (`daemon` / `cast` / `tome` /
+        `config`).
