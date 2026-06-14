@@ -45,7 +45,7 @@ public final class Controller: @unchecked Sendable {
     /// where no items qualify is a no-op, not a "shown" event.
     private var counterLauncherShown = 0
     private var counterLauncherDispatched = 0
-    /// Same semantics as `Launcher*` but for the external `--show-menu`
+    /// Same semantics as `Launcher*` but for the external `tome --open`
     /// entry point (event-driven daemons posting via IPC).
     private var counterShowMenuShown = 0
     private var counterShowMenuDispatched = 0
@@ -193,7 +193,7 @@ public final class Controller: @unchecked Sendable {
         writeStatus()
         // Capture the focused element's selected text at button-down
         // time, so shell actions can read it via `$SELECTION` — same
-        // env-var contract the `--show-menu` external path already
+        // env-var contract the `tome --open` external path already
         // honours, now native too. Captured once at button-down
         // (not at menu-close): the user's selection at the moment
         // they triggered the menu is what they intended to act on.
@@ -227,7 +227,7 @@ public final class Controller: @unchecked Sendable {
         }
     }
 
-    /// External-trigger entry point. Wired in by `--show-menu` —
+    /// External-trigger entry point. Wired in by `tome --open` —
     /// an upstream trigger (a chord hotkey, or a text-selection
     /// observer) posts a DNC
     /// notification carrying an items-TOML path, a Cocoa screen
@@ -244,19 +244,19 @@ public final class Controller: @unchecked Sendable {
                         title: String? = nil) {
         let cfg = config
         guard let text = try? String(contentsOfFile: itemsPath, encoding: .utf8) else {
-            Log.line("controller: --show-menu: items file unreadable "
+            Log.line("controller: tome --open: items file unreadable "
                      + "at \(itemsPath) — request dropped")
             return
         }
         let parsed = WandConfig.parseItems(text)
         guard !parsed.items.isEmpty else {
-            Log.line("controller: --show-menu: items file at \(itemsPath) "
+            Log.line("controller: tome --open: items file at \(itemsPath) "
                      + "yielded 0 items — request dropped")
             return
         }
         guard let app = NSWorkspace.shared.frontmostApplication,
               let bid = app.bundleIdentifier else {
-            Log.line("controller: --show-menu: no frontmost app — "
+            Log.line("controller: tome --open: no frontmost app — "
                      + "request dropped")
             return
         }
@@ -274,7 +274,7 @@ public final class Controller: @unchecked Sendable {
         let visible = Matcher.itemsFor(target: target, items: parsed.items,
                                         excludes: cfg.excludeApps,
                                         evalShell: evalShell)
-        Log.line("controller: --show-menu (external trigger) on "
+        Log.line("controller: tome --open (external trigger) on "
                  + "\(bid) at \(cocoaPoint) — "
                  + "\(visible.count)/\(parsed.items.count) item(s) visible"
                  + ", layout=\(parsed.layout.rawValue)"

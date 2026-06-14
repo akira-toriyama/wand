@@ -23,7 +23,7 @@ jobs:
       - uses: akira-toriyama/.github/actions/swift-build@main
 
       # Smoke-check the CLI parser path (no event tap touched).
-      - name: Smoke (--help, --validate)
+      - name: Smoke (--help, config --validate)
         run: |
           .build/release/wand --help > /dev/null
-          .build/release/wand --validate
+          .build/release/wand config --validate

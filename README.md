@@ -234,12 +234,12 @@ wand is **config.toml-driven** — there is no settings GUI by
 design. The `curl` line above drops the template at
 `~/.config/wand/config.toml`. Out-of-range / unknown values clamp
 silently to defaults — a typo can never break the daemon. Validate
-explicitly with `wand --validate`.
+explicitly with `wand config --validate`.
 
 > **`[failsafe]` is mandatory.** It defines the safety nets that
 > catch a stuck click / drag (button-hold timeout, Esc emergency
 > release). The bundled template ships it; **don't delete the
-> block** — `wand --validate` and daemon startup both refuse to
+> block** — `wand config --validate` and daemon startup both refuse to
 > run without it. See the `[failsafe]` block in
 > [`config.toml`](config.toml) for the knobs.
 
@@ -264,7 +264,7 @@ Pattern alphabet is `L U R D` (left / up / right / down) —
 **no consecutive duplicates**, because the recogniser coalesces
 same-direction motion into one segment (`LLLL…` is `L`, not `LL`).
 A rule whose pattern repeats a direction (`DRR`, `LL`, …) is
-unreachable; `wand --validate` drops it loudly. Scroll-axis
+unreachable; `wand config --validate` drops it loudly. Scroll-axis
 directions are not recognised yet. Action types are `key` (a
 keystroke), `ax` (`close` / `minimize` / `zoom` / `raise`), and
 `shell` (any command), `url` (`https://`, `slack://`, `file://`,
@@ -356,50 +356,63 @@ intensity = "wild"      # subtle | normal | bold | wild
 
 ## CLI
 
+yabai-style `wand <domain> --<verb> [VALUE …]`. Four domains —
+**daemon** (lifecycle), **cast** (gesture engine), **tome** (launcher
+menu), **config** (settings). Bare `wand` runs the agent.
+
 ```sh
 wand                    # run as agent (CGEventTap loop)
 WAND_DEBUG=1 wand       # verbose log to /tmp/wand.log + stderr
 
-wand --validate         # parse config.toml, exit 0/2.  Warnings
-                          # (clamps, collisions, typos) print to stderr.
-wand --validate --items <PATH>   # also validate an [[tome.cursor.item]] file
-                                  # intended for --show-menu
-wand --doctor           # health check: Accessibility, config, daemon, tap
-wand --test DR [app]    # dry-run: which rule fires for a pattern
-wand --record           # interactive recorder — draw a gesture, get a
-                          # paste-ready [[cast.cursor.rule]] snippet on stdout
+# daemon — lifecycle (need a running daemon; exit 3 if none)
+wand daemon --reload    # re-read config.toml (also automatic on save)
+wand daemon --show      # rule count, trigger, last gesture, counters
+wand daemon --quit      # terminate the running daemon
+wand daemon --resign    # re-sign the installed Wand.app + restart
+                        #   (run once after `brew install` / upgrade)
 
-wand --status           # rule count, trigger, last gesture
-wand --reload           # re-read config.toml (also automatic on save)
-wand --quit             # terminate the running daemon
-wand --resign           # re-sign the installed Wand.app with the
-                          # stable self-signed identity + restart
-                          # (run once after `brew install` / upgrade
-                          # if the TCC grant drops)
-wand --show-menu --items <PATH> --at <X> <Y> [--selection <TEXT>] \
-                 [--title <TEXT>]
-                        # external trigger: pop the tome with a
-                          # caller-supplied [[tome.cursor.item]] file at <X> <Y>
-                          # (Cocoa screen coords, Y-up).  Used by
-                          # an upstream trigger (a chord hotkey, or
-                          # a text-selection observer).
-                          # --selection populates $SELECTION for
-                          # shell items; --title overrides the
-                          # frontmost window title for
-                          # $WAND_TARGET_TITLE.
-wand --help
+# cast — gesture engine
+wand cast --test DR [app]   # dry-run: which rule fires for a pattern
+wand cast --record          # interactive recorder → paste-ready [[cast.rule]]
+
+# tome — launcher menu (external trigger)
+wand tome --open --items <PATH> --at <X> <Y> [--selection <TEXT>] [--title <TEXT>]
+                        #   pop the tome at <X> <Y> (Cocoa coords, Y-up;
+                        #   --at accepts negative coords). --selection →
+                        #   $SELECTION for shell items; --title overrides
+                        #   $WAND_TARGET_TITLE.
+wand tome --validate --items <PATH>   # validate a standalone items file
+
+# config — settings
+wand config --validate  # parse config.toml, exit 0/2 (warnings → stderr)
+wand config --doctor    # health check: Accessibility, config, daemon, tap
+wand config --emit-schema   # print the config.toml JSON Schema (Draft-07)
+
+wand --help, -h
 ```
 
-Combining incompatible actions (e.g. `wand --reload --quit`) or
-attaching a modifier to the wrong action (e.g. `--items` with
-`--reload`) exits `2` — there is no silent fallback.
+Each domain takes exactly **one** verb. Combining verbs (e.g.
+`wand daemon --reload --quit`) or using a flag outside its domain
+(e.g. `--items` without `tome`) exits `2` — no silent fallback; an
+unknown flag prints a `did you mean …?` hint.
 
-The daemon **auto-reloads `config.toml` on save** — `--reload` is the
-manual trigger if you need it. `--reload` / `--status` / `--quit` /
-`--show-menu` are client commands — they exit 3 with a helpful
-message if the daemon isn't running. `--record` is the reverse — it
-refuses if the daemon *is* running, because both would fight over the
-same CGEventTap.
+The daemon **auto-reloads `config.toml` on save** — `daemon --reload` is
+the manual trigger. `daemon --reload` / `daemon --show` / `daemon --quit`
+/ `tome --open` need a running daemon (exit 3 with a helpful message if
+none). `cast --record` is the reverse — it refuses if the daemon *is*
+running, because both would fight over the same CGEventTap.
+
+### Migration (flat flags → yabai-style domains)
+
+There is **no deprecation shim** — the old flat flags exit 2. Map:
+
+| old | new |
+|---|---|
+| `wand --reload` / `--status` / `--quit` / `--resign` | `wand daemon --reload` / `--show` / `--quit` / `--resign` |
+| `wand --test P [app]` / `--record` | `wand cast --test P [app]` / `--record` |
+| `wand --show-menu --items … --at …` | `wand tome --open --items … --at …` |
+| `wand --validate --items P` | `wand tome --validate --items P` |
+| `wand --validate` / `--doctor` / `--emit-schema` | `wand config --validate` / `--doctor` / `--emit-schema` |
 
 **Two transitions need a daemon restart** — everything else hot-reloads:
 - `[cast]` (button / modifiers) — baked into the running tap's
@@ -408,7 +421,7 @@ same CGEventTap.
   overlay disabled, the window was never created; flipping it on
   later has nothing to attach to
 
-Both surface in `wand --status` as a `pending-restart:` line, and
+Both surface in `wand daemon --show` as a `pending-restart:` line, and
 in `/tmp/wand.log` at reload time.
 
 ## Contributing
@@ -466,7 +479,7 @@ the cursor was likely on the menu bar / Dock / desktop.
 
 **A rule with `pattern = "DRR"` or similar repeats never fires.** By
 design — the recogniser coalesces same-direction motion, so `DRR`
-is unreachable. `wand --validate` drops the rule loudly. Use
+is unreachable. `wand config --validate` drops the rule loudly. Use
 distinct directions per segment (`DR` plus a follow-on like `DRU`).
 
 ## License

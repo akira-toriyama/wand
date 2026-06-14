@@ -10,6 +10,7 @@
 
 import AppKit
 import Foundation
+import CLIKit
 import WandCore
 import WandAdapterMacOS
 
@@ -21,71 +22,67 @@ enum WandApp {
         wand — global mouse-gesture daemon for macOS.
 
         USAGE
-          wand                       run as agent (CGEventTap loop)
-          wand [COMMAND]             one-shot client command
+          wand                              run as agent (CGEventTap loop)
+          wand <domain> --<verb> [VALUE …]  one-shot control command
 
         SERVER MODE
-          wand                       run as agent. Set WAND_DEBUG=1 in the
-                                       environment for verbose log to stderr
-                                       + /tmp/wand.log (run.sh sets it).
+          wand                              run as agent. Set WAND_DEBUG=1 in
+                                              the environment for verbose log to
+                                              stderr + /tmp/wand.log (run.sh sets it).
 
-        CLIENT COMMANDS — need a running daemon (exit 3 if none)
-          wand --reload              re-read ~/.config/wand/config.toml
-                                       (also automatic on file save).
-                                       Live: [[cast.rule]] /
-                                       [exclude].apps /
-                                       [cast.recognition] timing /
-                                       [cast.overlay] / [cast.fire].
-                                       Restart only: [cast] button +
-                                       modifiers, [tome] enabled +
-                                       button + modifiers.
-          wand --status              print rule count, trigger, last
-                                       gestures, counters, last reload
-          wand --quit                terminate the running daemon
-          wand --show-menu           ask the daemon to pop the tome
-            --items <PATH>             menu at a screen point with the
-            --at <X> <Y>               given [[tome.item]] file. Cocoa
-            [--selection <TEXT>]       coords (Y-up). For an upstream
-            [--title <TEXT>]           trigger (a chord hotkey, or a
-                                       text-selection observer).
-                                       $SELECTION is exported to shell
-                                       actions if --selection given.
-                                       --title overrides AX-fetched
-                                       focused-window title for
-                                       $WAND_TARGET_TITLE (default:
-                                       AX-fetch from frontmost app).
+        daemon — lifecycle (need a running daemon; exit 3 if none)
+          wand daemon --reload              re-read ~/.config/wand/config.toml
+                                              (also automatic on file save). Live:
+                                              [[cast.rule]] / [exclude].apps /
+                                              [cast.recognition] / [cast.overlay] /
+                                              [cast.fire]. Restart only: [cast]
+                                              button+modifiers, [tome] enabled+
+                                              button+modifiers.
+          wand daemon --show                print rule count, trigger, last
+                                              gestures, counters, last reload
+          wand daemon --quit                terminate the running daemon
+          wand daemon --resign              re-sign Wand.app with the persistent
+                                              "wand Local Signing" identity + restart
+                                              (run once after `brew install` / upgrade)
 
-        STANDALONE COMMANDS — no daemon required (--record refuses if one runs)
-          wand --validate            parse config.toml; exit 0 if valid.
-            [--items <PATH>]           Warnings (clamps, collisions,
-                                       typos) print to stderr
-                                       in addition to /tmp/wand.log.
-                                       --items also validates a standalone
-                                       items file (for --show-menu).
-          wand --doctor              health check: Accessibility, config,
-                                       daemon, event tap, tuning + rules
-          wand --test PATTERN [APP]  dry-run: which rule would fire for
-                                       a pattern (optionally for a bundle id)
-          wand --record              interactive recorder: draw a gesture,
-                                       get a paste-ready [[cast.rule]]
-                                       snippet on stdout. Refuses if the
-                                       daemon is running (tap conflict).
-          wand --resign              re-sign Wand.app with the persistent
-                                       "wand Local Signing" identity + restart
-                                       (run once after `brew install` / upgrade)
-          wand --emit-schema         print the config.toml JSON Schema
-                                       (Draft-07) to stdout + exit. Generated
-                                       from wand's own parser, so it always
-                                       matches the binary. Regenerate the
-                                       committed copy with:
-                                         wand --emit-schema > config.schema.json
-          wand --help                this help
+        cast — gesture engine
+          wand cast --test PATTERN [APP]    dry-run: which rule would fire for a
+                                              pattern (optionally for a bundle id)
+          wand cast --record                interactive recorder: draw a gesture,
+                                              get a paste-ready [[cast.rule]] on
+                                              stdout. Refuses if the daemon runs.
+
+        tome — launcher menu
+          wand tome --open                  ask the daemon to pop the tome menu
+            --items <PATH>                    at a screen point with the given
+            --at <X> <Y>                      [[tome.item]] file. Cocoa coords
+            [--selection <TEXT>]              (Y-up; --at accepts negatives). For an
+            [--title <TEXT>]                  upstream trigger. $SELECTION is exported
+                                              to shell actions if --selection given;
+                                              --title overrides the AX-fetched
+                                              focused-window title for $WAND_TARGET_TITLE.
+          wand tome --validate --items <PATH>
+                                            validate a standalone items file.
+
+        config — settings
+          wand config --validate            parse config.toml; exit 0 if valid.
+                                              Warnings (clamps, collisions, typos)
+                                              print to stderr + /tmp/wand.log.
+          wand config --doctor              health check: Accessibility, config,
+                                              daemon, event tap, tuning + rules
+          wand config --emit-schema         print the config.toml JSON Schema
+                                              (Draft-07) to stdout. Generated from
+                                              wand's own parser, so it always matches
+                                              the binary. Regenerate with:
+                                                wand config --emit-schema > config.schema.json
+
+          wand --help, -h                   this help
 
         EXIT CODES
           0   success
-          2   bad flag / invalid config
-          3   precondition mismatch: client cmd with no daemon, or
-              --record with a daemon running
+          2   usage / bad flag / invalid config (loud on stderr)
+          3   daemon precondition: a daemon command with no daemon running,
+              or `cast --record` with a daemon running
 
         CONFIG
           ~/.config/wand/config.toml is the single source of truth.
@@ -108,167 +105,118 @@ enum WandApp {
         // launch sets nothing and stays quiet; `--debug` on argv now exits 2.
         debugMode = ProcessInfo.processInfo.environment["WAND_DEBUG"] != nil
 
-        // Three flag classes, screened in this order:
-        //  1. action: terminal (each handler calls exit). At most one
-        //     per invocation; default is server mode (no flag).
-        //  2. unknown: reject before any dispatch so `wand --reload
-        //     --typo` fails loudly on --typo instead of silently
-        //     honoring --reload (no silent fallback).
-        //  3. modifier: only meaningful paired with a specific action;
-        //     orphans were silent drops, now rejected.
-        let actionFlags: Set<String> = [
-            "--help", "--test", "--validate", "--record",
-            "--reload", "--quit", "--status", "--doctor",
-            "--resign", "--show-menu", "--emit-schema",
-        ]
-        let modifierFlags: [String: Set<String>] = [
-            "--items":     ["--show-menu", "--validate"],
-            "--at":        ["--show-menu"],
-            "--selection": ["--show-menu"],
-            "--title":     ["--show-menu"],
-        ]
-        let recognised: Set<String> =
-            actionFlags.union(modifierFlags.keys)
-        let valueArities: [String: Int] = [
-            "--items": 1, "--selection": 1, "--at": 2, "--title": 1,
-        ]
-
-        // (1) Mutually-exclusive actions. Without this `wand --reload
-        // --quit` would silently honor only --reload (the first
-        // matching dispatcher calls exit). Same silent-drop class as
-        // config typos.
-        let presentActions = argv.filter { actionFlags.contains($0) }
-        if presentActions.count > 1 {
-            let msg = "wand: incompatible actions: "
-                + presentActions.joined(separator: " ")
-                + " — pick one (see `wand --help`)\n"
-            FileHandle.standardError.write(Data(msg.utf8))
-            exit(2)
+        // Bare `wand` = server mode (the LSUIElement launch path). Every
+        // other invocation is a yabai-style `wand <domain> --<verb>` control
+        // command. The domain noun is peeled here; CLIKit then tokenizes the
+        // rest against that domain's verb-arity spec (so e.g. `--at -100 50`
+        // negatives are consumed as values, not mistaken for flags).
+        guard let domain = argv.first else { runServer() }
+        switch domain {
+        case "--help", "-h": printHelp()
+        case "daemon": dispatchDaemon(Array(argv.dropFirst()))
+        case "cast":   dispatchCast(Array(argv.dropFirst()))
+        case "tome":   dispatchTome(Array(argv.dropFirst()))
+        case "config": dispatchConfig(Array(argv.dropFirst()))
+        default:
+            CLIKit.die("wand",
+                "unknown command '\(domain)'. Domains: daemon cast tome config "
+                + "(or bare `wand` for server). See `wand --help`.")
         }
+    }
 
-        // (2) Unknown-flag scan. --test's PATTERN [BUNDLE-ID] operands
-        // are skipped here (treated as 1 required + 1 optional non-flag
-        // token) so they don't get reported as unknown.
-        var ai = 0
-        while ai < argv.count {
-            let a = argv[ai]
-            if a == "--test" {
-                ai += 1
-                if ai < argv.count { ai += 1 }                       // PATTERN
-                if ai < argv.count && !argv[ai].hasPrefix("--") {     // BUNDLE-ID
-                    ai += 1
-                }
-                continue
-            }
-            if let arity = valueArities[a] {
-                ai += 1 + arity
-                continue
-            }
-            if !recognised.contains(a) {
-                let msg = "wand: unknown flag \"\(a)\" — see "
-                    + "`wand --help`\n"
-                FileHandle.standardError.write(Data(msg.utf8))
-                exit(2)
-            }
-            ai += 1
+    // MARK: domain dispatch (CLIKit tokenizes; wand keeps verb policy — D4)
+
+    /// Parse `argv` against `spec`, mapping any usage error to a loud
+    /// exit 2. (CLIKit's tokenizer is pure; wand owns the exit.)
+    private static func parseOrDie(_ argv: [String], _ spec: CLIKit.Spec) -> CLIKit.Invocation {
+        do { return try CLIKit.parse(argv, spec: spec) }
+        catch let e as CLIKit.ParseError { CLIKit.die("wand", e.usageMessage) }
+        catch { CLIKit.die("wand", "\(error)") }
+    }
+
+    /// Exactly one of `verbs` must be present. CLIKit already rejected
+    /// unknown flags; this is wand's mutual-exclusion policy (a domain
+    /// has one action; modifiers attach to it).
+    private static func requireOneVerb(_ inv: CLIKit.Invocation, among verbs: [String],
+                                       domain: String) -> String {
+        let present = inv.names.filter { verbs.contains($0) }
+        if present.count == 1 { return present[0] }
+        if present.isEmpty {
+            CLIKit.die("wand", "`wand \(domain)` needs a verb: "
+                + verbs.joined(separator: " ") + ". See `wand --help`.")
         }
+        CLIKit.die("wand", "`wand \(domain)`: incompatible verbs "
+            + present.joined(separator: " ") + " — pick one. See `wand --help`.")
+    }
 
-        // (3) Orphan modifier flags. e.g. `wand --reload --items
-        // /tmp/foo.toml` used to silently drop --items at the daemon;
-        // now it exits 2 with a "needs --show-menu / --validate" hint.
-        let chosenAction = presentActions.first
-        for (modifier, allowedActions) in modifierFlags {
-            guard argv.contains(modifier) else { continue }
-            if let action = chosenAction, allowedActions.contains(action) {
-                continue
-            }
-            let needs = allowedActions.sorted().joined(separator: " or ")
-            let ctx = chosenAction.map { "with \($0)" } ?? "in server mode"
-            let msg = "wand: \(modifier) is not valid \(ctx) — "
-                + "use it with \(needs)\n"
-            FileHandle.standardError.write(Data(msg.utf8))
-            exit(2)
+    @MainActor
+    private static func dispatchDaemon(_ argv: [String]) -> Never {
+        let spec = CLIKit.Spec(arity: [
+            "--reload": .flag, "--quit": .flag, "--show": .flag, "--resign": .flag,
+        ])
+        let inv = parseOrDie(argv, spec)
+        switch requireOneVerb(inv, among: ["--reload", "--quit", "--show", "--resign"],
+                              domain: "daemon") {
+        case "--reload": runClient(cmd: "reload")
+        case "--quit":   runClient(cmd: "quit")
+        case "--show":   runShow()
+        case "--resign": runResign()
+        default: preconditionFailure("unreachable: requireOneVerb returned an unlisted verb")
         }
+    }
 
-        if argv.contains("--help") { printHelp() }
+    @MainActor
+    private static func dispatchCast(_ argv: [String]) -> Never {
+        let spec = CLIKit.Spec(arity: [
+            "--test": .requiredThenOptional(1), "--record": .flag,
+        ])
+        let inv = parseOrDie(argv, spec)
+        switch requireOneVerb(inv, among: ["--test", "--record"], domain: "cast") {
+        case "--test":
+            let vs = inv.values("--test")               // PATTERN [APP]
+            runTest(pattern: vs.first ?? "", bundleID: vs.count > 1 ? vs[1] : nil)
+        case "--record": runRecord()
+        default: preconditionFailure("unreachable: requireOneVerb returned an unlisted verb")
+        }
+    }
 
-        // `--emit-schema` is a one-shot: print the `config.toml` JSON
-        // Schema (Draft-07) to stdout and exit. Generated from the same
-        // declarative `configSpec` that decodes the config, so the two
-        // can't drift. The repo regenerates `config.schema.json` with
-        // `wand --emit-schema > config.schema.json`.
-        if argv.contains("--emit-schema") {
+    @MainActor
+    private static func dispatchTome(_ argv: [String]) -> Never {
+        let spec = CLIKit.Spec(arity: [
+            "--open": .flag, "--validate": .flag,
+            "--items": .value, "--at": .values(2), "--selection": .value, "--title": .value,
+        ])
+        let inv = parseOrDie(argv, spec)
+        switch requireOneVerb(inv, among: ["--open", "--validate"], domain: "tome") {
+        case "--open":
+            runTomeOpen(inv)
+        case "--validate":
+            guard let path = inv.value("--items") else {
+                CLIKit.die("wand", "`wand tome --validate` needs --items <PATH>. "
+                    + "See `wand --help`.")
+            }
+            runValidateItems(path: path)
+        default: preconditionFailure("unreachable: requireOneVerb returned an unlisted verb")
+        }
+    }
+
+    @MainActor
+    private static func dispatchConfig(_ argv: [String]) -> Never {
+        let spec = CLIKit.Spec(arity: [
+            "--validate": .flag, "--doctor": .flag, "--emit-schema": .flag,
+        ])
+        let inv = parseOrDie(argv, spec)
+        switch requireOneVerb(inv, among: ["--validate", "--doctor", "--emit-schema"],
+                              domain: "config") {
+        case "--validate": runValidateConfig()
+        case "--doctor":   runDoctor()
+        case "--emit-schema":
+            // Generated from the same declarative `configSpec` that decodes
+            // the config, so editor schema and parser can't drift.
             print(WandConfig.jsonSchema, terminator: "")
             exit(0)
+        default: preconditionFailure("unreachable: requireOneVerb returned an unlisted verb")
         }
-
-        // `--test PATTERN [bundle-id]` consumes operands; handled here
-        // after the scan/checks already covered them.
-        if let i = argv.firstIndex(of: "--test") {
-            let pattern = i + 1 < argv.count ? argv[i + 1] : ""
-            let bundleID = (i + 2 < argv.count && !argv[i + 2].hasPrefix("--"))
-                ? argv[i + 2] : nil
-            runTest(pattern: pattern, bundleID: bundleID)
-        }
-
-        // Standalone modes — no running daemon required.
-        if argv.contains("--doctor") { runDoctor() }
-        if argv.contains("--validate") {
-            // Mirror every parser warning (clamp / migration / collision
-            // / typo) to stderr so the user actually sees them.
-            // Otherwise `--validate` would print a happy rule count even
-            // when half the config silently dropped — config.toml's
-            // "Validate explicitly with `wand --validate`" promise would
-            // be a lie. Warnings still also go to /tmp/wand.log.
-            Log.resetLineCount()
-            mirrorLineToStderr = true
-            let cfg = WandConfig.load()
-            let cfgWarnings = Log.lineCount
-            requireFailsafeBlock(cfg)
-            let tomeLine = cfg.launcher.enabled
-                ? ", tome=\(cfg.launcher.trigger.button.rawValue) "
-                  + "(\(cfg.launcher.items.count) item(s))"
-                : ""
-            FileHandle.standardError.write(Data((
-                "wand: loaded \(cfg.rules.count) rule(s), "
-                + "trigger=\(cfg.trigger.button.rawValue), "
-                + "minStrokePx=\(cfg.recognition.minStrokePx)\(tomeLine)"
-                + " — \(cfgWarnings) warning(s)\n"
-            ).utf8))
-            // `--validate --items PATH` also validates a standalone
-            // items file (intended for --show-menu) — parse + report
-            // count, exit 2 on read failure.
-            if let path = valueAfter("--items", in: argv) {
-                guard let text = try? String(contentsOfFile: path, encoding: .utf8)
-                else {
-                    FileHandle.standardError.write(Data((
-                        "wand: --items: could not read \(path)\n"
-                    ).utf8))
-                    exit(2)
-                }
-                Log.resetLineCount()
-                let parsed = WandConfig.parseItems(text)
-                let itemsWarnings = Log.lineCount
-                FileHandle.standardError.write(Data((
-                    "wand: items file \(path) — "
-                    + "\(parsed.items.count) item(s), "
-                    + "layout=\(parsed.layout.rawValue)"
-                    + " — \(itemsWarnings) warning(s)\n"
-                ).utf8))
-            }
-            exit(0)
-        }
-        if argv.contains("--record") { runRecord() }
-        if argv.contains("--resign") { runResign() }
-
-        // Client commands — require a running daemon.
-        if argv.contains("--status") { runStatus() }
-        if argv.contains("--reload") { runClient(cmd: "reload") }
-        if argv.contains("--quit")   { runClient(cmd: "quit") }
-        if argv.contains("--show-menu") { runShowMenu(argv: argv) }
-
-        // ----- Server mode -----
-        runServer()
     }
 
 
@@ -707,13 +655,13 @@ enum WandApp {
     }
 
 
-    /// Print the running daemon's status (rule count, trigger, last
-    /// gesture …) from the status file it maintains. Exit 3 if no
-    /// daemon is running.
-    private static func runStatus() -> Never {
+    /// `wand daemon --show` — print the running daemon's status (rule
+    /// count, trigger, last gesture …) from the status file it maintains.
+    /// Exit 3 if no daemon is running.
+    private static func runShow() -> Never {
         guard isServerRunning() else {
             FileHandle.standardError.write(Data((
-                "wand: --status needs a running daemon (it reads the "
+                "wand: `daemon --show` needs a running daemon (it reads the "
                 + "status file the daemon maintains). Start one with "
                 + "`wand` first.\n"
             ).utf8))
@@ -724,6 +672,52 @@ enum WandApp {
         } else {
             print("wand: running (status file not written yet)")
         }
+        exit(0)
+    }
+
+    /// `wand config --validate` — parse config.toml, mirror every parser
+    /// warning (clamp / migration / collision / typo) to stderr so the
+    /// user actually sees them (otherwise a happy rule count could hide a
+    /// half-dropped config). Warnings still also go to /tmp/wand.log.
+    private static func runValidateConfig() -> Never {
+        Log.resetLineCount()
+        mirrorLineToStderr = true
+        let cfg = WandConfig.load()
+        let cfgWarnings = Log.lineCount
+        requireFailsafeBlock(cfg)
+        let tomeLine = cfg.launcher.enabled
+            ? ", tome=\(cfg.launcher.trigger.button.rawValue) "
+              + "(\(cfg.launcher.items.count) item(s))"
+            : ""
+        FileHandle.standardError.write(Data((
+            "wand: loaded \(cfg.rules.count) rule(s), "
+            + "trigger=\(cfg.trigger.button.rawValue), "
+            + "minStrokePx=\(cfg.recognition.minStrokePx)\(tomeLine)"
+            + " — \(cfgWarnings) warning(s)\n"
+        ).utf8))
+        exit(0)
+    }
+
+    /// `wand tome --validate --items PATH` — validate a standalone items
+    /// file (the same shape `tome --open --items` consumes). Parse +
+    /// report count; exit 2 on read failure.
+    private static func runValidateItems(path: String) -> Never {
+        guard let text = try? String(contentsOfFile: path, encoding: .utf8) else {
+            FileHandle.standardError.write(Data((
+                "wand: tome --validate: could not read \(path)\n"
+            ).utf8))
+            exit(2)
+        }
+        Log.resetLineCount()
+        mirrorLineToStderr = true
+        let parsed = WandConfig.parseItems(text)
+        let itemsWarnings = Log.lineCount
+        FileHandle.standardError.write(Data((
+            "wand: items file \(path) — "
+            + "\(parsed.items.count) item(s), "
+            + "layout=\(parsed.layout.rawValue)"
+            + " — \(itemsWarnings) warning(s)\n"
+        ).utf8))
         exit(0)
     }
 
@@ -886,26 +880,17 @@ enum WandApp {
         }
     }
 
-    /// `--items <PATH>` / `--selection <TEXT>` etc — return the
-    /// token immediately after `flag`, or nil if `flag` isn't present
-    /// or has no follower. Shared by `--show-menu` and `--validate`.
-    private static func valueAfter(_ flag: String, in argv: [String]) -> String? {
-        guard let i = argv.firstIndex(of: flag), i + 1 < argv.count
-        else { return nil }
-        return argv[i + 1]
-    }
-
-    /// `wand --show-menu --items <PATH> --at <X> <Y> [--selection <TEXT>]`
-    /// — external trigger entry to the launcher menu. Validates args
-    /// locally (exit 2 on bad input), checks daemon liveness (exit 3),
-    /// then posts a DNC notification with the parameters in userInfo
-    /// and exits 0. The daemon does the rest async — resolves the
-    /// frontmost app as the target (spine exception, see CLAUDE.md),
-    /// builds the menu, pops it up.
-    private static func runShowMenu(argv: [String]) -> Never {
-        guard let itemsPath = valueAfter("--items", in: argv) else {
+    /// `wand tome --open --items <PATH> --at <X> <Y> [--selection <TEXT>]
+    /// [--title <TEXT>]` — external trigger entry to the launcher menu.
+    /// Values are already tokenized by CLIKit (so `--at` accepts negative
+    /// Cocoa coords). Validates locally (exit 2 on bad input), checks
+    /// daemon liveness (exit 3), then posts a DNC notification with the
+    /// parameters and exits 0. The daemon does the rest async — resolves
+    /// the frontmost app as the target, builds the menu, pops it up.
+    private static func runTomeOpen(_ inv: CLIKit.Invocation) -> Never {
+        guard let itemsPath = inv.value("--items") else {
             FileHandle.standardError.write(Data((
-                "wand: --show-menu: --items <PATH> is required\n"
+                "wand: tome --open: --items <PATH> is required\n"
             ).utf8))
             exit(2)
         }
@@ -917,7 +902,7 @@ enum WandApp {
             : FileManager.default.currentDirectoryPath + "/" + absItems
         guard let text = try? String(contentsOfFile: absPath, encoding: .utf8) else {
             FileHandle.standardError.write(Data((
-                "wand: --show-menu: could not read items file "
+                "wand: tome --open: could not read items file "
                 + "\(absPath)\n"
             ).utf8))
             exit(2)
@@ -927,35 +912,31 @@ enum WandApp {
         let parsed = WandConfig.parseItems(text)
         guard !parsed.items.isEmpty else {
             FileHandle.standardError.write(Data((
-                "wand: --show-menu: items file \(absPath) yielded "
+                "wand: tome --open: items file \(absPath) yielded "
                 + "0 items (no `[[item]]` rows, or all dropped — see "
                 + "/tmp/wand.log for per-row diagnostics)\n"
             ).utf8))
             exit(2)
         }
-        // --at X Y — parse two consecutive numeric tokens.
-        guard let i = argv.firstIndex(of: "--at"),
-              i + 2 < argv.count,
-              let x = Double(argv[i + 1]),
-              let y = Double(argv[i + 2]) else {
+        // --at X Y — two numeric values (CLIKit consumed them, signs OK).
+        let at = inv.values("--at")
+        guard at.count == 2, let x = Double(at[0]), let y = Double(at[1]) else {
             FileHandle.standardError.write(Data((
-                "wand: --show-menu: --at <X> <Y> is required "
+                "wand: tome --open: --at <X> <Y> is required "
                 + "(Cocoa screen coords, Y-up)\n"
             ).utf8))
             exit(2)
         }
-        let selection = valueAfter("--selection", in: argv) ?? ""
-        // --title: caller-supplied window title to override the
-        // daemon's AX fetch. Used by an upstream trigger (a chord
-        // hotkey, or a text-selection observer) that
-        // already knows the source window at fire time and wants it
-        // surfaced verbatim — avoids racing the daemon's AX lookup
-        // against window-switch latency.
-        let title = valueAfter("--title", in: argv) ?? ""
+        let selection = inv.value("--selection") ?? ""
+        // --title: caller-supplied window title to override the daemon's
+        // AX fetch. Used by an upstream trigger that already knows the
+        // source window at fire time and wants it surfaced verbatim —
+        // avoids racing the daemon's AX lookup against window-switch latency.
+        let title = inv.value("--title") ?? ""
 
         guard isServerRunning() else {
             FileHandle.standardError.write(Data((
-                "wand: --show-menu: no daemon running — start it "
+                "wand: tome --open: no daemon running — start it "
                 + "with `wand` (or `WAND_DEBUG=1 wand`) first\n"
             ).utf8))
             exit(3)
@@ -1038,8 +1019,8 @@ enum WandApp {
     private static func runRecord() -> Never {
         if isServerRunning() {
             FileHandle.standardError.write(Data((
-                "wand: daemon is running — `wand --quit` first, "
-                + "then `wand --record`\n"
+                "wand: daemon is running — `wand daemon --quit` first, "
+                + "then `wand cast --record`\n"
             ).utf8))
             exit(3)
         }

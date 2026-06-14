@@ -96,7 +96,7 @@ public struct WandConfig: Sendable {
 
     /// Parse a TOML document containing `[[tome.cursor.item]]` entries
     /// (and optionally `[tome].layout`) — the schema `wand
-    /// --show-menu --items <PATH>` expects. Same row-level
+    /// tome --open --items <PATH>` expects. Same row-level
     /// validation as `[tome]` items in the main config (drop on
     /// missing name / invalid action, with a loud log line), so a
     /// client that screws up the file gets a diagnostic.
@@ -546,7 +546,7 @@ public struct WandConfig: Sendable {
     /// Detect the legacy `[[tome.item]]` header and emit a loud
     /// warning per row — every row is dropped. Users must rename to
     /// `[[tome.cursor.item]]`. `scope` is "config" for the main
-    /// daemon config and "--items file" for `--show-menu --items`.
+    /// daemon config and "--items file" for `tome --open --items`.
     private static func warnLegacyTomeItem(_ doc: TOMLDocument,
                                             scope: String) {
         guard let rows = doc.arrays["tome.item"], !rows.isEmpty
@@ -647,7 +647,7 @@ public struct WandConfig: Sendable {
 
     /// Row-level parse for a single `[[item]]`. Shared by the
     /// `[tome]` items inside the main config and by
-    /// `parseItems(_:)` for the `--show-menu --items <PATH>` path.
+    /// `parseItems(_:)` for the `tome --open --items <PATH>` path.
     private static func parseItem(_ row: [String: TOMLValue], idx: Int)
         -> LauncherItem? {
         let label = "[[item]][\(idx)]"

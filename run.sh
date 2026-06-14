@@ -10,7 +10,7 @@
 #
 # Always kills any currently-running wand first (via stop.sh) so
 # the new bundle takes over cleanly. Quit later: ``./stop.sh`` or
-# ``wand --quit``.
+# ``wand daemon --quit``.
 set -e
 cd "$(dirname "$0")"
 
@@ -35,4 +35,4 @@ sleep 0.5
 # the var has to be passed through explicitly via `open --env`.
 open "./$APP" --env WAND_DEBUG=1
 echo "$APP launched (WAND_DEBUG=1). Grant Accessibility on first run."
-echo "logs: tail -f /tmp/wand.log   |   quit: ./stop.sh or wand --quit"
+echo "logs: tail -f /tmp/wand.log   |   quit: ./stop.sh or wand daemon --quit"

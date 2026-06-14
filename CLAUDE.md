@@ -32,7 +32,7 @@ for event-driven daemons to share the same tome UI:
   `[[tome.cursor.item]]` is one row with the same action-type
   vocabulary. Submenus (`group = ["..."]`) open as adjacent child
   panels on hover.
-- **`wand --show-menu`** (external trigger CLI): an upstream trigger
+- **`wand tome --open`** (external trigger CLI): an upstream trigger
   (a chord hotkey, or a text-selection observer) posts a
   Distributed Notification carrying items + cursor + selection;
   the daemon pops the same `LauncherPanel` against the frontmost
@@ -72,7 +72,7 @@ macOS 13+, three-layer hexagonal split.
 swift build                  # compile (CommandLineTools works)
 swift test                   # tests — needs Xcode (XCTest); fails on CLT
 .build/debug/wand --help   # smoke test
-.build/debug/wand --validate
+.build/debug/wand config --validate
 ```
 
 Same XCTest constraint as facet — CommandLineTools alone can't
@@ -251,7 +251,7 @@ Everything below depends on this contract:
   (`WAND_TARGET_BUNDLE_ID`, `WAND_TARGET_PID`,
   `WAND_TARGET_TITLE`, `WAND_TARGET_FRAME`) — the user's
   command can decide what to do with that information.
-- **`wand --show-menu` is the documented spine exception.**
+- **`wand tome --open` is the documented spine exception.**
   An upstream trigger (a chord hotkey, or a text-selection
   observer — there is no button-down moment to anchor against)
   posts `show-menu` over the existing DNC channel with
@@ -293,7 +293,7 @@ TOML-handling policy: while every other key clamps to a default
 when missing / invalid, **`[failsafe]` block missing → wand
 refuses to start**. Deliberate deviation from the
 clamp-to-default convention. The bundled `config.toml` always
-ships `[failsafe]`; `wand --validate` flags the missing block as
+ships `[failsafe]`; `wand config --validate` flags the missing block as
 fatal. Rationale: safety must not silently degrade — if a user
 removes the block, they get a loud error, not a quietly unsafe
 daemon.
@@ -330,7 +330,7 @@ combine them so one failure mode can't cascade.
    tap will be held to.
 5. **Tap watchdog** — `[failsafe].tap-watchdog-interval-sec`.
    `CGEventTap` can be disabled by the OS under load; the daemon
-   periodically checks and reinstalls. `wand --doctor` flags any
+   periodically checks and reinstalls. `wand config --doctor` flags any
    button held longer than the timeout and suggests
    `--release-all`. PLANNED — neither the config key nor the
    watchdog exists yet.
@@ -372,7 +372,7 @@ AX observation, anything future) goes through this checklist:
    mouseUp, and only after a `buttonState` precondition check.
 3. Is the trigger's progress state cleared by the emergency
    release sequence? Wire it into the release path.
-4. Does `wand --doctor` report the trigger's health? Add a probe.
+4. Does `wand config --doctor` report the trigger's health? Add a probe.
 
 ### Configuration
 
@@ -390,7 +390,7 @@ AX observation, anything future) goes through this checklist:
 - **All TOML keys clamp out-of-range / unknown values to defaults**
   rather than rejecting. A typo can never break cast
   recognition — the rule with the typo silently drops, the rest
-  still load. `wand --validate` is the explicit verification
+  still load. `wand config --validate` is the explicit verification
   path.
 - **Breaking schema changes are OK when adding / reshaping
   features.** wand is config.toml-driven with no users beyond
@@ -563,12 +563,12 @@ The workflow:
    - `target=nil` (with a recognised pattern) → cursor was over a
      non-AX surface (Dock, menu bar, desktop); the cast is
      dropped on purpose.
-5. **Isolate recognition** with `wand --record` — it streams
+5. **Isolate recognition** with `wand cast --record` — it streams
    `pattern=… samples=… max|dx|=… target=…` to stdout for every
    stroke and fires **no actions**, so you can confirm the
    capture+recognition half without side effects. (Refuses if the
    daemon is already running — they'd fight over the tap.)
-6. **Check config** with `wand --validate` (exit 0 + rule count +
+6. **Check config** with `wand config --validate` (exit 0 + rule count +
    warning count, or exit 2). Parser warnings (clamps / collisions
    / typos) mirror to stderr in addition to
    `/tmp/wand.log` so the user sees them without tailing the log.

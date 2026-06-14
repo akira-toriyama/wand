@@ -2,7 +2,7 @@
 // take keyboard focus from the underlying app — the user keeps typing
 // in their editor while picking an item with the mouse. Used for
 // both the native middle-click trigger and the
-// `wand --show-menu` external trigger.
+// `wand tome --open` external trigger.
 //
 // Behaviour notes:
 //   - No keyboard navigation (panel cannot become key by design);
