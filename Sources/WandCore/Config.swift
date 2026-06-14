@@ -122,82 +122,67 @@ public struct WandConfig: Sendable {
         return LauncherItemsFile(layout: layout, items: items)
     }
 
-    static func parse(_ text: String) -> WandConfig {
+    public static func parse(_ text: String) -> WandConfig {
         let doc = Toml.parseFlat(text)
 
+        // ── Uniform half: the plain scalar/table keys are driven by the
+        // single declarative `configSpec` (which ALSO emits the JSON
+        // Schema — see `Config+Spec.swift`). `decode` runs the SAME
+        // clamp / enum-parse / theme-resolve the hand-written reads did,
+        // writing into a scratch `Decoded` seeded with the parse
+        // defaults — so the resolved values below are byte-identical to
+        // the old inline reads (proven by `wandparityharness`). The
+        // NON-uniform bits (palette inheritance on the `""` colour
+        // sentinel, the chomp theme-conditional masking, `[failsafe]`
+        // block-present + empty→esc, the arrays-of-tables, the trigger
+        // collision) stay bespoke below; the spec still DESCRIBES them.
+        var d = Decoded()
+        configSpec.decode(doc.tables, into: &d)
+
         // ── [exclude] ─────────────────────────────────────────
-        // Bundle ids where wand is fully disabled. Applies to BOTH
-        // cast rules and tome items.
-        let excl = doc.tables["exclude"] ?? [:]
-        let excludes = excl.strings("apps")
+        let excludes = d.excludeApps
 
         // ── [cast] ────────────────────────────────────────────
         // Trigger identity + family-wide knobs (intensity, theme).
-        let g = doc.tables["cast"] ?? [:]
-        let button = Trigger.Button(rawValue: g.string("button").lowercased())
-            ?? .right
-        let mods = Set(g.strings("modifiers")
-            .compactMap { Modifier(rawValue: $0.lowercased()) })
+        let button = d.button
+        let mods = d.modifiers
+        let intensity = d.intensity
 
-        // `[cast].intensity` — cast-wide effect multiplier. Scope
-        // spans both [cast.overlay] cards and [cast.fire] burst, so
-        // it lives at the cast-family level (not under either).
-        let intensity: EffectIntensity = parseEnum(
-            g, key: "intensity", section: "cast", default: .normal)
-
-        // `[cast].theme` — the canonical theme name (sill catalog +
-        // wand engine themes), derived to a cast palette that supplies
+        // `[cast].theme` — derived to a cast palette that supplies
         // defaults for trail + cards colour fields. Individual keys
         // still win when explicitly non-empty in the TOML.
-        let theme = parseTheme(g, key: "theme", section: "cast")
+        let theme = d.theme
         let palette = wandCastPalette(theme)
 
         // [cast.recognition] — sample → direction tuning.
-        let rec = doc.tables["cast.recognition"] ?? [:]
-        let minPx = clampInt(rec, key: "min-stroke-px",
-                             default: 16, lo: 4, hi: 200)
-        let maxMs = clampMs(rec, key: "max-segment-ms",
-                            default: 0, lo: 100, hi: 60000)
-        let cancelRev = clampMs(rec, key: "cancel-reversals",
-                                default: 2, lo: 1, hi: 20)
-        let cancelWin = clampMs(rec, key: "cancel-window-ms",
-                                default: 500, lo: 100, hi: 5000)
         let recognition = GestureRecognitionSpec(
-            minStrokePx: minPx,
-            maxSegmentMs: maxMs,
-            cancelReversals: cancelRev,
-            cancelWindowMs: cancelWin)
+            minStrokePx: d.minStrokePx,
+            maxSegmentMs: d.maxSegmentMs,
+            cancelReversals: d.cancelReversals,
+            cancelWindowMs: d.cancelWindowMs)
 
         // [cast.overlay] — shared overlay toggles (enabled + blur);
         // trail / badge / cards live in their own nested sub-blocks.
-        let ov = doc.tables["cast.overlay"] ?? [:]
-        let overlayEnabled = ov.bool("enabled", true)
-        let overlayBlurEnabled = ov.bool("blur-enabled", true)
-        let overlayColorCycleMs = clampInt(
-            ov, key: "color-cycle-ms",
-            default: 2000, lo: 100, hi: 10000)
+        let overlayEnabled = d.overlayEnabled
+        let overlayBlurEnabled = d.overlayBlurEnabled
+        let overlayColorCycleMs = d.overlayColorCycleMs
 
-        // [cast.overlay.trail]
+        // [cast.overlay.trail] — colour fields resolve their `""`
+        // sentinel against the theme palette (bespoke; the spec stored
+        // the raw value). Explicit non-empty user value wins; `""` /
+        // unset inherits the active theme's palette (derived from sill).
+        // An unset `[cast].theme` resolves to the native `system` theme.
         let tr = doc.tables["cast.overlay.trail"] ?? [:]
-        // Theme inheritance: explicit non-empty user value wins,
-        // else the active theme's palette (derived from sill) supplies
-        // the default. An unset `[cast].theme` resolves to the native
-        // `system` theme (OS control-accent trail + frosted vibrancy),
-        // NOT the pre-migration hard-coded blue — a deliberate change.
-        let trailColor = { let c = tr.string("color")
-            return c.isEmpty ? palette.trailColor : c }()
-        let trailColorNoMatch = { let c = tr.string("color-no-match")
-            return c.isEmpty ? palette.trailColorNoMatch : c }()
-        let parsedTrailWidth = clampInt(tr, key: "width",
-                                         default: 3, lo: 1, hi: 40)
-        let parsedTrailStyle: TrailStyle = parseEnum(
-            tr, key: "style", section: "cast.overlay.trail",
-            default: .normal)
-        let trailFinalHoldMs = clampInt(tr, key: "final-hold-ms",
-                                        default: 400, lo: 0, hi: 2000)
-        let parsedTrailStraightenOnTurn = tr.bool("straighten-on-turn", false)
-        let trailColorOutline = { let c = tr.string("color-outline")
-            return c.isEmpty ? palette.trailColorOutline : c }()
+        let trailColor = d.trailColorRaw.isEmpty
+            ? palette.trailColor : d.trailColorRaw
+        let trailColorNoMatch = d.trailColorNoMatchRaw.isEmpty
+            ? palette.trailColorNoMatch : d.trailColorNoMatchRaw
+        let parsedTrailWidth = d.trailWidth
+        let parsedTrailStyle = d.trailStyle
+        let trailFinalHoldMs = d.trailFinalHoldMs
+        let parsedTrailStraightenOnTurn = d.trailStraightenOnTurn
+        let trailColorOutline = d.trailColorOutlineRaw.isEmpty
+            ? palette.trailColorOutline : d.trailColorOutlineRaw
 
         // [cast.chomp] — only read when `[cast].theme = "chomp"`.
         // Under every other theme it's nil so the rest of the codebase
@@ -270,42 +255,21 @@ public struct WandConfig: Sendable {
             straightenOnTurn: trailStraightenOnTurn)
 
         // [cast.overlay.badge]
-        let bd = doc.tables["cast.overlay.badge"] ?? [:]
-        let badgeEnabled = bd.bool("enabled", true)
-        let badgeSize = clampInt(bd, key: "size",
-                                 default: 56, lo: 32, hi: 96)
-        let badgeAnimEnabled = bd.bool("anim-enabled", true)
         let badge = GestureOverlayBadgeSpec(
-            enabled: badgeEnabled,
-            size: badgeSize,
-            animEnabled: badgeAnimEnabled)
+            enabled: d.badgeEnabled,
+            size: d.badgeSize,
+            animEnabled: d.badgeAnimEnabled)
 
         // [cast.overlay.cards]
-        let cd = doc.tables["cast.overlay.cards"] ?? [:]
-        let cardsFire: Effect = parseEnum(
-            cd, key: "fire", section: "cast.overlay.cards", default: .off)
-        let cardsCancel: Effect = parseEnum(
-            cd, key: "cancel", section: "cast.overlay.cards", default: .off)
-        let cardsArmed: ArmedEffect = parseEnum(
-            cd, key: "armed", section: "cast.overlay.cards", default: .off)
-        let cardsLinePets: [LinePet] = parseLinePets(
-            cd, section: "cast.overlay.cards")
-        let cardsFontSize = clampInt(
-            cd, key: "font-size", default: 13, lo: 8, hi: 32)
-        let cardsFiresAppIcon = cd.bool("fires-app-icon", true)
         let cards = GestureOverlayCardsSpec(
-            fire: cardsFire, cancel: cardsCancel,
-            armed: cardsArmed,
-            linePets: cardsLinePets,
-            fontSize: cardsFontSize,
-            firesAppIcon: cardsFiresAppIcon)
+            fire: d.cardsFire, cancel: d.cardsCancel,
+            armed: d.cardsArmed,
+            linePets: d.cardsLinePets,
+            fontSize: d.cardsFontSize,
+            firesAppIcon: d.cardsFiresAppIcon)
 
         // [cast.overlay.no-match]
-        let nm = doc.tables["cast.overlay.no-match"] ?? [:]
-        let noMatchKind: NoMatchBanner = parseEnum(
-            nm, key: "kind",
-            section: "cast.overlay.no-match", default: .off)
-        let noMatch = GestureOverlayNoMatchSpec(kind: noMatchKind)
+        let noMatch = GestureOverlayNoMatchSpec(kind: d.noMatchKind)
 
         let overlay = GestureOverlaySpec(
             enabled: overlayEnabled,
@@ -314,88 +278,55 @@ public struct WandConfig: Sendable {
             trail: trail, badge: badge, cards: cards,
             noMatch: noMatch)
 
-        // [cast.fire.burst]
-        let bu = doc.tables["cast.fire.burst"] ?? [:]
-        let burstKind: TrailEndKind = parseEnum(
-            bu, key: "kind", section: "cast.fire.burst", default: .off)
-        let burstColor = { let c = bu.string("color")
-            return c.isEmpty ? palette.burstColor : c }()
-        let burst = GestureFireBurstSpec(kind: burstKind,
+        // [cast.fire.burst] — `kind` resolved by the spec; the `color`
+        // `""` sentinel is resolved against the theme palette bespoke
+        // (the spec stored the raw value).
+        let burstColor = d.burstColorRaw.isEmpty
+            ? palette.burstColor : d.burstColorRaw
+        let burst = GestureFireBurstSpec(kind: d.burstKind,
                                           color: burstColor)
 
         // [cast.fire.decal]
-        let de = doc.tables["cast.fire.decal"] ?? [:]
-        let decalKind: DecalKind = parseEnum(
-            de, key: "kind", section: "cast.fire.decal", default: .off)
-        let decalDurationMs = clampInt(
-            de, key: "duration-ms",
-            default: 3000, lo: 0, hi: 10000)
-        let decalSize = clampInt(
-            de, key: "size", default: 60, lo: 10, hi: 500)
         let decal = GestureFireDecalSpec(
-            kind: decalKind,
-            durationMs: decalDurationMs,
-            size: decalSize)
+            kind: d.decalKind,
+            durationMs: d.decalDurationMs,
+            size: d.decalSize)
 
         let fire = GestureFireSpec(burst: burst, decal: decal)
 
         // ── [tome.*] ──────────────────────────────────────────
         // Middle-click (or other configured button) contextual menu.
-        // Tap not installed when `enabled = false` (default).
-        let lr = doc.tables["tome"] ?? [:]
-        let launcherEnabled = lr.bool("enabled", false)
-        let launcherButton = Trigger.Button(rawValue: lr.string("button").lowercased())
-            ?? .middle
-        let launcherMods = Set(lr.strings("modifiers")
-            .compactMap { Modifier(rawValue: $0.lowercased()) })
-        // `[tome].layout` — orientation of the native-trigger tome
-        // panel. `--show-menu` items files override this per-call via
-        // their own `[tome].layout`. Default `.list`.
-        let launcherLayout: LauncherLayout = parseEnum(
-            lr, key: "layout", section: "tome", default: .list)
-        // `[tome].theme` — canonical theme name for the tome panel,
-        // resolved to a tome palette via `wandTomePalette`. Independent
-        // of `[cast].theme`.
-        let launcherTheme = parseTheme(lr, key: "theme", section: "tome")
+        // Tap not installed when `enabled = false` (default). The plain
+        // scalar/table keys come from the spec decode; the items
+        // array-of-tables + trigger collision stay bespoke below.
+        let launcherEnabled = d.launcherEnabled
+        let launcherButton = d.launcherButton
+        let launcherMods = d.launcherModifiers
+        let launcherLayout = d.launcherLayout
+        let launcherTheme = d.launcherTheme
 
         // [tome.row] — per-row visual cosmetics.
-        let lrow = doc.tables["tome.row"] ?? [:]
         let launcherRow = LauncherRowSpec(
-            shortcutBadge: lrow.bool("shortcut-badge", true),
-            iconChip: lrow.bool("icon-chip", true),
-            fontSize: clampInt(lrow, key: "font-size",
-                                default: 13, lo: 11, hi: 32))
+            shortcutBadge: d.rowShortcutBadge,
+            iconChip: d.rowIconChip,
+            fontSize: d.rowFontSize)
 
         // [tome.animation]
-        let la = doc.tables["tome.animation"] ?? [:]
-        let launcherAnimOpen: LauncherOpenAnim = parseEnum(
-            la, key: "open", section: "tome.animation", default: .off)
-        let launcherAnimClose: LauncherCloseAnim = parseEnum(
-            la, key: "close", section: "tome.animation", default: .off)
+        let launcherAnimOpen = d.animOpen
+        let launcherAnimClose = d.animClose
         let launcherAnimation = LauncherAnimationSpec(
             open: launcherAnimOpen, close: launcherAnimClose)
 
-        // [tome.decoration] — panel-level statics (shadow, line-pets);
-        // the border rim is its own concern under [tome.decoration.border]
-        // (effect / width / color-cycle-ms), per the family block shape
-        // shared with facet/halo [border] and perch [overlay.border].
-        let ld = doc.tables["tome.decoration"] ?? [:]
-        let ldb = doc.tables["tome.decoration.border"] ?? [:]
-        let launcherDecorBorder: LauncherBorder = parseEnum(
-            ldb, key: "effect", section: "tome.decoration.border", default: .off)
-        let launcherDecorCycleMs = clampInt(
-            ldb, key: "color-cycle-ms", default: 4000, lo: 500, hi: 10000)
-        let launcherDecorBorderWidth = clampInt(
-            ldb, key: "width", default: 2, lo: 1, hi: 10)
-        let launcherDecorShadow = ld.bool("shadow", false)
-        let launcherDecorLinePets: [LinePet] = parseLinePets(
-            ld, section: "tome.decoration")
+        // [tome.decoration] + [tome.decoration.border] — panel statics +
+        // the border rim (the family block shape shared with facet/halo
+        // [border] and perch [overlay.border]).
+        let launcherDecorBorder = d.decorBorder
         let launcherDecoration = LauncherDecorationSpec(
             border: launcherDecorBorder,
-            cycleMs: launcherDecorCycleMs,
-            borderWidth: launcherDecorBorderWidth,
-            shadow: launcherDecorShadow,
-            linePets: launcherDecorLinePets)
+            cycleMs: d.decorCycleMs,
+            borderWidth: d.decorBorderWidth,
+            shadow: d.decorShadow,
+            linePets: d.decorLinePets)
 
         // Warn when the user opted out of the launcher but still
         // configured non-default panel cosmetics — those only fire
@@ -628,27 +559,11 @@ public struct WandConfig: Sendable {
                  + "future `[[tome.<modifier>.item]]` namespaces.")
     }
 
-    /// Parse a `line-pet = [...]` field shared by `[cast.overlay.cards]`
-    /// and `[tome.decoration]`. Unknown entries log + drop with the
-    /// valid set; the rest survive.
-    private static func parseLinePets(_ table: [String: TOMLValue],
-                                       section: String) -> [LinePet] {
-        table.strings("line-pets").compactMap { raw in
-            let v = raw.lowercased()
-            if let pet = LinePet(rawValue: v) { return pet }
-            let valid = canonicalLinePetNames
-                .sorted().joined(separator: ", ")
-            Log.line("config: [\(section)].line-pets contains"
-                     + " unrecognised entry \"\(raw)\" — dropped"
-                     + " (valid: \(valid))")
-            return nil
-        }
-    }
-
     /// Clamp a `[lo, hi]` integer, logging when the parsed value
-    /// differs from what the user wrote. Used for every fixed-range
-    /// knob — covers the "user typed 9999 and it silently capped to
-    /// 200" foot-gun.
+    /// differs from what the user wrote. The uniform `[block]` clamps
+    /// run through `configSpec` now (`Config+Spec.swift`); this stays
+    /// for the bespoke `[failsafe]` knob (decoded outside the spec
+    /// because of the block-present semantics).
     private static func clampInt(_ table: [String: TOMLValue],
                                   key: String, default def: Int,
                                   lo: Int, hi: Int) -> Int {
@@ -713,7 +628,10 @@ public struct WandConfig: Sendable {
     /// → silent default; unknown name → loud log + default with the
     /// full vocabulary listed (so a typo is fixable from the log
     /// alone). `CaseIterable` powers the valid-set; `RawRepresentable
-    /// where RawValue == String` powers the lookup.
+    /// where RawValue == String` powers the lookup. The uniform
+    /// `[block]` enums run through `configSpec` now; this stays for the
+    /// bespoke `[cast.chomp].size` (read conditionally on the theme) and
+    /// the `[tome].layout` of a standalone `--items` file (`parseItems`).
     private static func parseEnum<E>(
         _ table: [String: TOMLValue], key: String, section: String,
         default def: E
@@ -725,41 +643,6 @@ public struct WandConfig: Sendable {
         Log.line("config: [\(section)].\(key) = \"\(raw)\" not recognised "
                  + "— falling back to \"\(def.rawValue)\" (valid: \(valid))")
         return def
-    }
-
-    /// Resolve a `[section].theme` value to a canonical theme name
-    /// (sill's catalog + wand's `neon` / `splatoon` engine themes),
-    /// clamping an unknown name to the native `system` default with a
-    /// loud log. Mirrors `parseEnum`'s typo discipline, but the valid
-    /// name set lives in sill (`wandCanonicalThemeName`) so there is no
-    /// duplicated theme-name list. `random` resolves to a concrete name
-    /// inside `wandCanonicalThemeName`.
-    private static func parseTheme(_ table: [String: TOMLValue],
-                                   key: String, section: String) -> String {
-        let raw = table.string(key).trimmingCharacters(in: .whitespaces)
-        if raw.isEmpty { return wandDefaultThemeName }
-        if let name = wandCanonicalThemeName(raw) { return name }
-        let hint = wandThemeNameSuggestion(raw)
-            .map { " (did you mean \"\($0)\"?)" } ?? ""
-        Log.line("config: [\(section)].\(key) = \"\(raw)\" not recognised "
-                 + "— falling back to \"\(wandDefaultThemeName)\"" + hint)
-        return wandDefaultThemeName
-    }
-
-    /// Same as `clampInt`, but treats `<= 0` as "feature off" rather
-    /// than clamping up to `lo`. For knobs where 0 is a documented
-    /// opt-out (max-segment-ms, cancel-reversals, cancel-window-ms).
-    private static func clampMs(_ table: [String: TOMLValue],
-                                 key: String, default def: Int,
-                                 lo: Int, hi: Int) -> Int {
-        let raw = table.int(key, def)
-        if raw <= 0 { return 0 }
-        let clamped = max(lo, min(hi, raw))
-        if raw != clamped {
-            Log.line("config: \(key) = \(raw) clamped to \(clamped) "
-                     + "(allowed 0 or \(lo)..\(hi))")
-        }
-        return clamped
     }
 
     /// Row-level parse for a single `[[item]]`. Shared by the

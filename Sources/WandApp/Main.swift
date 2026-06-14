@@ -73,6 +73,12 @@ enum WandApp {
           wand --resign              re-sign Wand.app with the persistent
                                        "wand Local Signing" identity + restart
                                        (run once after `brew install` / upgrade)
+          wand --emit-schema         print the config.toml JSON Schema
+                                       (Draft-07) to stdout + exit. Generated
+                                       from wand's own parser, so it always
+                                       matches the binary. Regenerate the
+                                       committed copy with:
+                                         wand --emit-schema > config.schema.json
           wand --help                this help
 
         EXIT CODES
@@ -113,7 +119,7 @@ enum WandApp {
         let actionFlags: Set<String> = [
             "--help", "--test", "--validate", "--record",
             "--reload", "--quit", "--status", "--doctor",
-            "--resign", "--show-menu",
+            "--resign", "--show-menu", "--emit-schema",
         ]
         let modifierFlags: [String: Set<String>] = [
             "--items":     ["--show-menu", "--validate"],
@@ -185,6 +191,16 @@ enum WandApp {
         }
 
         if argv.contains("--help") { printHelp() }
+
+        // `--emit-schema` is a one-shot: print the `config.toml` JSON
+        // Schema (Draft-07) to stdout and exit. Generated from the same
+        // declarative `configSpec` that decodes the config, so the two
+        // can't drift. The repo regenerates `config.schema.json` with
+        // `wand --emit-schema > config.schema.json`.
+        if argv.contains("--emit-schema") {
+            print(WandConfig.jsonSchema, terminator: "")
+            exit(0)
+        }
 
         // `--test PATTERN [bundle-id]` consumes operands; handled here
         // after the scan/checks already covered them.
@@ -276,6 +292,15 @@ enum WandApp {
 
     @MainActor
     private static func runServer() -> Never {
+        // Refresh the taplo schema sidecar next to the user config so
+        // editor completion / validation just works (idempotent; writes
+        // only on change). The ConfigWatcher tracks config.toml itself —
+        // not the directory — so this sibling write never triggers a
+        // reload. Best-effort: a failure is non-fatal (never blocks
+        // start), so the daemon is unaffected if ~/.config/wand isn't
+        // writable.
+        WandConfig.installSchema()
+
         let cfg = WandConfig.load()
         requireFailsafeBlock(cfg)
 

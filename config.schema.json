@@ -1,0 +1,886 @@
+{
+  "$schema" : "http://json-schema.org/draft-07/schema#",
+  "additionalProperties" : false,
+  "properties" : {
+    "cast" : {
+      "additionalProperties" : false,
+      "description" : "Cast trigger (button + drag draws a shape) + cast-wide effect intensity + theme.",
+      "properties" : {
+        "button" : {
+          "default" : "right",
+          "description" : "Mouse button that arms a cast stroke.",
+          "enum" : [
+            "right",
+            "middle",
+            "side1",
+            "side2"
+          ],
+          "type" : "string"
+        },
+        "chomp" : {
+          "additionalProperties" : false,
+          "description" : "Chomp special-theme scale knob — read ONLY when `[cast].theme = \"chomp\"`; under any other theme it is ignored (with a log line).",
+          "properties" : {
+            "size" : {
+              "default" : "m",
+              "description" : "Arcade pellet-line scale tier; replaces the trail's `width` under chomp.",
+              "enum" : [
+                "s",
+                "m",
+                "l"
+              ],
+              "type" : "string"
+            }
+          },
+          "type" : "object"
+        },
+        "cursor" : {
+          "additionalProperties" : false,
+          "properties" : {
+            "rule" : {
+              "items" : {
+                "additionalProperties" : false,
+                "description" : "Cursor-anchored gesture rule (fires only when the cursor-AX walk resolves a target).",
+                "properties" : {
+                  "action-cmd" : {
+                    "description" : "For `type=shell` — shell command.",
+                    "type" : "string"
+                  },
+                  "action-keys" : {
+                    "description" : "For `type=key` — e.g. `\"cmd+w\"`.",
+                    "type" : "string"
+                  },
+                  "action-type" : {
+                    "description" : "Action kind; pairs with the matching `action-*`.",
+                    "enum" : [
+                      "key",
+                      "ax",
+                      "shell",
+                      "url"
+                    ],
+                    "type" : "string"
+                  },
+                  "action-url" : {
+                    "description" : "For `type=url` — URL to open.",
+                    "type" : "string"
+                  },
+                  "action-verb" : {
+                    "description" : "For `type=ax` — AX verb.",
+                    "enum" : [
+                      "close",
+                      "minimize",
+                      "raise",
+                      "zoom"
+                    ],
+                    "type" : "string"
+                  },
+                  "apps" : {
+                    "description" : "Bundle-id globs; empty = `[\"*\"]` (any app).",
+                    "items" : {
+                      "type" : "string"
+                    },
+                    "type" : "array"
+                  },
+                  "filter-shell" : {
+                    "description" : "Optional shell predicate (exit 0 fires).",
+                    "type" : "string"
+                  },
+                  "filter-title" : {
+                    "description" : "Optional title-glob filter.",
+                    "type" : "string"
+                  },
+                  "icon" : {
+                    "description" : "Optional card icon (SF: / emoji / path / app:).",
+                    "type" : "string"
+                  },
+                  "name" : {
+                    "description" : "Assist-card label (defaults to the pattern).",
+                    "type" : "string"
+                  },
+                  "pattern" : {
+                    "description" : "Direction string from `L` / `U` / `R` / `D` (e.g. `\"DR\"`). Required.",
+                    "type" : "string"
+                  }
+                },
+                "type" : "object"
+              },
+              "type" : "array"
+            }
+          },
+          "type" : "object"
+        },
+        "fire" : {
+          "additionalProperties" : false,
+          "properties" : {
+            "burst" : {
+              "additionalProperties" : false,
+              "description" : "Fire-moment particle burst at the cursor.",
+              "properties" : {
+                "color" : {
+                  "default" : "",
+                  "description" : "Particle colour. `\"\"` / `\"trail\"` inherits the trail accent; `\"splatoon\"` = random ink; else named / hex.",
+                  "type" : "string"
+                },
+                "kind" : {
+                  "default" : "off",
+                  "description" : "Burst kind; `off` = no burst.",
+                  "enum" : [
+                    "off",
+                    "burst",
+                    "arcade-score"
+                  ],
+                  "type" : "string"
+                }
+              },
+              "type" : "object"
+            },
+            "decal" : {
+              "additionalProperties" : false,
+              "description" : "Post-fire ink decal at the cursor.",
+              "properties" : {
+                "duration-ms" : {
+                  "default" : 3000,
+                  "description" : "How long the decal stays (ms); `0` = off. Clamped 0..10000.",
+                  "maximum" : 10000,
+                  "minimum" : 0,
+                  "type" : "integer"
+                },
+                "kind" : {
+                  "default" : "off",
+                  "description" : "Decal kind; `off` = no decal.",
+                  "enum" : [
+                    "off",
+                    "ink-splatter"
+                  ],
+                  "type" : "string"
+                },
+                "size" : {
+                  "default" : 60,
+                  "description" : "Decal footprint (px). Clamped 10..500.",
+                  "maximum" : 500,
+                  "minimum" : 10,
+                  "type" : "integer"
+                }
+              },
+              "type" : "object"
+            }
+          },
+          "type" : "object"
+        },
+        "focused" : {
+          "additionalProperties" : false,
+          "properties" : {
+            "rule" : {
+              "items" : {
+                "additionalProperties" : false,
+                "description" : "Frontmost-app fallback gesture rule (fires when the cursor sits on a non-AX surface — Desktop / Dock / menu bar).",
+                "properties" : {
+                  "action-cmd" : {
+                    "description" : "For `type=shell` — shell command.",
+                    "type" : "string"
+                  },
+                  "action-keys" : {
+                    "description" : "For `type=key` — e.g. `\"cmd+w\"`.",
+                    "type" : "string"
+                  },
+                  "action-type" : {
+                    "description" : "Action kind; pairs with the matching `action-*`.",
+                    "enum" : [
+                      "key",
+                      "ax",
+                      "shell",
+                      "url"
+                    ],
+                    "type" : "string"
+                  },
+                  "action-url" : {
+                    "description" : "For `type=url` — URL to open.",
+                    "type" : "string"
+                  },
+                  "action-verb" : {
+                    "description" : "For `type=ax` — AX verb.",
+                    "enum" : [
+                      "close",
+                      "minimize",
+                      "raise",
+                      "zoom"
+                    ],
+                    "type" : "string"
+                  },
+                  "apps" : {
+                    "description" : "Bundle-id globs; empty = `[\"*\"]` (any app).",
+                    "items" : {
+                      "type" : "string"
+                    },
+                    "type" : "array"
+                  },
+                  "filter-shell" : {
+                    "description" : "Optional shell predicate (exit 0 fires).",
+                    "type" : "string"
+                  },
+                  "filter-title" : {
+                    "description" : "Optional title-glob filter.",
+                    "type" : "string"
+                  },
+                  "icon" : {
+                    "description" : "Optional card icon (SF: / emoji / path / app:).",
+                    "type" : "string"
+                  },
+                  "name" : {
+                    "description" : "Assist-card label (defaults to the pattern).",
+                    "type" : "string"
+                  },
+                  "pattern" : {
+                    "description" : "Direction string from `L` / `U` / `R` / `D` (e.g. `\"DR\"`). Required.",
+                    "type" : "string"
+                  }
+                },
+                "type" : "object"
+              },
+              "type" : "array"
+            }
+          },
+          "type" : "object"
+        },
+        "intensity" : {
+          "default" : "normal",
+          "description" : "Effect-magnitude multiplier spanning `[cast.overlay.cards]` + `[cast.fire.burst]`.",
+          "enum" : [
+            "subtle",
+            "normal",
+            "bold",
+            "wild"
+          ],
+          "type" : "string"
+        },
+        "modifiers" : {
+          "description" : "Keyboard modifiers held with the button; `[]` = none. Unknown names dropped.",
+          "items" : {
+            "enum" : [
+              "cmd",
+              "opt",
+              "ctrl",
+              "shift",
+              "fn"
+            ],
+            "type" : "string"
+          },
+          "type" : "array"
+        },
+        "overlay" : {
+          "additionalProperties" : false,
+          "description" : "Gesture-trail HUD toggle + blur + colour-cycle period (trail / badge / cards live in sub-blocks).",
+          "properties" : {
+            "badge" : {
+              "additionalProperties" : false,
+              "description" : "Origin badge showing the target app's icon at the stroke start point.",
+              "properties" : {
+                "anim-enabled" : {
+                  "default" : true,
+                  "description" : "Scale-in pop when the badge first appears.",
+                  "type" : "boolean"
+                },
+                "enabled" : {
+                  "default" : true,
+                  "type" : "boolean"
+                },
+                "size" : {
+                  "default" : 56,
+                  "description" : "Badge size (px). Clamped 32..96.",
+                  "maximum" : 96,
+                  "minimum" : 32,
+                  "type" : "integer"
+                }
+              },
+              "type" : "object"
+            },
+            "blur-enabled" : {
+              "default" : true,
+              "description" : "Frosted blur under the HUD cards + badge.",
+              "type" : "boolean"
+            },
+            "cards" : {
+              "additionalProperties" : false,
+              "description" : "Assist-card cosmetics + exit effects.",
+              "properties" : {
+                "armed" : {
+                  "default" : "off",
+                  "description" : "Continuous cue on the currently-armed card.",
+                  "enum" : [
+                    "off",
+                    "pulse",
+                    "glow",
+                    "shake",
+                    "sparkle",
+                    "marching"
+                  ],
+                  "type" : "string"
+                },
+                "cancel" : {
+                  "default" : "off",
+                  "description" : "Animation when a card becomes unreachable.",
+                  "enum" : [
+                    "off",
+                    "drop",
+                    "rise",
+                    "slide-left",
+                    "slide-right",
+                    "explode",
+                    "vibrate",
+                    "fade",
+                    "fireworks",
+                    "confetti",
+                    "random"
+                  ],
+                  "type" : "string"
+                },
+                "fire" : {
+                  "default" : "off",
+                  "description" : "Animation when the firing card fires.",
+                  "enum" : [
+                    "off",
+                    "drop",
+                    "rise",
+                    "slide-left",
+                    "slide-right",
+                    "explode",
+                    "vibrate",
+                    "fade",
+                    "fireworks",
+                    "confetti",
+                    "random"
+                  ],
+                  "type" : "string"
+                },
+                "fires-app-icon" : {
+                  "default" : true,
+                  "description" : "Prepend the target-app icon to the firing card.",
+                  "type" : "boolean"
+                },
+                "font-size" : {
+                  "default" : 13,
+                  "description" : "Card-text base font size (px). Clamped 8..32.",
+                  "maximum" : 32,
+                  "minimum" : 8,
+                  "type" : "integer"
+                },
+                "line-pets" : {
+                  "description" : "Arcade pets walking the firing card's outline; `[]` = none.",
+                  "items" : {
+                    "enum" : [
+                      "chomp",
+                      "ghost"
+                    ],
+                    "type" : "string"
+                  },
+                  "type" : "array"
+                }
+              },
+              "type" : "object"
+            },
+            "color-cycle-ms" : {
+              "default" : 2000,
+              "description" : "Cycle period (ms) for `rainbow` / `neon` colour modes. Clamped 100..10000.",
+              "maximum" : 10000,
+              "minimum" : 100,
+              "type" : "integer"
+            },
+            "enabled" : {
+              "default" : true,
+              "description" : "Draw the trail HUD. `false` skips the overlay window entirely (restart to re-enable).",
+              "type" : "boolean"
+            },
+            "no-match" : {
+              "additionalProperties" : false,
+              "description" : "Banner shown while the in-progress gesture is off every reachable rule.",
+              "properties" : {
+                "kind" : {
+                  "default" : "off",
+                  "description" : "Banner kind; `off` = no banner.",
+                  "enum" : [
+                    "off",
+                    "game-over"
+                  ],
+                  "type" : "string"
+                }
+              },
+              "type" : "object"
+            },
+            "trail" : {
+              "additionalProperties" : false,
+              "description" : "The trail line itself.",
+              "properties" : {
+                "color" : {
+                  "default" : "",
+                  "description" : "Match-colour. `\"\"` inherits the theme palette; named / hex / `rainbow` / `neon` / `splatoon`.",
+                  "type" : "string"
+                },
+                "color-no-match" : {
+                  "default" : "",
+                  "description" : "Colour while the shape can't reach any rule. `\"\"` inherits the theme palette.",
+                  "type" : "string"
+                },
+                "color-outline" : {
+                  "default" : "",
+                  "description" : "Underlay / outline colour. `\"\"` inherits the theme palette (or = no outline).",
+                  "type" : "string"
+                },
+                "final-hold-ms" : {
+                  "default" : 400,
+                  "description" : "How long (ms) the trail lingers after a fire. Clamped 0..2000.",
+                  "maximum" : 2000,
+                  "minimum" : 0,
+                  "type" : "integer"
+                },
+                "straighten-on-turn" : {
+                  "default" : false,
+                  "description" : "Snap each completed segment onto its axis (diagram look). Forced `true` under chomp.",
+                  "type" : "boolean"
+                },
+                "style" : {
+                  "default" : "normal",
+                  "description" : "Line-shape preset (shape only — colour stays from `color`). Ignored under chomp.",
+                  "enum" : [
+                    "normal",
+                    "dashed",
+                    "dotted",
+                    "pixel",
+                    "ascii",
+                    "rainbow-road",
+                    "arrow",
+                    "paws"
+                  ],
+                  "type" : "string"
+                },
+                "width" : {
+                  "default" : 3,
+                  "description" : "Stroke width (px). Clamped 1..40. Ignored under `[cast].theme = \"chomp\"`.",
+                  "maximum" : 40,
+                  "minimum" : 1,
+                  "type" : "integer"
+                }
+              },
+              "type" : "object"
+            }
+          },
+          "type" : "object"
+        },
+        "recognition" : {
+          "additionalProperties" : false,
+          "description" : "Sample → direction tuning (recognition quality only; no visual output).",
+          "properties" : {
+            "cancel-reversals" : {
+              "default" : 2,
+              "description" : "180° reversals that abandon the stroke; `0` = off. Clamped 1..20 when set.",
+              "maximum" : 20,
+              "minimum" : 0,
+              "type" : "integer"
+            },
+            "cancel-window-ms" : {
+              "default" : 500,
+              "description" : "Speed gate (ms) for the scribble cancel; `0` = any speed. Clamped 100..5000 when set.",
+              "maximum" : 5000,
+              "minimum" : 0,
+              "type" : "integer"
+            },
+            "max-segment-ms" : {
+              "default" : 0,
+              "description" : "Max time (ms) one segment may take; `0` = no limit. Clamped 100..60000 when set.",
+              "maximum" : 60000,
+              "minimum" : 0,
+              "type" : "integer"
+            },
+            "min-stroke-px" : {
+              "default" : 16,
+              "description" : "Min displacement (px) before a new direction is emitted. Clamped 4..200.",
+              "maximum" : 200,
+              "minimum" : 4,
+              "type" : "integer"
+            }
+          },
+          "type" : "object"
+        },
+        "theme" : {
+          "default" : "system",
+          "description" : "Cast HUD theme (sill catalog + `neon` / `splatoon` engine themes); `random` picks one per launch; `\"\"` = native `system`.",
+          "enum" : [
+            "terminal",
+            "chomp",
+            "rainbow",
+            "cobalt2",
+            "shades-of-purple",
+            "tokyo-hack",
+            "github-dark",
+            "dracula",
+            "catppuccin-mocha",
+            "gruvbox",
+            "github-light",
+            "catppuccin-latte",
+            "system",
+            "random",
+            "neon",
+            "splatoon",
+            ""
+          ],
+          "type" : "string"
+        }
+      },
+      "type" : "object"
+    },
+    "exclude" : {
+      "additionalProperties" : false,
+      "description" : "Global: bundle ids where wand is fully disabled (applies to BOTH cast rules and tome items).",
+      "properties" : {
+        "apps" : {
+          "description" : "Bundle-id globs (`*` / `?`); `[]` = exclude nothing.",
+          "items" : {
+            "type" : "string"
+          },
+          "type" : "array"
+        }
+      },
+      "type" : "object"
+    },
+    "failsafe" : {
+      "additionalProperties" : false,
+      "description" : "Mandatory safety net for low-level mouse interception. wand refuses to start if this block is absent.",
+      "properties" : {
+        "emergency-release-key" : {
+          "default" : "esc",
+          "description" : "Key that force-releases a stuck button mid-stroke. Empty = `esc`.",
+          "type" : "string"
+        },
+        "mouse-hold-timeout-seconds" : {
+          "default" : 30,
+          "description" : "Auto-release a held button after this many seconds (runaway-drag guard). Clamped 5..300.",
+          "maximum" : 300,
+          "minimum" : 5,
+          "type" : "integer"
+        }
+      },
+      "type" : "object"
+    },
+    "tome" : {
+      "additionalProperties" : false,
+      "description" : "Tome trigger (a button-press pops a contextual menu) + layout + theme.",
+      "properties" : {
+        "animation" : {
+          "additionalProperties" : false,
+          "description" : "Panel open / close transitions.",
+          "properties" : {
+            "close" : {
+              "default" : "off",
+              "description" : "Close animation; `off` = instant.",
+              "enum" : [
+                "off",
+                "fade",
+                "pop"
+              ],
+              "type" : "string"
+            },
+            "open" : {
+              "default" : "off",
+              "description" : "Open animation; `off` = instant.",
+              "enum" : [
+                "off",
+                "fade",
+                "pop"
+              ],
+              "type" : "string"
+            }
+          },
+          "type" : "object"
+        },
+        "button" : {
+          "default" : "middle",
+          "description" : "Mouse button that pops the menu.",
+          "enum" : [
+            "right",
+            "middle",
+            "side1",
+            "side2"
+          ],
+          "type" : "string"
+        },
+        "cursor" : {
+          "additionalProperties" : false,
+          "properties" : {
+            "item" : {
+              "items" : {
+                "additionalProperties" : false,
+                "description" : "One tome menu row.",
+                "properties" : {
+                  "action-cmd" : {
+                    "type" : "string"
+                  },
+                  "action-keys" : {
+                    "type" : "string"
+                  },
+                  "action-type" : {
+                    "description" : "Static-row action kind.",
+                    "enum" : [
+                      "key",
+                      "ax",
+                      "shell",
+                      "url"
+                    ],
+                    "type" : "string"
+                  },
+                  "action-url" : {
+                    "type" : "string"
+                  },
+                  "action-verb" : {
+                    "enum" : [
+                      "close",
+                      "minimize",
+                      "raise",
+                      "zoom"
+                    ],
+                    "type" : "string"
+                  },
+                  "apps" : {
+                    "description" : "Bundle-id globs; empty = `[\"*\"]`.",
+                    "items" : {
+                      "type" : "string"
+                    },
+                    "type" : "array"
+                  },
+                  "dynamic" : {
+                    "description" : "Shell command whose stdout lines become child rows (folder producer).",
+                    "type" : "string"
+                  },
+                  "filter-shell" : {
+                    "description" : "Shell predicate (exit 0 keeps).",
+                    "type" : "string"
+                  },
+                  "filter-title" : {
+                    "description" : "Title-glob filter.",
+                    "type" : "string"
+                  },
+                  "group" : {
+                    "description" : "Parent submenu path; empty = top level.",
+                    "items" : {
+                      "type" : "string"
+                    },
+                    "type" : "array"
+                  },
+                  "header" : {
+                    "description" : "Section header (`.list` layout only).",
+                    "type" : "string"
+                  },
+                  "icon" : {
+                    "description" : "Icon spec (SF: / emoji / path / app:).",
+                    "type" : "string"
+                  },
+                  "icon-anim" : {
+                    "description" : "SF Symbol hover animation (`bounce` / `pulse`).",
+                    "type" : "string"
+                  },
+                  "name" : {
+                    "description" : "Menu label (required).",
+                    "type" : "string"
+                  },
+                  "separator-before" : {
+                    "description" : "Draw a separator above this row.",
+                    "type" : "boolean"
+                  },
+                  "state" : {
+                    "description" : "Checkmark spec (`on` / `off` / `mixed` / `shell:<cmd>`).",
+                    "type" : "string"
+                  },
+                  "subtitle" : {
+                    "description" : "Second line under the name (`.list` layout only).",
+                    "type" : "string"
+                  },
+                  "template-action-cmd" : {
+                    "type" : "string"
+                  },
+                  "template-action-keys" : {
+                    "type" : "string"
+                  },
+                  "template-action-type" : {
+                    "description" : "Child-row action kind for a `dynamic` item.",
+                    "enum" : [
+                      "key",
+                      "ax",
+                      "shell",
+                      "url"
+                    ],
+                    "type" : "string"
+                  },
+                  "template-action-url" : {
+                    "type" : "string"
+                  },
+                  "template-action-verb" : {
+                    "type" : "string"
+                  },
+                  "template-icon" : {
+                    "description" : "Child icon template ({line}).",
+                    "type" : "string"
+                  },
+                  "template-name" : {
+                    "description" : "Child label template ({line}).",
+                    "type" : "string"
+                  },
+                  "tint" : {
+                    "description" : "SF Symbol tint colour (named / hex).",
+                    "type" : "string"
+                  },
+                  "tint-colors" : {
+                    "description" : "SF Symbol multi-colour palette.",
+                    "items" : {
+                      "type" : "string"
+                    },
+                    "type" : "array"
+                  }
+                },
+                "type" : "object"
+              },
+              "type" : "array"
+            }
+          },
+          "type" : "object"
+        },
+        "decoration" : {
+          "additionalProperties" : false,
+          "description" : "Static panel decoration (shadow + line-pets); the border rim is its own sub-block.",
+          "properties" : {
+            "border" : {
+              "additionalProperties" : false,
+              "description" : "Decorative border rim (effect / width / cycle).",
+              "properties" : {
+                "color-cycle-ms" : {
+                  "default" : 4000,
+                  "description" : "Cycle period (ms) for the `rainbow` outline. Clamped 500..10000.",
+                  "maximum" : 10000,
+                  "minimum" : 500,
+                  "type" : "integer"
+                },
+                "effect" : {
+                  "default" : "off",
+                  "description" : "Border decoration; `off` = no rim.",
+                  "enum" : [
+                    "off",
+                    "rainbow",
+                    "terminal",
+                    "neon",
+                    "splatoon",
+                    "mono",
+                    "vapor",
+                    "chomp"
+                  ],
+                  "type" : "string"
+                },
+                "width" : {
+                  "default" : 2,
+                  "description" : "Border stroke width (px). Clamped 1..10.",
+                  "maximum" : 10,
+                  "minimum" : 1,
+                  "type" : "integer"
+                }
+              },
+              "type" : "object"
+            },
+            "line-pets" : {
+              "description" : "Arcade pets walking the panel outline; `[]` = none.",
+              "items" : {
+                "enum" : [
+                  "chomp",
+                  "ghost"
+                ],
+                "type" : "string"
+              },
+              "type" : "array"
+            },
+            "shadow" : {
+              "default" : false,
+              "description" : "macOS window drop shadow under the panel.",
+              "type" : "boolean"
+            }
+          },
+          "type" : "object"
+        },
+        "enabled" : {
+          "default" : false,
+          "description" : "Install the tome tap. `false` = no menu (restart to flip).",
+          "type" : "boolean"
+        },
+        "layout" : {
+          "default" : "list",
+          "description" : "Panel orientation for the native trigger.",
+          "enum" : [
+            "list",
+            "toolbar",
+            "labeled-toolbar"
+          ],
+          "type" : "string"
+        },
+        "modifiers" : {
+          "description" : "Modifiers held with the button; `[]` = none. Must differ from `[cast]` or the tome is demoted (collision).",
+          "items" : {
+            "enum" : [
+              "cmd",
+              "opt",
+              "ctrl",
+              "shift",
+              "fn"
+            ],
+            "type" : "string"
+          },
+          "type" : "array"
+        },
+        "row" : {
+          "additionalProperties" : false,
+          "description" : "Per-row visual conventions applied to every item.",
+          "properties" : {
+            "font-size" : {
+              "default" : 13,
+              "description" : "Title font size (px); drives row height. Clamped 11..32.",
+              "maximum" : 32,
+              "minimum" : 11,
+              "type" : "integer"
+            },
+            "icon-chip" : {
+              "default" : true,
+              "description" : "Rounded chip behind emoji / text-glyph icons.",
+              "type" : "boolean"
+            },
+            "shortcut-badge" : {
+              "default" : true,
+              "description" : "Auto `⌘W`-style glyph badge on `.list` key rows.",
+              "type" : "boolean"
+            }
+          },
+          "type" : "object"
+        },
+        "theme" : {
+          "default" : "system",
+          "description" : "Tome panel theme (independent of `[cast].theme`); `\"\"` = native `system`.",
+          "enum" : [
+            "terminal",
+            "chomp",
+            "rainbow",
+            "cobalt2",
+            "shades-of-purple",
+            "tokyo-hack",
+            "github-dark",
+            "dracula",
+            "catppuccin-mocha",
+            "gruvbox",
+            "github-light",
+            "catppuccin-latte",
+            "system",
+            "random",
+            "neon",
+            "splatoon",
+            ""
+          ],
+          "type" : "string"
+        }
+      },
+      "type" : "object"
+    }
+  },
+  "title" : "wand config.toml",
+  "type" : "object"
+}

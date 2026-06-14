@@ -55,8 +55,14 @@ let package = Package(
         // the exact shape wand's old `TOMLDocument` had, so the swap is
         // mechanical. Pinned to the next-minor range like the other family
         // apps; Package.resolved locks the exact commit.
+        //
+        // Floor 0.9.0 = the `ConfigSchema` module — one declarative `Spec`
+        // describes wand's whole config.toml surface and emits the JSON
+        // Schema taplo uses for completion/validation (`wand --emit-schema`).
+        // 0.9.0 is an additive superset of 0.7.x; the existing
+        // Palette / Toml / Effects usage is unaffected.
         .package(url: "https://github.com/akira-toriyama/sill.git",
-                 .upToNextMinor(from: "0.7.1")),
+                 .upToNextMinor(from: "0.9.1")),
     ],
     targets: [
         .target(
@@ -64,6 +70,11 @@ let package = Package(
             dependencies: [
                 .product(name: "Palette", package: "sill"),
                 .product(name: "Toml", package: "sill"),
+                // ConfigSchema: one declarative `Spec` describes wand's whole
+                // config.toml surface and emits the JSON Schema for taplo
+                // completion (`wand --emit-schema`) — generated from the same
+                // parser source, so editor schema and parser never drift.
+                .product(name: "ConfigSchema", package: "sill"),
             ]),
         .target(
             name: "WandAdapterMacOS",
