@@ -5,7 +5,7 @@
 # The `#:schema` line above gives editors (taplo / Even Better TOML) key
 # + value completion and inline validation. wand writes this schema next
 # to your config on launch, and it's generated from wand's own config
-# parser (`wand --emit-schema`) — so it always matches the binary.
+# parser (`wand config --emit-schema`) — so it always matches the binary.
 #
 # This file is the **single source of truth** for wand's settings.
 # wand does NOT ship a GUI. Drop your edited copy at
@@ -17,7 +17,7 @@
 # wand only ever READS this file. Out-of-range / unknown values are
 # silently clamped to safe defaults rather than rejected — a typo
 # can never break the daemon. Validate explicitly with
-# `wand --validate`.
+# `wand config --validate`.
 
 
 # -----------------------------------------------------------------
@@ -93,7 +93,7 @@ apps = []
 # wand grabs low-level mouse via CGEventTap. A bug, a crash, or a
 # swallowed event maps directly to "the user's PC is now unusable".
 # This block defines the safety nets that catch such failures. It
-# is **mandatory**: removing it makes `wand --validate` and server
+# is **mandatory**: removing it makes `wand config --validate` and server
 # startup both refuse to proceed.
 #
 # Deliberate inversion of wand's clamp-to-default rule that covers
@@ -190,7 +190,7 @@ intensity = "normal"
 # facet / perch / wand family): trail <- primary, no-match <- error,
 # text <- foreground, cards / outline / badge <- background. Individual
 # [cast.overlay.*] colour keys still override per field.
-# Unknown names clamp to "system". Validate with `wand --validate`.
+# Unknown names clamp to "system". Validate with `wand config --validate`.
 theme = "system"
 
 
@@ -484,7 +484,7 @@ kind = "off"
 #   "m" — calibrated baseline (scale ≈ 3.0)
 #   "l" — chunky / over-the-top (scale ≈ 4.5)
 #
-# Unknown values clamp to "m". Validate with `wand --validate`.
+# Unknown values clamp to "m". Validate with `wand config --validate`.
 size = "m"
 
 
@@ -562,7 +562,7 @@ size = 60
 #
 # Two changes that need a daemon restart (the tap is baked into the
 # event mask at install): `enabled = false ↔ true` and `button`.
-# Surfaced in `wand --status` as `pending-restart`.
+# Surfaced in `wand daemon --show` as `pending-restart`.
 [tome]
 enabled = false                # opt-in
 button = "middle"              # "middle" | "side1" | "side2" | "right"

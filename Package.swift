@@ -61,8 +61,14 @@ let package = Package(
         // Schema taplo uses for completion/validation (`wand --emit-schema`).
         // 0.9.0 is an additive superset of 0.7.x; the existing
         // Palette / Toml / Effects usage is unaffected.
+        // Floor 0.10.0 = the `CLIKit` module — the family's shared
+        // yabai-style argv tokenizer (Phase 3). WandApp's CLI dispatch
+        // declares each domain's verb arity and CLIKit consumes values
+        // (incl. negative `--at` coords) without the `--verb=value` form.
+        // Additive superset of 0.9.x; Palette / Toml / ConfigSchema /
+        // Effects usage is unaffected.
         .package(url: "https://github.com/akira-toriyama/sill.git",
-                 .upToNextMinor(from: "0.9.1")),
+                 .upToNextMinor(from: "0.10.0")),
     ],
     targets: [
         .target(
@@ -89,6 +95,11 @@ let package = Package(
             dependencies: [
                 "WandCore",
                 "WandAdapterMacOS",
+                // CLIKit — the family's shared yabai-style argv tokenizer
+                // (Phase 3). WandApp's CLI dispatch declares each domain's
+                // verb arity and CLIKit consumes values (incl. negative
+                // --at coords) without the --verb=value form.
+                .product(name: "CLIKit", package: "sill"),
             ]),
         .testTarget(name: "WandCoreTests", dependencies: ["WandCore"]),
         // Drives the synthetic MouseSource end-to-end through Core's

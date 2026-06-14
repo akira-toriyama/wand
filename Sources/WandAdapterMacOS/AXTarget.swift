@@ -191,7 +191,7 @@ public enum AXTarget {
 
     /// Focused-window title of the app owning `pid`. Empty string
     /// when the app exposes no focused window, no title attribute,
-    /// or AX denies the read. Used by `--show-menu` to fill in
+    /// or AX denies the read. Used by `tome --open` to fill in
     /// `Target.title` (= `$WAND_TARGET_TITLE`) on external triggers
     /// where the calling shell can't know the window title itself.
     public static func focusedWindowTitle(pid: pid_t) -> String {

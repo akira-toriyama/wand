@@ -385,7 +385,7 @@ public struct LauncherSpec: Sendable, Equatable {
     )
 }
 
-/// Result of parsing a standalone items file (the `--show-menu
+/// Result of parsing a standalone items file (the `tome --open
 /// --items <PATH>` input). Carries both the items and the file's
 /// optional `[tome].layout` declaration so the external-trigger
 /// path can pick the right UI without consulting the main config.

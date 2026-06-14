@@ -10,7 +10,7 @@ import WandCore
 public enum Dispatch {
 
     /// `extraEnv` lets an external trigger inject env vars on top of
-    /// the standard `WAND_TARGET_*` set — `--show-menu --selection
+    /// the standard `WAND_TARGET_*` set — `tome --open --selection
     /// "..."` reaches shell actions as `$SELECTION` via this. Empty
     /// default keeps native-trigger callsites (gesture, launcher)
     /// unchanged.
@@ -215,7 +215,7 @@ public enum Dispatch {
         env["WAND_TARGET_FRAME"] =
             "\(Int(target.frame.minX)),\(Int(target.frame.minY))," +
             "\(Int(target.frame.width)),\(Int(target.frame.height))"
-        // Caller-supplied env — currently `$SELECTION` from --show-menu.
+        // Caller-supplied env — currently `$SELECTION` from tome --open.
         // Same untrusted-input caveat as WAND_TARGET_TITLE: quote any
         // expansion that hits a shell command line.
         for (k, v) in extraEnv { env[k] = v }
