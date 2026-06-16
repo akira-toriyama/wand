@@ -48,9 +48,10 @@ let package = Package(
         // `resolve`). sill 0.6.0 moves the pure `LinePet` vocabulary into
         // `Palette` (so a no-AppKit Core can validate it) and adds
         // `drawLinePets(…chaseGap:)` — both consumed by wand's line-pets
-        // dedup. Since 0.7.0 WandCore also takes the `Toml` module — the
-        // family's ONE hand-rolled TOML subset parser (wand's in-tree
-        // TOML.swift folded into sill in atelier Phase 1.6). wand reads
+        // dedup. WandCore also takes the `Toml` module — the family's ONE
+        // TOML implementation (wand's in-tree TOML.swift folded into sill in
+        // Phase 1.6, then moved out to the standalone swift-toml-edit repo at
+        // sill 0.11.0). wand reads
         // config via `Toml.parseFlat`, whose `Document{tables,arrays}` is
         // the exact shape wand's old `TOMLDocument` had, so the swap is
         // mechanical. Pinned to the next-minor range like the other family
@@ -61,21 +62,28 @@ let package = Package(
         // Schema taplo uses for completion/validation (`wand --emit-schema`).
         // 0.9.0 is an additive superset of 0.7.x; the existing
         // Palette / Toml / Effects usage is unaffected.
-        // Floor 0.10.0 = the `CLIKit` module — the family's shared
-        // yabai-style argv tokenizer (Phase 3). WandApp's CLI dispatch
-        // declares each domain's verb arity and CLIKit consumes values
-        // (incl. negative `--at` coords) without the `--verb=value` form.
-        // Additive superset of 0.9.x; Palette / Toml / ConfigSchema /
-        // Effects usage is unaffected.
+        // Floor 0.11.0 = the release that removed sill's in-tree `Toml`
+        // (moved to swift-toml-edit, below). It also carries the `CLIKit`
+        // module — the family's shared yabai-style argv tokenizer (Phase 3):
+        // WandApp's CLI dispatch declares each domain's verb arity and CLIKit
+        // consumes values (incl. negative `--at` coords) without the
+        // `--verb=value` form. Palette / ConfigSchema / Effects usage is
+        // unaffected.
         .package(url: "https://github.com/akira-toriyama/sill.git",
-                 .upToNextMinor(from: "0.10.0")),
+                 .upToNextMinor(from: "0.11.0")),
+        // swift-toml-edit — the family's ONE TOML implementation (Sill-1).
+        // Provides the `Toml` module WandCore reads config with
+        // (`Toml.parseFlat`, whose `Document{tables,arrays}` matches wand's
+        // old `TOMLDocument`). Module name unchanged so `import Toml` survives.
+        .package(url: "https://github.com/akira-toriyama/swift-toml-edit.git",
+                 .upToNextMinor(from: "1.0.0")),
     ],
     targets: [
         .target(
             name: "WandCore",
             dependencies: [
                 .product(name: "Palette", package: "sill"),
-                .product(name: "Toml", package: "sill"),
+                .product(name: "Toml", package: "swift-toml-edit"),
                 // ConfigSchema: one declarative `Spec` describes wand's whole
                 // config.toml surface and emits the JSON Schema for taplo
                 // completion (`wand --emit-schema`) — generated from the same
