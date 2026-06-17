@@ -460,16 +460,16 @@ AX observation, anything future) goes through this checklist:
 
 ### TOML parser
 
-- **`parseTOMLSubset` is hand-rolled** in
-  [Sources/WandCore/TOML.swift](Sources/WandCore/TOML.swift)
-  — extended from facet's port with `[[array-of-tables]]`
-  support because `[[cast.cursor.rule]]` / `[[cast.focused.rule]]` /
-  `[[tome.cursor.item]]` all need it. Inline tables (`{a=1,
-  b=2}`) are **not** supported and rules use dotted-key style
-  (`action-type` + `action-keys` / `action-verb` /
-  `action-cmd` / `action-url`) instead. Don't add an inline-table
-  parser without a real need; the dotted-key form keeps the parser
-  ~100 lines.
+- **TOML parsing is delegated to swift-toml-edit's `Toml` module**
+  (Sill-1 — the family's one TOML implementation). wand reads its
+  config via `Toml.parseFlat` (Config.swift), which natively supports
+  arrays-of-tables (`[[cast.cursor.rule]]` / `[[cast.focused.rule]]` /
+  `[[tome.cursor.item]]`). The former hand-rolled
+  `Sources/WandCore/TOML.swift` (`parseTOMLSubset`, extended from
+  facet's port) was removed when wand moved onto the shared lib. Rules
+  still use the dotted-key style (`action-type` + `action-keys` /
+  `action-verb` / `action-cmd` / `action-url`); the underlying lib is
+  full TOML 1.0, so there is no local "~100-line parser budget" to defend.
 - **Action vocabulary**: `key` (keystroke after `raise`), `ax`
   (verb in `Action.axVerbs` — no focus switch), `shell` (env vars
   carry the target), `url` (`NSWorkspace.shared.open` — handles
@@ -746,6 +746,8 @@ decisions. Subsections ordered broad → narrow.
 
 - **[sill](https://github.com/akira-toriyama/sill)** — 共有 theming / CLI 基盤。設計 → [`docs/DESIGN.md`](https://github.com/akira-toriyama/sill/blob/main/docs/DESIGN.md)。wand が使う: `Palette` / `Effects`（line-pets・border）/ `CLIKit`（CLI tokenizer）/ `ConfigSchema`（taplo schema）。
 - **[swift-toml-edit](https://github.com/akira-toriyama/swift-toml-edit)** — family 唯一の TOML 実装（`Toml` module・Swift 版 toml_edit）。wand は config.toml パースに使用。
+
+**自己完結しない — 共有候補は sill に PR を模索**: app 単独で実装する前に「2 つ以上の app で冗長になりそうか」を問い、そうなら sill への PR を検討する（過剰共通化はしない・zero-debt ≠ 全部共有）。
 
 ## Roadmap board (GitHub Projects)
 
