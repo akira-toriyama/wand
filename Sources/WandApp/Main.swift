@@ -33,7 +33,7 @@ enum WandApp {
         daemon — lifecycle (need a running daemon; exit 3 if none)
           wand daemon --reload              re-read ~/.config/wand/config.toml
                                               (also automatic on file save). Live:
-                                              [[cast.rule]] / [exclude].apps /
+                                              [[cast.cursor.rule]] / [exclude].apps /
                                               [cast.recognition] / [cast.overlay] /
                                               [cast.fire]. Restart only: [cast]
                                               button+modifiers, [tome] enabled+
@@ -49,13 +49,13 @@ enum WandApp {
           wand cast --test PATTERN [APP]    dry-run: which rule would fire for a
                                               pattern (optionally for a bundle id)
           wand cast --record                interactive recorder: draw a gesture,
-                                              get a paste-ready [[cast.rule]] on
+                                              get a paste-ready [[cast.cursor.rule]] on
                                               stdout. Refuses if the daemon runs.
 
         tome — launcher menu
           wand tome --open                  ask the daemon to pop the tome menu
             --items <PATH>                    at a screen point with the given
-            --at <X> <Y>                      [[tome.item]] file. Cocoa coords
+            --at <X> <Y>                      [[tome.cursor.item]] file. Cocoa coords
             [--selection <TEXT>]              (Y-up; --at accepts negatives). For an
             [--title <TEXT>]                  upstream trigger. $SELECTION is exported
                                               to shell actions if --selection given;
@@ -1055,7 +1055,7 @@ enum WandApp {
             pattern=\(pattern)  samples=\(event.samples.count)  \
             max|dx|=\(Int(dx)) max|dy|=\(Int(dy))  target=\(event.target.bundleID)
 
-            [[cast.rule]]
+            [[cast.cursor.rule]]
             name = "\(pattern)"
             pattern = "\(pattern)"
             apps = ["\(event.target.bundleID)"]

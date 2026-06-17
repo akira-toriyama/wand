@@ -6,10 +6,17 @@ Guidance for working in this repository.
 
 All UI / config terminology follows [`docs/glossary.md`](docs/glossary.md) —
 use the canonical names (**cast**, **tome**, assist card, badge,
-trail, fire burst, fire decal, non-activating panel, child panel,
-tome entry, tome layout, dynamic submenu, AX target, external
-trigger, excludes, …), **not** the `Don't call it:` synonyms.
+trail, fire burst, fire decal, chomp, line-pet, non-activating panel,
+child panel, tome entry, tome layout, dynamic submenu, AX target,
+external trigger, excludes, …), **not** the `Don't call it:` synonyms.
 Adding or renaming a term lands in the same PR as the code change.
+
+The same lockstep covers the CLI verb surface and the TOML table
+names: prose and help text use the live forms (`wand <domain> --<verb>`;
+`[[cast.cursor.rule]]` / `[[cast.focused.rule]]` / `[[tome.cursor.item]]`).
+The retired flag CLI and the dropped `[[cast.rule]]` / `[[tome.item]]`
+headers may appear only in the parser's migration-warning paths, never
+as canonical examples.
 
 Swift type names (`LauncherSpec`, `LauncherPanel`, `LauncherSource`,
 `GestureOverlay`, `cfg.launcher`, …) intentionally retain the pre-
@@ -260,7 +267,7 @@ Everything below depends on this contract:
   `NSWorkspace.frontmostApplication` instead of `AXTarget.
   resolveAt(point:)` — text-selection-anchored, not cursor-
   anchored. Spine guarantees above apply to cast and middle-
-  click tome (the native trigger families); `--show-menu` is
+  click tome (the native trigger families); `tome --open` is
   documented as the carve-out. `$SELECTION` is the only extra env
   var added (via `Dispatch.execute(extraEnv:)`); the
   `WAND_TARGET_*` set is still populated, just from the
@@ -444,19 +451,21 @@ AX observation, anything future) goes through this checklist:
   entries) live at the higher scope on purpose; the comment at the
   call site explains why. Default to the nested form, and justify
   in a comment when promoting a key upward.
-- **The same discipline applies to CLI options.** Breaking changes
-  to the flag surface are OK (rename + warn, update `--help` /
-  README in the same PR — there is no third-party tooling depending
-  on the flag set). And the loud-reject policy holds end-to-end:
-  unknown flags exit `2`, multiple action flags exit `2`, orphan
-  modifier flags exit `2`. **No silent fallback, no silent drop** —
-  PR #98 set this baseline; new flags must register in the
-  three-pass argument processor in [Main.swift](Sources/WandApp/Main.swift)
-  (action mutex → unknown-flag scan with operand arities → orphan
-  modifier check). If a new flag takes operands, add it to
-  `valueArities` so its operand doesn't get reported as "unknown";
-  if it's only valid with specific actions, add it to `modifierFlags`
-  with the allow-list.
+- **The same discipline applies to the CLI.** wand is a domain-verb
+  CLI (`wand <domain> --<verb> [VALUE …]`; bare `wand` = server).
+  Breaking changes to the verb surface are OK (rename + update
+  `--help` / README in the same PR — there is no third-party tooling
+  depending on it). The loud-reject policy holds end-to-end: an
+  unknown domain, an unknown flag, a bad arity, zero verbs for a
+  domain, or two incompatible verbs all exit `2`. **No silent
+  fallback, no silent drop** (PR #98 set this baseline). Tokenizing
+  is delegated to `CLIKit` (sill): each domain declares a
+  `CLIKit.Spec(arity:)` and `parseOrDie` maps any parse error to a
+  loud exit `2`; wand keeps the policy on top via `requireOneVerb`
+  (exactly one verb per domain). To add a verb, register it in two
+  places in [Main.swift](Sources/WandApp/Main.swift): the domain's
+  `CLIKit.Spec(arity:)` (pick `.flag` / `.value` / `.values(n)` /
+  `.requiredThenOptional(n)`) and the domain's `requireOneVerb` list.
 
 ### TOML parser
 
@@ -516,12 +525,12 @@ AX observation, anything future) goes through this checklist:
   quiet. There is no `--debug` flag).
 - **Both write to `/tmp/wand.log`**; `WAND_DEBUG` also mirrors to
   stderr so foreground users see events live.
-- **`mirrorLineToStderr`** is the `--validate`-only escape hatch
+- **`mirrorLineToStderr`** is the `config --validate`-only escape hatch
   for surfacing `Log.line` (and only `Log.line`, never `Log.debug`)
   to stderr without flipping `debugMode`. `Log.lineCount` /
   `Log.resetLineCount()` let the caller turn the warning stream
   into a tally for the validation summary. Don't reach for these
-  outside `--validate`; for normal daemon foregrounding, set
+  outside `config --validate`; for normal daemon foregrounding, set
   `WAND_DEBUG=1` instead.
 - **Use `Log.debug` liberally** in EventTap / dispatch hot paths.
   It costs one bool check when disabled. Skip per-sample logging
@@ -605,50 +614,51 @@ stray instances before relaunching.
 
 ### CLI surface
 
-- **Flags**: `--validate` / `--doctor` / `--test` / `--record` /
-  `--resign` / `--help` (standalone), `--reload` / `--quit` /
-  `--status` / `--show-menu` (client). Verbose logging is triggered
-  by the `WAND_DEBUG` env var, not a flag — there is no `--debug`
-  flag (passing it exits `2` like any unknown flag). Any unrecognised
-  flag exits `2` with a stderr message (no silent fallback — facet's
-  *Rule of Repair* discipline). The same loud-reject policy extends
-  to **combinations**: multiple action flags (e.g. `--reload --quit`)
-  and orphan modifier flags (e.g. `--items` without `--show-menu` /
-  `--validate`) both exit `2`. Argument processing in
-  [Main.swift](Sources/WandApp/Main.swift) runs in three passes —
-  (1) mutually-exclusive-action check, (2) unknown-flag scan with
-  per-flag operand arities (incl. `--test PATTERN [BUNDLE-ID]`
-  inline), (3) orphan-modifier check — then dispatches. Keep that
-  ordering when adding flags; in particular, register any new
-  value-bearing flag in `valueArities` so its operand doesn't get
-  flagged as "unknown".
-- **`--doctor`** reports Accessibility (`AXTarget.isTrusted()`),
+- **Domain-verb surface (yabai-style).** wand is invoked
+  `wand <domain> --<verb> [VALUE …]`; bare `wand` is server mode.
+  Domains and verbs: `daemon --reload | --quit | --show | --resign`;
+  `cast --test PATTERN [APP] | --record`; `tome --open | --validate`
+  (modifiers `--items <PATH>` / `--at <X> <Y>` / `--selection <TEXT>`
+  / `--title <TEXT>`); `config --validate | --doctor | --emit-schema`.
+  Verbose logging is the `WAND_DEBUG` env var, not a flag — there is
+  no `--debug` (passing it exits `2`). `CLIKit` (sill) owns
+  tokenization: it parses each domain's argv against a per-domain
+  `CLIKit.Spec(arity:)` (so `--at -100 50` negatives are consumed as
+  values), and any unknown flag / arity error maps to a loud exit `2`
+  via `parseOrDie`. wand layers the policy on top: `requireOneVerb`
+  enforces exactly one verb per domain (zero verbs or two
+  incompatible verbs both exit `2`), and an unknown domain exits via
+  `CLIKit.die`. No three-pass processor / `valueArities` /
+  `modifierFlags` allow-list exists any more.
+- **`wand config --doctor`** reports Accessibility (`AXTarget.isTrusted()`),
   config, daemon liveness, and a live tap probe
   (`MacOSMouseSource.canInstallTap()` — a listen-only tap created and
-  torn down). Exit 1 if AX/tap fail. **`--test PATTERN [bundle-id]`**
+  torn down). Exit 1 if AX/tap fail. **`wand cast --test PATTERN [bundle-id]`**
   dry-runs `Matcher` against config (no event tap touched).
-- **`--reload` / `--quit` / `--show-menu` talk to the running
-  daemon over Distributed Notification Center**
+- **`daemon --reload` / `daemon --quit` / `tome --open` talk to the
+  running daemon over Distributed Notification Center**
   (`com.wand.app.control`,
   see [Sources/WandApp/Control.swift](Sources/WandApp/Control.swift)
   + `Controller.installCLIControl`) — same pattern as facet.
-  Don't invent a different IPC. They exit `3` if no daemon is
-  running; `--record` exits `3` if one *is* (tap conflict).
-  `--resign` is standalone (not a client cmd) — it re-signs the
-  installed bundle with the persistent identity and restarts the
-  daemon, used as a one-shot recovery after `brew install` /
-  upgrade drops the TCC grant.
-- **`--status` is one-way the other direction**: DNC can't reply, so
-  the daemon rewrites a small status file (`statusPath` =
+  Don't invent a different IPC. `tome --open` posts the `show-menu`
+  DNC object (a wire constant, not a CLI flag) carrying
+  `items`/`x`/`y`/`selection`/`title`. They exit `3` if no daemon is
+  running; `cast --record` exits `3` if one *is* (tap conflict).
+  `daemon --resign` re-signs the installed bundle with the persistent
+  identity and restarts the daemon — a one-shot recovery after
+  `brew install` / upgrade drops the TCC grant.
+- **`daemon --show` is one-way the other direction**: DNC can't reply,
+  so the daemon rewrites a small status file (`statusPath` =
   `/tmp/wand.status`) on start / reload / each recognised cast,
-  and `--status` just reads it. Don't reach for a request/response
+  and `daemon --show` just reads it (rule count, trigger, last
+  gestures, counters, last reload). Don't reach for a request/response
   IPC — the file is enough.
 - **Config auto-reload**: `ConfigWatcher`
   ([Sources/WandApp/ConfigWatcher.swift](Sources/WandApp/ConfigWatcher.swift))
   watches `WandConfig.path` with a `DispatchSource` vnode source
   and calls `controller.reload()` on edit (debounced; re-arms on the
-  atomic-save rename/delete). `--reload` is now just the manual
-  trigger for the same path.
+  atomic-save rename/delete). `daemon --reload` is now just the
+  manual trigger for the same path.
 - **Login auto-start**: the Homebrew formula's `service do` block
   (`brew services start wand`) runs the bundle's executable via
   launchd; `keep_alive` is safe because an un-granted start doesn't
@@ -706,11 +716,13 @@ decisions. Subsections ordered broad → narrow.
 ### Formats / conventions
 
 - [TOML 1.0.0 spec](https://toml.io/en/v1.0.0)
-  *(reviewed 2026-05-23)* — what the hand-rolled
-  `parseTOMLSubset` approximates. We intentionally support a strict
-  subset (no inline tables, no nested arrays-of-arrays, dotted-key
-  style for `[[cast.cursor.rule]]` rows). New `.toml` features must justify the
-  added parser surface against the "≈100-line parser" budget.
+  *(reviewed 2026-05-23)* — wand now consumes full TOML 1.0 via
+  swift-toml-edit's `Toml` module (Sill-1), so the whole spec is
+  available. The config still uses the dotted-key action style on
+  `[[cast.cursor.rule]]` / `[[cast.focused.rule]]` / `[[tome.cursor.item]]`
+  rows by convention, not by parser limitation (the retired
+  hand-rolled `parseTOMLSubset` and its ≈100-line budget no longer
+  apply — see `### TOML parser`).
 - [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/)
   *(reviewed 2026-05-23)* — type / scope grammar
   `<type>(<scope>)<!>: <subject>`. `docs/commit-convention.md` is
