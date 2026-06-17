@@ -72,13 +72,6 @@ public final class IconSetCache {
         },
     ]
 
-    /// Names recognised as icon-set prefixes (`lucide:`, `phosphor:`,
-    /// `tabler:`, `heroicons:`). Used by `IconResolver` to decide
-    /// whether a spec belongs to this cache vs. the existing
-    /// `app:` / `favicon:` / `SF:` branches.
-    public static let recognisedPrefixes: [String] =
-        Array(sources.keys)
-
     /// True iff `spec` starts with one of the recognised set
     /// prefixes followed by an icon name (no empty-name acceptance
     /// — `"lucide:"` alone is treated as malformed and falls
