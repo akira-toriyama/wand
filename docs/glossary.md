@@ -39,8 +39,8 @@ wand を構成する各パーツの **正規の呼び名** をまとめた規範
 
 ### cast
 右ボタンドラッグでカーソルを動かして形（LURD 文字列）を描き、
-「呪文を唱える」感覚で `[[cast.rule]]` にマッチさせ cursor-anchored target
-にアクションを実行する第 1 のトリガーファミリー。`[cast]` の
+「呪文を唱える」感覚で `[[cast.cursor.rule]]` にマッチさせ cursor-anchored
+target にアクションを実行する第 1 のトリガーファミリー。`[cast]` の
 `button` / `modifiers` で起動条件を切り替える。
 - 設定: `[cast]`
 - **Don't call it:** gesture, ジェスチャー
@@ -49,7 +49,7 @@ wand を構成する各パーツの **正規の呼び名** をまとめた規範
 カーソル周囲に配置される小さなカード。**今この瞬間ここから到達可能な方向**
 を 1 方向 = 1 カードで提示する。現在マッチしているルールに対応する
 カードは match color で強調される。1 行は `矢印 [icon] 名前` の
-3 カラムレイアウトで、`[[cast.rule]].icon` が空でないルールでは
+3 カラムレイアウトで、`[[cast.cursor.rule]].icon` が空でないルールでは
 矢印と名前の間にアイコンが入る。退場 / 発動アニメは
 `[cast.overlay.cards]` の `cancel` / `fire` / `armed` で個別に指定する。
 - 設定: `[cast.overlay]` / `[cast.overlay.cards]`
@@ -78,11 +78,15 @@ wand を構成する各パーツの **正規の呼び名** をまとめた規範
 - **Don't call it:** path, stroke, line, ink, パス, 軌跡（説明文中の比喩を除く）
 
 ### cast rule
-1 つの `[[cast.rule]]` エントリ。`pattern`（例: `DR`）と
+1 つの `[[cast.cursor.rule]]` エントリ。`pattern`（例: `DR`）と
 アクションのペアで、必要に応じて `apps` / `filter-title` /
 `filter-shell` で適用範囲を絞る。任意の `icon` は assist card 上で
-名前の左に表示される（`[[tome.item]].icon` と同じ syntax）。
-- 設定: `[[cast.rule]]`
+名前の左に表示される（`[[tome.cursor.item]].icon` と同じ syntax）。
+発動コンテキストはセクションヘッダで選ぶ: `[[cast.cursor.rule]]`
+（既定・カーソル下のウィンドウを [[AX target]] として解決）と
+`[[cast.focused.rule]]`（AX で解決できない面＝デスクトップ / Dock /
+メニューバー用の frontmost-app フォールバック）。
+- 設定: `[[cast.cursor.rule]]`（既定）/ `[[cast.focused.rule]]`（frontmost フォールバック）
 - **Don't call it:** gesture, binding, mapping, shortcut, バインド, ショートカット
 
 ### wand pattern
@@ -109,6 +113,26 @@ wand を構成する各パーツの **正規の呼び名** をまとめた規範
 - コード: `WandAdapterMacOS/DecalManager`
 - **Don't call it:** splash, stain, mark, sticker, スタンプ, シール
 
+### chomp
+`theme = "chomp"` で有効になる特別テーマ。`trail` がアーケード風の
+ペレット列＋顔スプライトに置き換わり、`assist card` や tome パネルも
+そろって配色が切り替わる。スケールは `[cast.overlay.trail].width`
+ではなく `[cast.chomp].size`（`s` / `m` / `l`、既定 `m`）で決まる。
+cast 側は `[cast].theme`、tome 側は `[tome].theme` で個別に選ぶ。
+- 設定: `[cast].theme` / `[tome].theme` / `[cast.chomp]`
+- コード: `WandCore/Chomp`（`ChompSize`）/ `WandAdapterMacOS/ChompRenderer`
+- **Don't call it:** pacman, パックマン, game theme, arcade theme, ゲームテーマ
+
+### line-pet
+サーフェスの輪郭を歩く小さなアーケードキャラ（`chomp` / `ghost`）。
+`assist card` の枠（`[cast.overlay.cards].line-pets`）や tome パネルの
+装飾（`[tome.decoration].line-pets`）に 0 個以上並べる。配列順が描画順で、
+後ろのものが前を追う（`["chomp", "ghost"]` = ghost が chomp を追う）。
+`[]` で無効。語彙にない名前は drop + 警告される。
+- 設定: `[cast.overlay.cards].line-pets` / `[tome.decoration].line-pets`
+- コード: `Palette.LinePet`（sill・語彙）/ `Effects.drawLinePets`（sill・描画）
+- **Don't call it:** sprite, mascot, decoration char, スプライト, マスコット
+
 ### match color / no-match color
 [[assist card]] の枠色および [[trail]] の線色を切り替える 2 色のペア。
 描画中のジェスチャーが [[cast rule]] にマッチしている瞬間は
@@ -126,7 +150,7 @@ match color、まだマッチしていなければ no-match color。同時に表
 ### tome
 中クリック（既定）で開く呪文書スタイルのコンテキストメニュー。
 non-activating NSPanel を cursor 下にアンカーして開き、各
-`[[tome.item]]` がメニュー 1 行に対応する。第 2 のトリガーファミリー。
+`[[tome.cursor.item]]` がメニュー 1 行に対応する。第 2 のトリガーファミリー。
 opt-in (`[tome].enabled = true`)。
 - 設定: `[tome]`
 - **Don't call it:** launcher, ランチャー
@@ -146,10 +170,10 @@ tome のメインメニュー。トリガーボタンを押した瞬間に出現
 - **Don't call it:** submenu, dropdown, flyout, nested menu, サブメニュー, ドロップダウン
 
 ### tome entry
-1 つの `[[tome.item]]` エントリ。[[non-activating panel]] もしくは
+1 つの `[[tome.cursor.item]]` エントリ。[[non-activating panel]] もしくは
 [[child panel]] に並ぶ 1 行を指す。静的なもの、`group` で child panel に
 展開されるもの、`dynamic` でメニュー展開時に行を生成するものがある。
-- 設定: `[[tome.item]]`
+- 設定: `[[tome.cursor.item]]`
 - **Don't call it:** entry, row, button, command, action, 項目, ボタン, アクション
 
 ### dynamic submenu
@@ -157,13 +181,13 @@ tome のメインメニュー。トリガーボタンを押した瞬間に出現
 シェルコマンドを実行し、その標準出力 1 行 = 1 子行として
 `template-*` フィールドを適用して生成する [[child panel]]。500ms の
 ハードタイムアウトあり。
-- 設定: `[[tome.item]]` で `dynamic` 指定時
+- 設定: `[[tome.cursor.item]]` で `dynamic` 指定時
 - **Don't call it:** generated submenu, shell submenu, computed menu, 動的メニュー
 
 ### tome layout
 [[non-activating panel]] の並びモード。`list`（縦並び、デフォルト）/
 `toolbar`（横並び、アイコンのみ）/ `labeled-toolbar`（横並び、ラベル付き）
-の 3 つ。`[tome].layout` でデーモン全体、`--show-menu --items`
+の 3 つ。`[tome].layout` でデーモン全体、`tome --open --items`
 のファイル内の `[tome].layout` でその呼び出し限定に切り替えられる。
 - 設定: `[tome].layout`
 - **Don't call it:** orientation, mode, panel style, 並び順
@@ -184,7 +208,7 @@ cast と tome を **特定のアプリ内で完全に無効化** する
 
 ### external trigger
 トリガー（chord のホットキーやテキスト選択監視など）が
-`wand --show-menu --items <PATH> --at <X> <Y>` 経由で tome を
+`wand tome --open --items <PATH> --at <X> <Y>` 経由で tome を
 呼び出す経路。ボタン押下に紐付かないため [[AX target]] では解決
 できず、**フロントモストアプリを対象**として spine の例外扱い
 となる。`--selection` で `$SELECTION`、`--title` で
@@ -222,8 +246,13 @@ tome トリガー発火の瞬間に、フォーカスされている要素で選
 - 1 つの概念につき正規名は 1 つ。複数の呼び方が流通しているなら、
   このファイルで勝者を選び、敗者は `Don't call it:` 行に並べる。
 - 正規名は **英語のまま小文字で書く**。コード識別子・設定キー
-  （`[[cast.rule]]`, `PanelController`）はその表記を維持する。
+  （`[[cast.cursor.rule]]`, `PanelController`）はその表記を維持する。
 - 定義は **1〜2 文** に収める。動作の詳細は設定セクションやソース
   ファイルへリンクし、ここで説明し直さない。
 - 用語にスクリーンショットを付ける場合は `docs/images/` に置き、
   `![](images/<name>.png)` の形で埋め込む。
+- **コードと剥離させない**: 設定キー / コード識別子（`[[cast.cursor.rule]]`,
+  `[cast.chomp]`, `Palette.LinePet` など）や CLI の verb（`wand <domain> --<verb>`）
+  を変更・追加・廃止したら、必ず同一 PR でこのファイルの該当箇所も書き換える。
+  パーサが drop する旧綴り（例: 旧 `[[cast.rule]]` / `[[tome.item]]`、旧フラグ CLI
+  `--show-menu`）を live shape の説明に使わない（それらは移行警告の中だけに残す）。

@@ -373,7 +373,7 @@ wand daemon --resign    # re-sign the installed Wand.app + restart
 
 # cast — gesture engine
 wand cast --test DR [app]   # dry-run: which rule fires for a pattern
-wand cast --record          # interactive recorder → paste-ready [[cast.rule]]
+wand cast --record          # interactive recorder → paste-ready [[cast.cursor.rule]]
 
 # tome — launcher menu (external trigger)
 wand tome --open --items <PATH> --at <X> <Y> [--selection <TEXT>] [--title <TEXT>]

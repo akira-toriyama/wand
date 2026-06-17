@@ -91,25 +91,38 @@ type in TOML and grep-friendly in logs. Y grows up — `dy > 0` ⇒
 from `CGEvent.location` (Y-down) and sign-flips Y at sample creation
 to honour the convention.
 
-## CLI surface (M1–M4)
+## CLI surface
 
-| Flag | Mode | Purpose |
+Four domains, each taking exactly one verb (`wand <domain> --<verb>`);
+bare `wand` runs the agent. Tokenizing is delegated to `CLIKit` (sill);
+`requireOneVerb` enforces the one-verb-per-domain mutex.
+
+| Command | Mode | Purpose |
 |---|---|---|
 | *(none)* | server | run the agent (CGEventTap loop) |
 | `WAND_DEBUG=1` (env, not a flag) | server | mirror logs to stderr too (run.sh sets it; raw/brew launch stays quiet) |
-| `--validate` | standalone | parse `~/.config/wand/config.toml`, exit 0/2 |
-| `--record` | standalone | interactive recorder; refuses if daemon running |
-| `--reload` | client | tell running daemon to re-read config |
-| `--quit` | client | terminate running daemon |
-| `--help` | standalone | show help |
+| `wand config --validate` | standalone | parse `~/.config/wand/config.toml`, exit 0/2 |
+| `wand config --doctor` | standalone | health check (Accessibility, config, daemon, tap) |
+| `wand config --emit-schema` | standalone | print the config.toml JSON Schema (Draft-07) |
+| `wand cast --test <PATTERN> [app]` | standalone | dry-run which rule fires for a pattern |
+| `wand cast --record` | standalone | interactive recorder; refuses if daemon running |
+| `wand daemon --reload` | client | tell running daemon to re-read config |
+| `wand daemon --show` | client | rule count / trigger / last gesture / counters |
+| `wand daemon --quit` | client | terminate running daemon |
+| `wand daemon --resign` | client | re-sign + restart the installed Wand.app |
+| `wand tome --open --items <PATH> --at <X> <Y>` | client | pop the launcher menu at a point |
+| `wand tome --validate --items <PATH>` | standalone | validate a standalone items file |
+| `wand --help, -h` | standalone | show help |
 
-Client commands (`--reload`, `--quit`) talk to the running daemon via
+Client commands (`daemon --reload`, `daemon --show`, `daemon --quit`,
+`tome --open`) talk to the running daemon via
 `DistributedNotificationCenter` (notification name
 `com.wand.app.control` — deliberately distinct from the bundle id
 so the bundle id can change without breaking clients). Refuse with
-exit 3 if no daemon is running. `--record` is the inverse — it
+exit 3 if no daemon is running. `cast --record` is the inverse — it
 refuses with exit 3 if one *is* running, because both would fight
-over the same CGEventTap.
+over the same CGEventTap. An unknown domain, an unknown flag, a bad
+arity, or combining verbs all exit 2.
 
 ## References
 
