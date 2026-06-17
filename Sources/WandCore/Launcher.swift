@@ -4,8 +4,8 @@
 // entry is one of the existing `Action` cases, so the dispatcher
 // stays trigger-agnostic.
 //
-// The TOML shape (`[[tome.item]]`) is intentionally parallel to
-// `[[cast.rule]]` minus `pattern` plus `group` for nesting.
+// The TOML shape (`[[tome.cursor.item]]`) is intentionally parallel to
+// `[[cast.cursor.rule]]` minus `pattern` plus `group` for nesting.
 
 import Foundation
 import Palette   // LinePet (shared pet vocabulary)
@@ -56,7 +56,7 @@ public struct LauncherItem: Sendable, Equatable {
     public let apps: [String]
     /// Optional section header — a short label drawn above this item
     /// when its value differs from the previous item's. Lets a long
-    /// `[[tome.item]]` list split into labelled bands ("Editing",
+    /// `[[tome.cursor.item]]` list split into labelled bands ("Editing",
     /// "Window", "Tools") without nesting into submenus. Empty value
     /// (the default) inherits whatever the previous item used, so a
     /// run of items can share one header without repeating it on each
@@ -256,7 +256,7 @@ public struct TomeThemePalette: Sendable, Equatable {
 }
 
 /// `[tome.row]` — per-row visual conventions that affect every
-/// `[[tome.item]]` uniformly.
+/// `[[tome.cursor.item]]` uniformly.
 public struct LauncherRowSpec: Sendable, Equatable {
     /// Auto-derive a `⌘W`-style glyph badge from an item's
     /// `action-keys` and render it right-aligned on `.list` rows
