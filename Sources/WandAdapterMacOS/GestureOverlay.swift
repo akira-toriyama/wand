@@ -20,8 +20,8 @@ public struct GestureHint: Sendable {
     public struct Row: Sendable {
         public let suffix: String
         public let name: String
-        /// Optional icon spec from `[[cast.rule]].icon`. Same syntax
-        /// as `[[tome.item]].icon` (SF:<name> / emoji / file path /
+        /// Optional icon spec from `[[cast.cursor.rule]].icon`. Same syntax
+        /// as `[[tome.cursor.item]].icon` (SF:<name> / emoji / file path /
         /// `app:<bundle-id>`). Empty = the card collapses its icon
         /// column for this row.
         public let icon: String

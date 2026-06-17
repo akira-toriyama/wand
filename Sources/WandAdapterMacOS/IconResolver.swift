@@ -1,6 +1,6 @@
 // Shared icon-spec → NSImage resolver. Used by:
-//   - The tome panel (`[[tome.item]].icon` on every row)
-//   - The cast HUD assist cards (`[[cast.rule]].icon` on each row)
+//   - The tome panel (`[[tome.cursor.item]].icon` on every row)
+//   - The cast HUD assist cards (`[[cast.cursor.rule]].icon` on each row)
 // Keeping the parser in one place means the same syntax works on both
 // surfaces (SF:<name> / emoji / file paths / app:<bundle-id>).
 
