@@ -638,8 +638,6 @@ private extension ConfigSchema.Field where Root == WandConfig.Decoded {
     static func linePets(_ key: String,
                          _ kp: WritableKeyPath<WandConfig.Decoded, [LinePet]>,
                          doc: String? = nil) -> Self {
-        let section = key   // (unused — wand logs with the section in parse)
-        _ = section
         return .init(key: key, kind: .stringArray(item: canonicalLinePetNames),
               apply: { c, v in
                   guard let raw = v.asStringArray else { return }
