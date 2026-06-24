@@ -422,10 +422,10 @@ anim-enabled = true
 # Pet sizes scale with `font-size` below so a larger card gets
 # proportionally larger pets.
 [cast.overlay.cards]
-fire = "off"          # the firing card, on button-up
-cancel = "off"        # cards that became unreachable mid-gesture
-armed = "off"         # live cue on the firing card mid-stroke
-line-pets = []        # chomp pets orbiting the firing card
+fire = "off"   # the firing card, on button-up
+cancel = "off" # cards that became unreachable mid-gesture
+armed = "off"  # live cue on the firing card mid-stroke
+line-pets = [] # chomp pets orbiting the firing card
 
 # Card-text base font size in points. The arrow column rides at
 # `font-size + 1` so directional glyphs stay a hair taller than
@@ -564,9 +564,9 @@ size = 60
 # event mask at install): `enabled = false ↔ true` and `button`.
 # Surfaced in `wand daemon --show` as `pending-restart`.
 [tome]
-enabled = false                # opt-in
-button = "middle"              # "middle" | "side1" | "side2" | "right"
-modifiers = []                 # e.g. ["ctrl"] to require ctrl + middle
+enabled = false   # opt-in
+button = "middle" # "middle" | "side1" | "side2" | "right"
+modifiers = []    # e.g. ["ctrl"] to require ctrl + middle
 
 # Visual orientation of the panel:
 #   "list"            — vertical rows (default; full feature set)
