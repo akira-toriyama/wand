@@ -70,13 +70,15 @@ let package = Package(
         // `--verb=value` form. Palette / ConfigSchema / Effects usage is
         // unaffected.
         .package(url: "https://github.com/akira-toriyama/sill.git",
-                 .upToNextMinor(from: "0.11.0")),
+                 .upToNextMinor(from: "1.27.0")),
         // swift-toml-edit — the family's ONE TOML implementation (Sill-1).
         // Provides the `Toml` module WandCore reads config with
         // (`Toml.parseFlat`, whose `Document{tables,arrays}` matches wand's
         // old `TOMLDocument`). Module name unchanged so `import Toml` survives.
+        // 2.0.0 only changes the nested `parse`/`.arrayOfTables` surface
+        // (now `[Toml.Row]`), which wand doesn't use — parseFlat is unchanged.
         .package(url: "https://github.com/akira-toriyama/swift-toml-edit.git",
-                 .upToNextMinor(from: "1.0.0")),
+                 .upToNextMajor(from: "2.0.0")),
     ],
     targets: [
         .target(
