@@ -384,7 +384,7 @@ wand tome --open --items <PATH> --at <X> <Y> [--selection <TEXT>] [--title <TEXT
 wand tome --validate --items <PATH>   # validate a standalone items file
 
 # config — settings
-wand config --validate  # parse config.toml, exit 0/2 (warnings → stderr)
+wand config --validate  # schema-validate config.toml; exit 0 (valid) / 1 (schema violation) / 2 (unparseable)
 wand config --doctor    # health check: Accessibility, config, daemon, tap
 wand config --emit-schema   # print the config.toml JSON Schema (Draft-07)
 

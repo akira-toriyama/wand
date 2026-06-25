@@ -370,7 +370,7 @@ wand tome --open --items <PATH> --at <X> <Y> [--selection <TEXT>] [--title <TEXT
 wand tome --validate --items <PATH>   # standalone items ファイルを検証
 
 # config — 設定
-wand config --validate  # config.toml をパース、0 / 2 で exit(警告は stderr)
+wand config --validate  # config.toml を schema 検証、exit 0 (valid) / 1 (schema 違反) / 2 (parse 不能)
 wand config --doctor    # 健康診断: AX / config / daemon / tap
 wand config --emit-schema   # config.toml JSON Schema(Draft-07)を出力
 

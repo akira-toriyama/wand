@@ -11,6 +11,7 @@
 import AppKit
 import Foundation
 import CLIKit
+import ConfigSchema
 import WandCore
 import WandAdapterMacOS
 
@@ -65,7 +66,10 @@ enum WandApp {
                                             validate a standalone items file.
 
         config — settings
-          wand config --validate            parse config.toml; exit 0 if valid.
+          wand config --validate            validate config.toml against the schema;
+                                            exit 0 if valid, 1 on a schema
+                                            violation (bad type/enum/range,
+                                            typo'd key), 2 if unparseable.
                                               Warnings (clamps, collisions, typos)
                                               print to stderr + /tmp/wand.log.
           wand config --doctor              health check: Accessibility, config,
@@ -680,6 +684,32 @@ enum WandApp {
     /// user actually sees them (otherwise a happy rule count could hide a
     /// half-dropped config). Warnings still also go to /tmp/wand.log.
     private static func runValidateConfig() -> Never {
+        // Structural validation first (sill 1.29.0 `Spec.validate` bridge,
+        // t-0029): the strict counterpart to the lenient `load()` below, which
+        // clamps out-of-range values and drops typo'd keys. Surfaces the
+        // type / enum / range / unknown-key mismatches the loader silently
+        // accepts. Exit 2 if config.toml isn't parseable TOML at all; 1 if it
+        // parses but violates the schema; otherwise fall through to the
+        // bespoke parsed summary (clamp warnings + the failsafe-block check).
+        let source = (try? String(contentsOfFile: WandConfig.path,
+                                  encoding: .utf8)) ?? ""
+        let schemaErrors: [ValidationError]
+        do {
+            schemaErrors = try WandConfig.validate(source)
+        } catch {
+            FileHandle.standardError.write(Data(
+                "wand: config.toml: not parseable — \(error)\n".utf8))
+            exit(2)
+        }
+        if !schemaErrors.isEmpty {
+            for e in schemaErrors {
+                FileHandle.standardError.write(Data("wand: \(e.message)\n".utf8))
+            }
+            FileHandle.standardError.write(Data(
+                "wand: \(schemaErrors.count) validation error(s)\n".utf8))
+            exit(1)
+        }
+
         Log.resetLineCount()
         mirrorLineToStderr = true
         let cfg = WandConfig.load()

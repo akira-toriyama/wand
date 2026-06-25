@@ -3,6 +3,7 @@
 // it. Unknown / out-of-range values clamp to defaults — a typo can
 // never break recognition.
 
+import ConfigSchema
 import Foundation
 import Palette
 import Toml
@@ -120,6 +121,20 @@ public struct WandConfig: Sendable {
             .compactMap { idx, row in parseItem(row, idx: idx) }
         warnToolbarOnlyFields(items: items, layout: layout)
         return LauncherItemsFile(layout: layout, items: items)
+    }
+
+    /// Structural validation against the SAME `configSpec` that drives decode
+    /// + `--emit-schema` (sill 1.29.0's `Spec.validate` bridge, t-0029). The
+    /// STRICT counterpart to the lenient `load()` / `parse()` (which clamp
+    /// out-of-range values and drop typo'd keys): it surfaces the type / enum /
+    /// range / unknown-key mismatches the loader silently accepts — the
+    /// "editor-green-but-load-accepts" gap. Returns every violation (empty =
+    /// structurally valid). Throws only if `text` is not parseable TOML at all
+    /// (a genuine syntax error, distinct from a schema violation). One source
+    /// for decode + emit + validate ⇒ they can't drift.
+    public static func validate(_ text: String) throws -> [ValidationError] {
+        let root = try Toml.parse(text)
+        return configSpec.validate(root)
     }
 
     public static func parse(_ text: String) -> WandConfig {
