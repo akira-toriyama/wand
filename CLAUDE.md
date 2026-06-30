@@ -725,8 +725,9 @@ decisions. Subsections ordered broad → narrow.
   apply — see `### TOML parser`).
 - [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/)
   *(reviewed 2026-05-23)* — type / scope grammar
-  `<type>(<scope>)<!>: <subject>`. `docs/commit-convention.md` is
-  the project-local rules; CI enforces this via `commit-lint.yml`.
+  `<type>(<scope>)<!>: <subject>`. The rules are the account-wide
+  [CONTRIBUTING.md](https://github.com/akira-toriyama/.github/blob/main/CONTRIBUTING.md);
+  CI enforces this via `commit-lint.yml`.
 - [Gitmoji](https://gitmoji.dev/)
   *(reviewed 2026-05-23)* — the leading emoji on each commit
   (`:sparkles:` feat, `:bug:` fix, `:lock:` security, `:memo:` docs,

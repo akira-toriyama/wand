@@ -412,7 +412,7 @@ deprecation シムは **無い** — 旧フラット flag は exit 2。対応表
 ## Contributing
 
 コミットメッセージは **gitmoji + Conventional Commits**。CI が PR
-ごとに [docs/commit-convention.md](docs/commit-convention.md) のフォーマット
+ごとに [CONTRIBUTING.md](https://github.com/akira-toriyama/.github/blob/main/CONTRIBUTING.md) のフォーマット
 に対して lint する。ローカル hook は
 `git config core.hooksPath scripts/hooks` で有効化。
 
