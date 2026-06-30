@@ -427,7 +427,7 @@ in `/tmp/wand.log` at reload time.
 ## Contributing
 
 Commit messages use **gitmoji + Conventional Commits**; CI lints
-each PR against [docs/commit-convention.md](docs/commit-convention.md).
+each PR against [CONTRIBUTING.md](https://github.com/akira-toriyama/.github/blob/main/CONTRIBUTING.md).
 Enable the local hook with `git config core.hooksPath scripts/hooks`.
 
 ## Build from source
