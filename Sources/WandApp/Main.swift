@@ -254,6 +254,12 @@ enum WandApp {
         WandConfig.installSchema()
 
         let cfg = WandConfig.load()
+        // A1: run the strict schema validate on the daemon load path too and
+        // surface violations as WARNINGS (does NOT reject — load() already
+        // clamped/dropped; this only makes the mismatches visible in the log,
+        // matching facet/perch).
+        WandConfig.warnSchemaViolations(
+            (try? String(contentsOfFile: WandConfig.path, encoding: .utf8)) ?? "")
         requireFailsafeBlock(cfg)
 
         let app = NSApplication.shared

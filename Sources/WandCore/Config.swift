@@ -137,6 +137,22 @@ public struct WandConfig: Sendable {
         return configSpec.validate(root)
     }
 
+    /// A1 (load-path validate): run the strict `validate` on the daemon's
+    /// load path and surface each violation as a WARNING via `Log.line` — it
+    /// does NOT reject. The lenient `load()`/`parse()` already clamped
+    /// out-of-range values and dropped typo'd keys; this only makes those
+    /// mismatches visible in the log (matching facet/perch). A non-parseable
+    /// source yields zero warnings (the lenient loader still continues).
+    /// Returns the violation count (0 = clean).
+    @discardableResult
+    public static func warnSchemaViolations(_ text: String) -> Int {
+        let errors = (try? validate(text)) ?? []
+        for e in errors {
+            Log.line("config: \(e.message)")
+        }
+        return errors.count
+    }
+
     public static func parse(_ text: String) -> WandConfig {
         let doc = Toml.parseFlat(text)
 

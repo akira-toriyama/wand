@@ -358,6 +358,13 @@ public final class Controller: @unchecked Sendable {
     /// `pending-restart`.
     public func reload(cause: String = "manual") {
         let new = WandConfig.load()
+        // A1: warn on schema violations at hot-reload too, matching the daemon
+        // startup path (runServer) — an edit that introduces a typo'd key or
+        // out-of-range value while the daemon runs is otherwise silent until
+        // restart. Warn only; load() above already clamped/dropped, so `new`
+        // stays a usable config (never reject/throw/exit on reload).
+        WandConfig.warnSchemaViolations(
+            (try? String(contentsOfFile: WandConfig.path, encoding: .utf8)) ?? "")
         let oldRules = config.rules.count, newRules = new.rules.count
         if new.trigger != config.trigger {
             Log.line("controller: reload — [trigger] changed; full restart "
