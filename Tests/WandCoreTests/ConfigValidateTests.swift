@@ -61,4 +61,37 @@ final class ConfigValidateTests: XCTestCase {
     func testUnparseableSourceThrows() {
         XCTAssertThrowsError(try WandConfig.validate("[cast.overlay\nbad"))
     }
+
+    // MARK: - A1: the daemon LOAD path warns on a schema violation (no reject)
+
+    func testLoadPathWarnsOnSchemaViolation() throws {
+        Log.resetLineCount()
+        // `bogus-key` is an unknown key the lenient load()/parse() silently
+        // drops; the load-path validate must surface it as a WARNING.
+        let count = WandConfig.warnSchemaViolations("""
+        [cast.overlay]
+        enabled = true
+        bogus-key = 1
+        """)
+        XCTAssertGreaterThanOrEqual(count, 1,
+            "a schema violation on the load path must produce a warning")
+        XCTAssertGreaterThanOrEqual(Log.lineCount, 1,
+            "the violation must reach Log.line (the daemon warning channel)")
+    }
+
+    func testLoadPathIsSilentOnCleanConfig() throws {
+        Log.resetLineCount()
+        let count = WandConfig.warnSchemaViolations("""
+        [cast.overlay]
+        enabled = true
+        """)
+        XCTAssertEqual(count, 0)
+        XCTAssertEqual(Log.lineCount, 0)
+    }
+
+    func testLoadPathDoesNotRejectUnparseableSource() {
+        // Unparseable TOML must NOT throw on the daemon path (load stays
+        // lenient / keeps starting) — helper swallows it via try?.
+        XCTAssertEqual(WandConfig.warnSchemaViolations("[cast.overlay\nbad"), 0)
+    }
 }
