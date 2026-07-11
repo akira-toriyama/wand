@@ -7,14 +7,23 @@
 import Foundation
 
 public struct FailsafeConfig: Sendable, Equatable {
-    /// Clamped 5..300.
+    /// The ONE source for `[failsafe]`'s bounds + defaults. The schema
+    /// descriptor (`Config+Spec.swift`) and the lenient runtime clamp
+    /// (`WandConfig.parse`) both cite these constants, so what completion
+    /// SHOWS can never drift from what the loader ENFORCES. Regression-guarded
+    /// by `FailsafeDriftTests`. (A3 DRY — projects t-5qxd.)
+    public static let mouseHoldTimeoutRange: ClosedRange<Int> = 5...300
+    public static let mouseHoldTimeoutDefault = 30
+    public static let emergencyReleaseKeyDefault = "esc"
+
+    /// Clamped to `mouseHoldTimeoutRange`.
     public let mouseHoldTimeoutSec: Int
 
     /// Currently only `"esc"` is implemented.
     public let emergencyReleaseKey: String
 
-    public init(mouseHoldTimeoutSec: Int = 30,
-                emergencyReleaseKey: String = "esc") {
+    public init(mouseHoldTimeoutSec: Int = FailsafeConfig.mouseHoldTimeoutDefault,
+                emergencyReleaseKey: String = FailsafeConfig.emergencyReleaseKeyDefault) {
         self.mouseHoldTimeoutSec = mouseHoldTimeoutSec
         self.emergencyReleaseKey = emergencyReleaseKey
     }
