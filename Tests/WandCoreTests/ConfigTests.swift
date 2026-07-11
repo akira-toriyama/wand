@@ -282,6 +282,32 @@ final class ConfigTests: XCTestCase {
         } else { XCTFail("expected .shell") }
     }
 
+    func testTomeTrashItemShellActionUnescapesQuotes() {
+        // Guards the shipped `[[tome.cursor.item]]` "Move to Trash"
+        // example (config.toml). `ax`/`AXDelete` cannot trash a file —
+        // ax verbs act on the target WINDOW — so the example is a
+        // `shell` osascript whose AppleScript literal `"Finder"` is
+        // TOML-escaped as `\"Finder\"`. Prove the escape round-trips to
+        // the exact command `/bin/sh -c` receives, so uncommenting the
+        // example actually works instead of silently dropping.
+        let toml = """
+        [[tome.cursor.item]]
+        name = "Move to Trash"
+        action-type = "shell"
+        action-cmd = "osascript -e 'tell application \\"Finder\\" to delete (selection as alias list)'"
+        """
+        let cfg = WandConfig.parse(toml)
+        XCTAssertEqual(cfg.launcher.items.count, 1)
+        if case .shell(let c) = cfg.launcher.items.first?.action {
+            XCTAssertEqual(
+                c,
+                "osascript -e 'tell application \"Finder\" to delete (selection as alias list)'")
+        } else {
+            XCTFail("expected .shell, got "
+                + String(describing: cfg.launcher.items.first?.action))
+        }
+    }
+
     // MARK: - Namespace schema (v8 / cursor + focused)
 
     func testCursorAndFocusedRulesParseWithContext() {

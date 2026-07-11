@@ -960,12 +960,18 @@ action-verb = "minimize"
 # # Tint — palette-colour an SF Symbol icon. Same colour grammar as
 # # the trail's `color`: named ("systemRed" / "red" / "orange" / …,
 # # "accent" for the system accent), or hex.
+# #
+# # `ax` verbs act on the target WINDOW (close / minimize / zoom /
+# # raise) — there is no file or Finder verb, so "Move to Trash" is a
+# # `shell` action. This osascript trashes Finder's current selection
+# # (wand has no file handle to pass, so it targets whatever Finder
+# # has selected; it is a no-op when Finder has no selection).
 # [[tome.cursor.item]]
 # name = "Move to Trash"
 # icon = "SF:trash"
 # tint = "systemRed"
-# action-type = "ax"
-# action-verb = "AXDelete"
+# action-type = "shell"
+# action-cmd  = "osascript -e 'tell application \"Finder\" to delete (selection as alias list)'"
 #
 # # Multi-colour palette — `tint-colors = [...]` applies SF Symbol's
 # # hierarchical / multicolor palette. Wins over a single `tint`.
