@@ -447,10 +447,12 @@ public struct WandConfig: Sendable {
         let fs = doc.tables["failsafe"] ?? [:]
         let mouseHoldTimeoutSec = clampInt(
             fs, key: "mouse-hold-timeout-seconds",
-            default: 30, lo: 5, hi: 300)
+            default: FailsafeConfig.mouseHoldTimeoutDefault,
+            lo: FailsafeConfig.mouseHoldTimeoutRange.lowerBound,
+            hi: FailsafeConfig.mouseHoldTimeoutRange.upperBound)
         let emergencyReleaseKey: String = {
             let raw = fs.string("emergency-release-key").lowercased()
-            return raw.isEmpty ? "esc" : raw
+            return raw.isEmpty ? FailsafeConfig.emergencyReleaseKeyDefault : raw
         }()
         let failsafe = FailsafeConfig(
             mouseHoldTimeoutSec: mouseHoldTimeoutSec,

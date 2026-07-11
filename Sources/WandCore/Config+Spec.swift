@@ -157,11 +157,16 @@ public extension WandConfig {
                 // mouse-hold-timeout-seconds / emergency-release-key are
                 // decoded bespoke (the block-present check + the empty→esc
                 // sentinel), but DESCRIBED here for completion.
-                .descInt("mouse-hold-timeout-seconds", min: 5, max: 300,
-                         default: 30,
+                .descInt("mouse-hold-timeout-seconds",
+                         min: Double(FailsafeConfig.mouseHoldTimeoutRange.lowerBound),
+                         max: Double(FailsafeConfig.mouseHoldTimeoutRange.upperBound),
+                         default: FailsafeConfig.mouseHoldTimeoutDefault,
                          doc: "Auto-release a held button after this many "
-                            + "seconds (runaway-drag guard). Clamped 5..300."),
-                .descOnly("emergency-release-key", default: .string("esc"),
+                            + "seconds (runaway-drag guard). Clamped "
+                            + "\(FailsafeConfig.mouseHoldTimeoutRange.lowerBound).."
+                            + "\(FailsafeConfig.mouseHoldTimeoutRange.upperBound)."),
+                .descOnly("emergency-release-key",
+                          default: .string(FailsafeConfig.emergencyReleaseKeyDefault),
                           doc: "Key that force-releases a stuck button "
                              + "mid-stroke. Empty = `esc`."),
             ]),
