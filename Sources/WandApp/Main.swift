@@ -58,8 +58,9 @@ enum WandApp {
             --items <PATH>                    at a screen point with the given
             --at <X> <Y>                      [[tome.cursor.item]] file. Cocoa coords
             [--selection <TEXT>]              (Y-up; --at accepts negatives). For an
-            [--title <TEXT>]                  upstream trigger. $SELECTION is exported
-                                              to shell actions if --selection given;
+            [--title <TEXT>]                  upstream trigger. $WAND_SELECTION is
+                                              exported to shell actions if --selection
+                                              given (unset otherwise);
                                               --title overrides the AX-fetched
                                               focused-window title for $WAND_TARGET_TITLE.
           wand tome --validate --items <PATH>

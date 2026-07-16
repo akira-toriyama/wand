@@ -154,25 +154,32 @@ under the cursor. App-specific items there are filtered out
 automatically. Good fit for Spotlight, lock screen, "open
 Terminal", etc.
 
-### Selection-aware shell items (`$SELECTION`)
+### Selection-aware shell items (`$WAND_SELECTION`)
 
-Shell actions launched from the menu also see a `$SELECTION` env
-var carrying the text selected in the focused element at the
-moment you middle-clicked. Empty if nothing is selected or the
-focused app doesn't expose AX selection. Use it for translate /
-search / send-to-app workflows:
+Shell actions launched from the menu also see a `$WAND_SELECTION`
+env var carrying the text selected in the focused element at the
+moment you middle-clicked. Use it for translate / search /
+send-to-app workflows:
 
 ```toml
 [[tome.cursor.item]]
 name = "Translate"
 icon = "SF:globe"
 action-type = "shell"
-action-cmd = 'open "https://translate.google.com/?sl=auto&tl=en&text=$(printf %s "$SELECTION" | sed "s/ /%20/g")"'
+action-cmd = 'open "https://translate.google.com/?sl=auto&tl=en&text=$(printf %s "$WAND_SELECTION" | sed "s/ /%20/g")"'
 ```
 
-Quote `$SELECTION` in shell commands — the content is whatever the
-user happened to highlight (URLs, code, shell metacharacters), and
-is **untrusted** in the same sense `WAND_TARGET_TITLE` is.
+Every wand env var is `WAND_`-prefixed, and a context that doesn't
+exist is left **unset** — never set to an empty string — so a
+command can branch on presence:
+`[ -n "${WAND_SELECTION:-}" ] && …`. `$WAND_SELECTION` is unset
+when nothing is selected or the focused app doesn't expose AX
+selection.
+
+Quote `$WAND_SELECTION` in shell commands — the content is
+whatever the user happened to highlight (URLs, code, shell
+metacharacters), and is **untrusted** in the same sense
+`WAND_TARGET_TITLE` is.
 
 ### Conditional filters (`filter-title` / `filter-shell`)
 
@@ -379,8 +386,8 @@ wand cast --record          # interactive recorder → paste-ready [[cast.cursor
 wand tome --open --items <PATH> --at <X> <Y> [--selection <TEXT>] [--title <TEXT>]
                         #   pop the tome at <X> <Y> (Cocoa coords, Y-up;
                         #   --at accepts negative coords). --selection →
-                        #   $SELECTION for shell items; --title overrides
-                        #   $WAND_TARGET_TITLE.
+                        #   $WAND_SELECTION for shell items; --title
+                        #   overrides $WAND_TARGET_TITLE.
 wand tome --validate --items <PATH>   # validate a standalone items file
 
 # config — settings

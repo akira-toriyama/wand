@@ -9,11 +9,13 @@ import WandCore
 
 public enum Dispatch {
 
-    /// `extraEnv` lets an external trigger inject env vars on top of
-    /// the standard `WAND_TARGET_*` set — `tome --open --selection
-    /// "..."` reaches shell actions as `$SELECTION` via this. Empty
-    /// default keeps native-trigger callsites (gesture, launcher)
-    /// unchanged.
+    /// `extraEnv` lets a trigger inject env vars on top of the
+    /// standard `WAND_TARGET_*` set — a captured selection reaches
+    /// shell actions as `$WAND_SELECTION` via this. Contract
+    /// (wand#137): every key is `WAND_`-prefixed, and an absent
+    /// context means the key is NOT passed (unset, never empty
+    /// string) so recipes can test `[ -n "${WAND_SELECTION:-}" ]`.
+    /// Empty default keeps callsites without extra context unchanged.
     public static func execute(_ action: Action, on target: Target,
                                 extraEnv: [String: String] = [:]) {
         switch action {
@@ -215,10 +217,20 @@ public enum Dispatch {
         env["WAND_TARGET_FRAME"] =
             "\(Int(target.frame.minX)),\(Int(target.frame.minY))," +
             "\(Int(target.frame.width)),\(Int(target.frame.height))"
-        // Caller-supplied env — currently `$SELECTION` from tome --open.
-        // Same untrusted-input caveat as WAND_TARGET_TITLE: quote any
-        // expansion that hits a shell command line.
-        for (k, v) in extraEnv { env[k] = v }
+        // Caller-supplied env — currently `$WAND_SELECTION` from the
+        // tome triggers. Same untrusted-input caveat as
+        // WAND_TARGET_TITLE: quote any expansion that hits a shell
+        // command line. The `WAND_` prefix is the contract (wand#137);
+        // a non-conforming key is a programmer error — drop it loudly
+        // rather than leak an unnamespaced var into the user's shell.
+        for (k, v) in extraEnv {
+            guard k.hasPrefix("WAND_") else {
+                Log.line("dispatch.shell: dropped extraEnv key \"\(k)\" "
+                         + "— keys must be WAND_-prefixed")
+                continue
+            }
+            env[k] = v
+        }
         p.environment = env
         // Surface non-zero exits — a silent failing shell command was
         // the most under-diagnosed `.shell` failure mode previously

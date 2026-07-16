@@ -192,17 +192,18 @@ public final class Controller: @unchecked Sendable {
         counterLauncherShown += 1
         writeStatus()
         // Capture the focused element's selected text at button-down
-        // time, so shell actions can read it via `$SELECTION` — same
-        // env-var contract the `tome --open` external path already
-        // honours, now native too. Captured once at button-down
-        // (not at menu-close): the user's selection at the moment
-        // they triggered the menu is what they intended to act on.
+        // time, so shell actions can read it via `$WAND_SELECTION` —
+        // same env-var contract the `tome --open` external path
+        // already honours, now native too. Captured once at button-
+        // down (not at menu-close): the user's selection at the
+        // moment they triggered the menu is what they intended to
+        // act on.
         let selection = AXTarget.selectedText()
         if let sel = selection {
-            Log.line("controller: tome captured $SELECTION = "
+            Log.line("controller: tome captured $WAND_SELECTION = "
                      + "\(sel.count) char(s)")
         }
-        let env: [String: String] = selection.map { ["SELECTION": $0] } ?? [:]
+        let env: [String: String] = selection.map { ["WAND_SELECTION": $0] } ?? [:]
         LauncherPanel.present(
             filteredItems: visibleItems,
             target: event.target,
@@ -235,8 +236,8 @@ public final class Controller: @unchecked Sendable {
     /// via `NSWorkspace.frontmostApplication` (the **cursor-anchored
     /// spine is intentionally bypassed here** — external triggers
     /// don't have a button-down moment), build a `LauncherMenu` from
-    /// the parsed items, and pop it up. `$SELECTION` is exported to
-    /// any shell action chosen from the resulting menu.
+    /// the parsed items, and pop it up. `$WAND_SELECTION` is exported
+    /// to any shell action chosen from the resulting menu.
     @MainActor
     func handleShowMenu(itemsPath: String,
                         cocoaPoint: NSPoint,
@@ -279,7 +280,7 @@ public final class Controller: @unchecked Sendable {
                  + "\(visible.count)/\(parsed.items.count) item(s) visible"
                  + ", layout=\(parsed.layout.rawValue)"
                  + (selection == nil ? ""
-                    : ", $SELECTION=\(selection!.count) char(s)"))
+                    : ", $WAND_SELECTION=\(selection!.count) char(s)"))
         record("show-menu on \(bid) (\(visible.count) item(s))")
         guard !visible.isEmpty else { writeStatus(); return }
         counterShowMenuShown += 1
@@ -287,7 +288,7 @@ public final class Controller: @unchecked Sendable {
         // Capture selection in the closure so Dispatch can export it
         // as an env var — keeps the LauncherMenu signature trigger-
         // agnostic (no `selection` field on items or menu state).
-        let env: [String: String] = selection.map { ["SELECTION": $0] } ?? [:]
+        let env: [String: String] = selection.map { ["WAND_SELECTION": $0] } ?? [:]
         LauncherPanel.present(
             filteredItems: visible,
             target: target,

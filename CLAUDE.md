@@ -60,7 +60,7 @@ Names:
 - config: `~/.config/wand/config.toml`
 - log / status: `/tmp/wand.{log,status}`
 - DNC channel: `com.wand.app.control`
-- shell-action env vars: `WAND_TARGET_*`
+- shell-action env vars: `WAND_*` (`WAND_TARGET_*`, `WAND_SELECTION`, …)
 - Swift modules: `WandCore` / `WandAdapterMacOS` / `WandAdapterTest`
   / `WandApp`
 
@@ -258,6 +258,14 @@ Everything below depends on this contract:
   (`WAND_TARGET_BUNDLE_ID`, `WAND_TARGET_PID`,
   `WAND_TARGET_TITLE`, `WAND_TARGET_FRAME`) — the user's
   command can decide what to do with that information.
+- **Env-var contract (wand#137)**: every context env var is
+  `WAND_`-prefixed (`Dispatch.execute(extraEnv:)` drops
+  non-conforming keys loudly), and an absent context leaves the
+  var **unset** — never an empty string — so recipes can branch
+  on `[ -n "${WAND_SELECTION:-}" ]`. New trigger families add
+  one var each (`$WAND_SHELF_FILES` / `$WAND_SHELF_COUNT` for
+  bolt, `$WAND_CLIPBOARD` / `$WAND_URL` reserved); values are
+  untrusted — same quoting caveat as `WAND_TARGET_TITLE`.
 - **`wand tome --open` is the documented spine exception.**
   An upstream trigger (a chord hotkey, or a text-selection
   observer — there is no button-down moment to anchor against)
@@ -268,8 +276,8 @@ Everything below depends on this contract:
   resolveAt(point:)` — text-selection-anchored, not cursor-
   anchored. Spine guarantees above apply to cast and middle-
   click tome (the native trigger families); `tome --open` is
-  documented as the carve-out. `$SELECTION` is the only extra env
-  var added (via `Dispatch.execute(extraEnv:)`); the
+  documented as the carve-out. `$WAND_SELECTION` is the only extra
+  env var added (via `Dispatch.execute(extraEnv:)`); the
   `WAND_TARGET_*` set is still populated, just from the
   frontmost app instead of a cursor-anchored window. See
   [Sources/WandApp/Controller.swift](Sources/WandApp/Controller.swift)'s

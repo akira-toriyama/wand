@@ -215,7 +215,7 @@ public enum AXTarget {
     /// to act on that selection. Returning the focused element's
     /// selection matches that mental model. (Cursor-anchored
     /// targeting still applies to the *action's* destination — only
-    /// the `$SELECTION` payload comes from the focused element.)
+    /// the `$WAND_SELECTION` payload comes from the focused element.)
     public static func selectedText() -> String? {
         let sys = AXUIElementCreateSystemWide()
         var focused: AnyObject?
