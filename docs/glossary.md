@@ -211,7 +211,7 @@ cast と tome を **特定のアプリ内で完全に無効化** する
 `wand tome --open --items <PATH> --at <X> <Y>` 経由で tome を
 呼び出す経路。ボタン押下に紐付かないため [[AX target]] では解決
 できず、**フロントモストアプリを対象**として spine の例外扱い
-となる。`--selection` で `$SELECTION`、`--title` で
+となる。`--selection` で `$WAND_SELECTION`、`--title` で
 `WAND_TARGET_TITLE` を呼び出し側から上書きできる。
 - コード: `Sources/WandApp/Controller.swift` の `handleShowMenu`
 - **Don't call it:** remote menu, ipc menu, dnc menu,
@@ -230,14 +230,25 @@ cast と tome を **特定のアプリ内で完全に無効化** する
   target app, フォーカスウィンドウ, アクティブウィンドウ
   （frontmost / focused は AX target と一致しないことがある）
 
-### `$SELECTION`
+### `$WAND_SELECTION`
 tome トリガー発火の瞬間に、フォーカスされている要素で選択
 されていたテキスト。`shell` 系 [[tome entry]] に環境変数として
 渡される。何も選択されていない場合、もしくはフォーカス先のアプリ
-が AX selection を公開していない場合は空文字列。**信頼できない値**
-としてシェル内では必ずクォートすること。
-- **Don't call it:** clipboard, highlighted text, current selection,
-  クリップボード, 選択範囲（コード側 AX の "current selection" と衝突するため）
+が AX selection を公開していない場合は **unset**（空文字列ではない
+— `[ -n "${WAND_SELECTION:-}" ]` で有無を判定できる）。
+**信頼できない値**としてシェル内では必ずクォートすること。
+- **Don't call it:** `$SELECTION`（旧名・wand#137 で廃止）, clipboard,
+  highlighted text, current selection, クリップボード,
+  選択範囲（コード側 AX の "current selection" と衝突するため）
+
+### env-var contract
+wand が `shell` アクションへ context を渡す環境変数の規約
+（wand#137）: (1) すべて `WAND_` prefix、(2) 存在しない context の
+変数は unset（空文字を入れない）、(3) 値は untrusted としてシェル内
+で必ずクォート。trigger 族が増えても変数を 1 個足すだけで済む
+（例: `$WAND_SHELF_FILES` / `$WAND_CLIPBOARD` は予約済みの将来枠）。
+- コード: `Dispatch.execute(extraEnv:)`（`WAND_` prefix を強制）
+- **Don't call it:** env spec, variable convention, 環境変数仕様
 
 ---
 

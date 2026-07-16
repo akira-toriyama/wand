@@ -150,24 +150,30 @@ AX target が無い場所でも menu が出る(アプリ特定アイテムは
 自動で除外)。Spotlight / 画面ロック / "ターミナルを開く" 等の
 システム横断機能の置き場として最適。
 
-### 選択テキストを使う shell アイテム(`$SELECTION`)
+### 選択テキストを使う shell アイテム(`$WAND_SELECTION`)
 
 shell アクションには、中ボタン押下時にフォーカス要素で選択されて
-いたテキストが `$SELECTION` 環境変数として渡される。何も選択して
-いない、または対象アプリが AX に選択テキストを露出していない場合
-は空。翻訳 / 検索 / 他アプリへ渡す系のワークフローに使える:
+いたテキストが `$WAND_SELECTION` 環境変数として渡される。翻訳 /
+検索 / 他アプリへ渡す系のワークフローに使える:
 
 ```toml
 [[tome.cursor.item]]
 name = "Translate"
 icon = "SF:globe"
 action-type = "shell"
-action-cmd = 'open "https://translate.google.com/?sl=auto&tl=en&text=$(printf %s "$SELECTION" | sed "s/ /%20/g")"'
+action-cmd = 'open "https://translate.google.com/?sl=auto&tl=en&text=$(printf %s "$WAND_SELECTION" | sed "s/ /%20/g")"'
 ```
 
-shell コマンド内では必ず `"$SELECTION"` のようにクオートする —
-内容はユーザーがハイライトした任意の文字列(URL / コード / shell
-メタ文字を含みうる)で、`WAND_TARGET_TITLE` と同じく **untrusted**。
+wand の env var はすべて `WAND_` prefix 付きで、存在しない
+context の変数は **unset**(空文字ではない)。だからコマンド側で
+`[ -n "${WAND_SELECTION:-}" ] && …` のように有無で分岐できる。
+`$WAND_SELECTION` は、何も選択していない・対象アプリが AX に
+選択テキストを露出していない場合に unset になる。
+
+shell コマンド内では必ず `"$WAND_SELECTION"` のようにクオート
+する — 内容はユーザーがハイライトした任意の文字列(URL / コード /
+shell メタ文字を含みうる)で、`WAND_TARGET_TITLE` と同じく
+**untrusted**。
 
 ### 条件フィルタ(`filter-title` / `filter-shell`)
 
@@ -365,7 +371,7 @@ wand cast --record          # 対話型レコーダ → 貼れる [[cast.cursor.
 # tome — ランチャーメニュー(外部トリガー)
 wand tome --open --items <PATH> --at <X> <Y> [--selection <TEXT>] [--title <TEXT>]
                         #   tome を <X> <Y> に出す(Cocoa 座標、Y-up;
-                        #   --at は負座標も可)。--selection → $SELECTION
+                        #   --at は負座標も可)。--selection → $WAND_SELECTION
                         #   (shell アクション用)、--title で $WAND_TARGET_TITLE 上書き。
 wand tome --validate --items <PATH>   # standalone items ファイルを検証
 

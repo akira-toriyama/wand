@@ -813,11 +813,13 @@ width = 2
 #   WAND_TARGET_BUNDLE_ID, WAND_TARGET_PID,
 #   WAND_TARGET_TITLE,     WAND_TARGET_FRAME (x,y,w,h)
 # Tome items additionally receive:
-#   SELECTION              the text selected in the focused element
-#                          at button-down (empty if none / AX not
-#                          granted). Use for translate / search /
-#                          send-to-app workflows. Untrusted — same
-#                          quoting caveat as WAND_TARGET_TITLE.
+#   WAND_SELECTION         the text selected in the focused element
+#                          at button-down. Use for translate /
+#                          search / send-to-app workflows. Untrusted
+#                          — same quoting caveat as WAND_TARGET_TITLE.
+# Every wand env var is WAND_-prefixed; a context that doesn't
+# exist is left unset (never empty), so commands can branch on
+# presence: [ -n "${WAND_SELECTION:-}" ] && …
 #
 # `icon` (`[[cast.cursor.rule]]` / `[[cast.focused.rule]]` /
 # `[[tome.cursor.item]]`) — optional icon
@@ -947,7 +949,7 @@ action-verb = "minimize"
 # subtitle = "選択テキストを日本語へ"
 # icon = "SF:globe"
 # action-type = "shell"
-# action-cmd  = "echo $SELECTION | translate --to ja"
+# action-cmd  = 'echo "$WAND_SELECTION" | translate --to ja'
 #
 # # App icon — `icon = "app:<bundle-id>"` pulls the actual icon of an
 # # installed app (running OR installed-but-inactive).
