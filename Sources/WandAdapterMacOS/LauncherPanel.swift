@@ -161,6 +161,8 @@ public enum LauncherPanel {
                                 shadow: Bool = false,
                                 linePets: [LinePet] = [],
                                 palette: TomeThemePalette = TomeThemePalette(),
+                                orderOverride: [String: [String]] = [:],
+                                onReorder: ((String, [String]) -> Void)? = nil,
                                 onSelect: @escaping (LauncherItem, Target) -> Void) {
         current?.dismiss()
         guard !items.isEmpty else {
@@ -168,7 +170,8 @@ public enum LauncherPanel {
                      + "panel suppressed")
             return
         }
-        let nodes = PanelTree.build(from: items)
+        let nodes = PanelTree.applyOrder(PanelTree.build(from: items),
+                                          path: "", override: orderOverride)
         let colors = TomeColors.resolve(palette)
         // Header (app icon + name) only makes sense on the vertical
         // list — in toolbar mode the panel is a single horizontal row
@@ -196,6 +199,8 @@ public enum LauncherPanel {
             layout: layout,
             target: target, onSelect: onSelect,
             isRoot: true,
+            panelPath: "",
+            onReorder: onReorder,
             openAnim: openAnim,
             closeAnim: closeAnim,
             border: border,
@@ -226,6 +231,20 @@ indirect enum PanelNode {
     case item(LauncherItem)
     case folder(name: String, children: [PanelNode])
     case placeholder(label: String)
+
+    /// Stable-within-a-session identity for the DnD sort override
+    /// (wand#127). Keyed on the display name — two same-named items
+    /// at one level share an id and keep their relative order (see
+    /// `LauncherOrder.apply`). `nil` = the node never participates
+    /// in reordering. The id is threaded into each `ItemRow` at
+    /// build time so rows and nodes can't drift apart.
+    var orderID: String? {
+        switch self {
+        case .item(let i):             return "item:\(i.name)"
+        case .folder(let name, _):     return "folder:\(name)"
+        case .placeholder:             return nil
+        }
+    }
 }
 
 /// App-header data flowed into the root panel.
@@ -257,6 +276,51 @@ private enum PanelTree {
             current.children.append(.leaf(item))
         }
         return root.toNodes()
+    }
+
+    /// Separator for panel-path override keys. U+001F (unit
+    /// separator) instead of "/" because folder names are free-form
+    /// user strings — `group = ["a/b"]` and `group = ["a", "b"]`
+    /// must not collapse to the same key.
+    static let pathSep = "\u{1F}"
+
+    /// Override key for the child panel of folder `name` inside
+    /// `parent`. Always prefixes the separator so even an empty
+    /// folder name can't collide with the root key `""`.
+    static func childPath(_ parent: String, _ name: String) -> String {
+        parent + pathSep + name
+    }
+
+    /// Human-readable form of a panel path for log lines.
+    static func displayPath(_ path: String) -> String {
+        path.isEmpty
+            ? "(root)"
+            : path.split(separator: Character(pathSep), omittingEmptySubsequences: false)
+                  .dropFirst()  // leading separator from the always-prefix shape
+                  .joined(separator: "/")
+    }
+
+    /// Re-apply the session's DnD sort override (wand#127) to every
+    /// level of the tree. `override` maps a panel path ("" = root,
+    /// folder names joined via `pathSep` when nested) to the row
+    /// order the user last dragged that level into;
+    /// `LauncherOrder.apply` does the slot-merge so rows the
+    /// override doesn't know about keep their config positions.
+    static func applyOrder(_ nodes: [PanelNode], path: String,
+                           override: [String: [String]]) -> [PanelNode] {
+        let level = override[path].map { order in
+            LauncherOrder.apply(nodes, id: { $0.orderID }, override: order)
+        } ?? nodes
+        guard !override.isEmpty else { return level }
+        return level.map { node in
+            guard case .folder(let name, let children) = node else {
+                return node
+            }
+            return .folder(name: name,
+                           children: applyOrder(children,
+                                                 path: childPath(path, name),
+                                                 override: override))
+        }
     }
 
     /// Mutable intermediate. Class so siblings share folder references.
@@ -413,13 +477,15 @@ private enum PanelLayout {
                 if layout == .list && item.separatorBefore && !views.isEmpty {
                     views.append(makeSeparator(layout: layout))
                 }
-                views.append(makeItemRow(item, layout: layout,
+                views.append(makeItemRow(item, nodeID: node.orderID,
+                                          layout: layout,
                                           shortcutBadge: shortcutBadge,
                                           iconChip: iconChip,
                                           fontSize: fontSize,
                                           sink: &rows))
             case .folder(let name, let children):
                 views.append(makeFolderRow(name: name, children: children,
+                                            nodeID: node.orderID,
                                             layout: layout,
                                             fontSize: fontSize,
                                             sink: &rows))
@@ -566,6 +632,7 @@ private enum PanelLayout {
     }
 
     private static func makeItemRow(_ item: LauncherItem,
+                                     nodeID: String?,
                                      layout: LauncherLayout,
                                      shortcutBadge: Bool,
                                      iconChip: Bool,
@@ -580,7 +647,7 @@ private enum PanelLayout {
                                                     fontSize: fontSize)
             let r = ItemRow(kind: .dynamic(item),
                             label: item.name, icon: icon, layout: layout,
-                            fontSize: fontSize)
+                            fontSize: fontSize, nodeID: nodeID)
             rows.append(r)
             return r
         }
@@ -604,7 +671,7 @@ private enum PanelLayout {
                          layout: layout, shortcut: shortcut,
                          subtitle: subtitle, iconAnim: item.iconAnim,
                          iconSpec: item.icon,
-                         fontSize: fontSize)
+                         fontSize: fontSize, nodeID: nodeID)
         rows.append(r)
         return r
     }
@@ -644,12 +711,13 @@ private enum PanelLayout {
 
     private static func makeFolderRow(name: String,
                                        children: [PanelNode],
+                                       nodeID: String?,
                                        layout: LauncherLayout,
                                        fontSize: Int,
                                        sink rows: inout [ItemRow]) -> NSView {
         let r = ItemRow(kind: .folder(name: name, children: children),
                         label: name, icon: nil, layout: layout,
-                        fontSize: fontSize)
+                        fontSize: fontSize, nodeID: nodeID)
         rows.append(r)
         return r
     }
@@ -845,6 +913,15 @@ private final class PanelController {
     private let target: Target
     private let onSelect: (LauncherItem, Target) -> Void
     private let isRoot: Bool
+    /// Tree position for the session DnD sort override (wand#127):
+    /// "" = root, folder names joined via `PanelTree.pathSep` when
+    /// nested. Keys the order the panel's rows are reported under
+    /// when the user drags one.
+    private let panelPath: String
+    /// Fires after a DnD row drop with (panelPath, new node-id order
+    /// for that level). `nil` = reordering disabled for this panel
+    /// (toolbar layouts, dynamic expansions, external `tome --open`).
+    private let onReorder: ((String, [String]) -> Void)?
     /// Open-time animation applied in `show()`. Inherited by child
     /// panels when they're spawned (so the whole cascade feels
     /// consistent). `.off` keeps the historical instant pop.
@@ -911,6 +988,8 @@ private final class PanelController {
          target: Target,
          onSelect: @escaping (LauncherItem, Target) -> Void,
          isRoot: Bool,
+         panelPath: String = "",
+         onReorder: ((String, [String]) -> Void)? = nil,
          openAnim: LauncherOpenAnim = .off,
          closeAnim: LauncherCloseAnim = .off,
          border: LauncherBorder = .off,
@@ -925,6 +1004,8 @@ private final class PanelController {
         self.target = target
         self.onSelect = onSelect
         self.isRoot = isRoot
+        self.panelPath = panelPath
+        self.onReorder = onReorder
         self.openAnim = openAnim
         self.closeAnim = closeAnim
         self.border = border
@@ -962,6 +1043,18 @@ private final class PanelController {
             row.onClick = { [weak self, weak row] in
                 guard let self, let row else { return }
                 self.handleRowClick(row)
+            }
+        }
+        // Session DnD sort (wand#127) — only vertical list panels
+        // whose caller opted in (native tome; not `tome --open`,
+        // not dynamic expansions) and only rows that carry a node id
+        // (headers / placeholders sit out).
+        if layout == .list && onReorder != nil {
+            for row in rows where row.nodeID != nil {
+                row.enableReorder { [weak self] source, target, after in
+                    self?.handleReorderDrop(source: source, target: target,
+                                             after: after)
+                }
             }
         }
     }
@@ -1164,16 +1257,50 @@ private final class PanelController {
         }
     }
 
+    /// One row was dropped onto another (same panel level). Move the
+    /// dragged row's view in the stack for immediate visual feedback,
+    /// then report the level's new node-id order upward so the next
+    /// panel-open rebuilds in that order. `after` = insert below the
+    /// target row (drop landed in its lower half).
+    private func handleReorderDrop(source: ItemRow, target: ItemRow,
+                                    after: Bool) {
+        guard source !== target,
+              let stack = target.superview as? NSStackView,
+              source.superview === stack,
+              let targetIdx = stack.arrangedSubviews.firstIndex(of: target),
+              let sourceIdx = stack.arrangedSubviews.firstIndex(of: source)
+        else { return }
+        var idx = after ? targetIdx + 1 : targetIdx
+        if sourceIdx < idx { idx -= 1 }
+        guard idx != sourceIdx else { return }
+        stack.removeArrangedSubview(source)
+        source.removeFromSuperview()
+        stack.insertArrangedSubview(source, at: idx)
+        // Separators / section headers don't travel with the row in
+        // the live panel (they carry no node id); the next panel-open
+        // rebuilds them against the new item order.
+        let order = stack.arrangedSubviews.compactMap {
+            ($0 as? ItemRow)?.nodeID
+        }
+        Log.line("launcher-panel: DnD sort \"\(source.titleForLog)\" "
+                 + "at \"\(PanelTree.displayPath(panelPath))\" — "
+                 + "\(order.count) row(s) reordered (session-only)")
+        onReorder?(panelPath, order)
+    }
+
     private func handleRowHover(_ row: ItemRow) {
         switch row.kind {
-        case .folder(_, let children):
+        case .folder(let name, let children):
             if childAnchor === row { return }  // already open
             closeChild()
-            openChild(for: row, children: children, label: row.titleForLog)
+            openChild(for: row, children: children, label: row.titleForLog,
+                       childPath: PanelTree.childPath(panelPath, name))
         case .dynamic(let item):
             if childAnchor === row { return }
             closeChild()
             let expanded = PanelLayout.expandDynamic(item)
+            // childPath nil — dynamic children are synthesized per
+            // hover, so there's no stable order to override.
             openChild(for: row, children: expanded,
                        label: "\(row.titleForLog) (dynamic)")
         case .leaf, .placeholder:
@@ -1190,7 +1317,7 @@ private final class PanelController {
     // MARK: Child management
 
     private func openChild(for row: ItemRow, children: [PanelNode],
-                            label: String) {
+                            label: String, childPath: String? = nil) {
         guard let win = row.window else {
             Log.line("launcher-panel: openChild: row has no window — skip")
             return
@@ -1219,6 +1346,8 @@ private final class PanelController {
             layout: .list,
             target: target, onSelect: onSelect,
             isRoot: false,
+            panelPath: childPath ?? "",
+            onReorder: childPath == nil ? nil : onReorder,
             openAnim: openAnim,
             closeAnim: closeAnim,
             border: border,
@@ -1393,6 +1522,10 @@ private final class ItemRow: NSView {
 
     let kind: RowKind
     let layout: LauncherLayout
+    /// Session DnD sort identity (`PanelNode.orderID`, threaded in at
+    /// build time so rows and nodes can't drift apart). `nil` for
+    /// header / section-header / placeholder rows — they never drag.
+    let nodeID: String?
     var onClick: (() -> Void)?
     var onHover: (() -> Void)?
     /// Theme-resolved colours. Defaults to `.none` (every field nil →
@@ -1489,9 +1622,11 @@ private final class ItemRow: NSView {
          layout: LauncherLayout, shortcut: String = "",
          subtitle: String = "", iconAnim: String = "",
          iconSpec: String = "",
-         fontSize: Int = 13) {
+         fontSize: Int = 13,
+         nodeID: String? = nil) {
         self.kind = kind
         self.layout = layout
+        self.nodeID = nodeID
         self.rawLabel = label
         self.shortcutText = shortcut
         self.subtitleText = subtitle
@@ -1853,7 +1988,175 @@ private final class ItemRow: NSView {
     }
 
     override func mouseUp(with event: NSEvent) {
+        dragOrigin = nil
         guard isInteractive else { return }
         onClick?()
+    }
+
+    // MARK: Session DnD sort (wand#127)
+
+    /// Private in-app pasteboard type marking a tome-row drag. The
+    /// payload (the row's `nodeID`) is informational — drop handling
+    /// resolves the source row via `draggingSource` identity so
+    /// duplicate-named rows can't cross wires.
+    static let reorderType =
+        NSPasteboard.PasteboardType("com.wand.wand.tome-row")
+
+    /// Set by `PanelController` on reorderable rows only (`.list`
+    /// layout + a live `onReorder` sink + non-nil `nodeID`). Fires
+    /// with (source row, target row = self, insert-after) when a
+    /// drop lands on this row.
+    private var reorderDrop: ((ItemRow, ItemRow, Bool) -> Void)?
+    /// Button-down point (window coords) armed in `mouseDown`; a
+    /// drag past a small hysteresis starts the dragging session.
+    /// Cleared on mouseUp so a plain click stays a click.
+    private var dragOrigin: NSPoint?
+    /// 2 pt accent insertion line shown while a compatible drag
+    /// hovers this row — top edge = "insert above", bottom edge =
+    /// "insert below". Lazily created, hidden between drags.
+    private var dropIndicator: CALayer?
+
+    func enableReorder(
+        _ onDrop: @escaping (ItemRow, ItemRow, Bool) -> Void) {
+        reorderDrop = onDrop
+        registerForDraggedTypes([Self.reorderType])
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        guard reorderDrop != nil else {
+            // Non-reorderable rows keep NSView's default next-
+            // responder propagation — only drag-source rows hold the
+            // event back to arm the hysteresis check.
+            super.mouseDown(with: event)
+            return
+        }
+        dragOrigin = event.locationInWindow
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        guard let origin = dragOrigin, let nodeID else { return }
+        let dx = event.locationInWindow.x - origin.x
+        let dy = event.locationInWindow.y - origin.y
+        guard dx * dx + dy * dy > 16 else { return }  // 4 pt hysteresis
+        dragOrigin = nil
+        let pb = NSPasteboardItem()
+        pb.setString(nodeID, forType: Self.reorderType)
+        let item = NSDraggingItem(pasteboardWriter: pb)
+        item.setDraggingFrame(bounds, contents: snapshotImage())
+        beginDraggingSession(with: [item], event: event, source: self)
+    }
+
+    /// Row snapshot used as the drag image, so the user drags a
+    /// faithful copy of the row instead of a generic ghost.
+    private func snapshotImage() -> NSImage? {
+        guard let rep = bitmapImageRepForCachingDisplay(in: bounds) else {
+            return nil
+        }
+        cacheDisplay(in: bounds, to: rep)
+        let img = NSImage(size: bounds.size)
+        img.addRepresentation(rep)
+        return img
+    }
+
+    // Destination side — every reorderable row is also a drop target.
+
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        updateDropIndicator(sender)
+    }
+
+    override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
+        updateDropIndicator(sender)
+    }
+
+    override func draggingExited(_ sender: NSDraggingInfo?) {
+        hideDropIndicator()
+    }
+
+    override func draggingEnded(_ sender: NSDraggingInfo) {
+        hideDropIndicator()
+    }
+
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        hideDropIndicator()
+        guard let drop = reorderDrop,
+              let source = sender.draggingSource as? ItemRow,
+              source !== self else { return false }
+        drop(source, self, isLowerHalf(sender))
+        return true
+    }
+
+    private func updateDropIndicator(_ sender: NSDraggingInfo) -> NSDragOperation {
+        guard reorderDrop != nil,
+              let source = sender.draggingSource as? ItemRow,
+              source !== self else {
+            hideDropIndicator()
+            return []
+        }
+        showDropIndicator(below: isLowerHalf(sender))
+        return .move
+    }
+
+    private func hideDropIndicator() {
+        dropIndicator?.isHidden = true
+    }
+
+    /// Non-flipped view: smaller y = visually lower. Lower half →
+    /// insert AFTER (below) this row.
+    private func isLowerHalf(_ sender: NSDraggingInfo) -> Bool {
+        convert(sender.draggingLocation, from: nil).y < bounds.midY
+    }
+
+    private func showDropIndicator(below: Bool) {
+        let line: CALayer
+        if let existing = dropIndicator {
+            line = existing
+        } else {
+            line = CALayer()
+            line.cornerRadius = 1
+            line.zPosition = 10
+            // Standalone CALayer: kill the implicit ~0.25 s
+            // animations, or the line eases behind every drag-move
+            // event instead of tracking the cursor.
+            line.actions = ["frame": NSNull(), "position": NSNull(),
+                            "bounds": NSNull(), "hidden": NSNull(),
+                            "backgroundColor": NSNull()]
+            layer?.addSublayer(line)
+            dropIndicator = line
+        }
+        // Same accent resolution as the hover highlight so the two
+        // drag affordances agree under a `[tome].theme`.
+        let accent = rowAccent ?? themeColors.accent ?? .controlAccentColor
+        line.backgroundColor = accent.cgColor
+        line.frame = CGRect(x: 4, y: below ? 0 : bounds.height - 2,
+                            width: bounds.width - 8, height: 2)
+        line.isHidden = false
+    }
+}
+
+// NSDraggingSource — nonisolated to satisfy the protocol regardless
+// of the SDK's isolation annotations; AppKit calls these on the main
+// thread, so `assumeIsolated` is safe where row state is touched.
+extension ItemRow: NSDraggingSource {
+    nonisolated func draggingSession(
+        _ session: NSDraggingSession,
+        sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation {
+        context == .withinApplication ? .move : []
+    }
+
+    nonisolated func draggingSession(_ session: NSDraggingSession,
+                                     willBeginAt screenPoint: NSPoint) {
+        MainActor.assumeIsolated { alphaValue = 0.5 }
+    }
+
+    nonisolated func draggingSession(_ session: NSDraggingSession,
+                                     endedAt screenPoint: NSPoint,
+                                     operation: NSDragOperation) {
+        // Restore idle style too: the drag session swallows mouse
+        // events, so the tracking area's mouseExited never fires and
+        // the source row would otherwise keep its hover accent.
+        MainActor.assumeIsolated {
+            alphaValue = 1
+            applyIdleStyle()
+        }
     }
 }

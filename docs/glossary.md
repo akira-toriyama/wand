@@ -194,6 +194,17 @@ tome のメインメニュー。トリガーボタンを押した瞬間に出現
   （`layout` 単体は `[tome].layout` のキー名なので可。「並びモード」
   を指す名詞としては `tome layout` を使う）
 
+### DnD sort
+[[non-activating panel]] / [[child panel]] の行をマウスドラッグで
+並び替える操作。並び順は **session-only** — デーモン再起動・
+config reload（`ConfigWatcher` 含む）で破棄され、config.toml の
+記述順が正に戻る。`list` layout のみ（toolbar 系は対象外）。
+[[dynamic submenu]] の生成行と [[external trigger]] 経由のパネルは
+並び替え不可。config.toml への永続化は別 issue（surgical writer）。
+- コード: `LauncherOrder.apply`（Core の slot-merge）、
+  `PanelController.handleReorderDrop`
+- **Don't call it:** drag sort, reorder mode, 並べ替えモード
+
 ### excludes
 cast と tome を **特定のアプリ内で完全に無効化** する
 グローバルブロックリスト。bundle id の glob 配列で、トリガー判定の

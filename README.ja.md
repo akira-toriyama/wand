@@ -101,6 +101,12 @@ bundle id で実行中アプリのアイコン)、`"~/icons/foo.png"` または
 `"/abs/path.png"`(絶対パス)。解決できない値はアイコンなしに
 フォールバック(`/tmp/wand.log` にログ)。
 
+行は **ドラッグ & ドロップで並び替え** できる(list layout のみ)。
+行を掴んで別の行の上下に落とすとパネル内の並びが変わる。並び順は
+**session-only** — config reload やデーモン再起動で破棄され、
+`config.toml` の記述順に戻る。恒久的に変えたい場合は
+`config.toml` の `[[tome.cursor.item]]` の並びを入れ替えること。
+
 各行には `subtitle`(副題)、`header`(セパレータ見出し)、
 SF Symbol アイコン向けの `tint` / `tint-colors` / `icon-anim`
 も指定できる — 全項目は [`config.toml`](config.toml) 参照。

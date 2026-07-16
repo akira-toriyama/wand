@@ -49,6 +49,16 @@ public final class Controller: @unchecked Sendable {
     /// entry point (event-driven daemons posting via IPC).
     private var counterShowMenuShown = 0
     private var counterShowMenuDispatched = 0
+    /// Session-only DnD sort override for the tome panel (wand#127):
+    /// panel path ("" = root; nested levels join folder names with
+    /// U+001F — an opaque adapter-side key) → the node-id order the
+    /// user last dragged that level into. Deliberately NOT
+    /// persisted — discarded on config reload (the config's document
+    /// order is the durable truth; persistence is a tracked follow-up
+    /// on swift-toml-edit's surgical writer) and on daemon restart.
+    /// Only the native middle-click path reads it; `tome --open`
+    /// items files are caller-owned and skip the override.
+    private var tomeOrder: [String: [String]] = [:]
     /// Last reload timestamp + cause, surfaced via `--status`.
     private var lastReload: (when: Date, cause: String) =
         (Date(), "initial-load")
@@ -219,7 +229,23 @@ public final class Controller: @unchecked Sendable {
             borderWidth: cfg.launcher.decoration.borderWidth,
             shadow: cfg.launcher.decoration.shadow,
             linePets: cfg.launcher.decoration.linePets,
-            palette: wandTomePalette(cfg.launcher.theme)
+            palette: wandTomePalette(cfg.launcher.theme),
+            orderOverride: tomeOrder,
+            onReorder: { [weak self] path, order in
+                self?.tomeOrder[path] = order
+                // The raw key is "\u{1F}Folder\u{1F}Sub" (always-
+                // prefix shape) — drop the leading separator and
+                // join with "/" so the log line stays printable.
+                let shown = path.isEmpty
+                    ? "(root)"
+                    : path.split(separator: Character("\u{1F}"),
+                                 omittingEmptySubsequences: false)
+                          .dropFirst()
+                          .joined(separator: "/")
+                Log.line("controller: tome DnD sort saved for "
+                         + "\"\(shown)\" "
+                         + "(\(order.count) row(s), session-only)")
+            }
         ) { [weak self] item, target in
             self?.counterLauncherDispatched += 1
             Log.line("controller: → tome entry \"\(item.name)\"")
@@ -387,6 +413,14 @@ public final class Controller: @unchecked Sendable {
             Log.line("controller: reload — [tome].trigger changed; "
                      + "the event mask is baked into the running tap, "
                      + "restart required to apply")
+        }
+        // Session DnD sort override dies with the config that bred it
+        // — after a reload the config's document order is the truth
+        // again (wand#127 acceptance: reload discards the override).
+        if !tomeOrder.isEmpty {
+            tomeOrder.removeAll()
+            Log.line("controller: reload — tome DnD sort override "
+                     + "discarded (session-only)")
         }
         config = new
         lastReload = (Date(), cause)
