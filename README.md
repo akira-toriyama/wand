@@ -106,6 +106,14 @@ icon for that bundle id), `"~/icons/foo.png"` / `"icons/foo.png"`
 `"/abs/path.png"`. Unrecognised values fall back to no icon and log
 once to `/tmp/wand.log`.
 
+Tome entries can be **reordered by drag & drop**: drag an entry and
+drop it above or below another to rearrange the panel (list layout
+only).
+The new order is **session-only** — a config reload or daemon
+restart discards it and the `config.toml` document order applies
+again. To make an order permanent, reorder the
+`[[tome.cursor.item]]` tables in `config.toml`.
+
 Each row also accepts `subtitle`, a `header` separator, and
 `tint` / `tint-colors` / `icon-anim` for SF-Symbol icons — see
 [`config.toml`](config.toml) for the full per-row vocabulary. Panel-
