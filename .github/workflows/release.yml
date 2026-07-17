@@ -1,10 +1,14 @@
 name: Release
-
-# Thin caller of the shared rolling-DRAFT release (atelier Track 3).
-# The version-compute + dry-run + draft-management logic lives once in
-# akira-toriyama/.github; this file supplies only wand's name + install
-# prose + the post-build --validate smoke. See that reusable's header
-# for the model. Config: cliff.toml.
+# Thin caller of glyph's reusable rolling-DRAFT release. A push to main makes
+# `glyph release` compute the next version and the notes from each merged
+# PR's individual (pre-squash) commits — gitmoji-driven and squash-safe — and
+# create/update a single DRAFT release (no tag until you Publish in the UI).
+# The verdict + draft logic and the binary that runs it ship together from
+# akira-toriyama/glyph at ONE concrete tag (never a moving ref); this file
+# supplies only wand's name + install prose + the post-build smoke. Flipped
+# from the git-cliff era akira-toriyama/.github release.yml@v1 (glyph fleet
+# migration, t-n9ed); cliff.toml is gone — the classification table lives
+# inside the glyph binary (`glyph rules`).
 on:
   push:
     branches: [main]
@@ -24,7 +28,7 @@ permissions:
 
 jobs:
   release:
-    uses: akira-toriyama/.github/.github/workflows/release.yml@v1
+    uses: akira-toriyama/glyph/.github/workflows/release.yml@v0.5.0
     with:
       app: Wand
       smoke-cmd: "config --validate"
