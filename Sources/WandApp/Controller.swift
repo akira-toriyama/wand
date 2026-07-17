@@ -230,6 +230,7 @@ public final class Controller: @unchecked Sendable {
             shadow: cfg.launcher.decoration.shadow,
             linePets: cfg.launcher.decoration.linePets,
             palette: wandTomePalette(cfg.launcher.theme),
+            themeName: cfg.launcher.theme,
             orderOverride: tomeOrder,
             onReorder: { [weak self] path, order in
                 self?.tomeOrder[path] = order
@@ -245,6 +246,10 @@ public final class Controller: @unchecked Sendable {
                 Log.line("controller: tome DnD sort saved for "
                          + "\"\(shown)\" "
                          + "(\(order.count) row(s), session-only)")
+            },
+            onDelete: { path, id in
+                Log.line("controller: tome delete requested — \(id) at "
+                         + "\"\(path.isEmpty ? "(root)" : path)\" (spike)")
             }
         ) { [weak self] item, target in
             self?.counterLauncherDispatched += 1

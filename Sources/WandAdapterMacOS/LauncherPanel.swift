@@ -36,6 +36,9 @@
 import AppKit
 import Effects   // drawLinePets (shared line-pet drawing; re-exports Palette)
 import Foundation
+import Palette      // paletteFor — ThemeSpec source for the context menu
+import PaletteKit   // resolve(ThemeSpec) → ResolvedPalette (ThemedMenu input)
+import ThemeKitUI   // ThemedMenu — the row context menu (t-k4hf)
 import WandCore
 
 // MARK: - Static border colour
@@ -161,8 +164,11 @@ public enum LauncherPanel {
                                 shadow: Bool = false,
                                 linePets: [LinePet] = [],
                                 palette: TomeThemePalette = TomeThemePalette(),
+                                themeName: String = "system",
                                 orderOverride: [String: [String]] = [:],
                                 onReorder: ((String, [String]) -> Void)? = nil,
+                                hiddenOverride: [String: Set<String>] = [:],
+                                onDelete: ((String, String) -> Void)? = nil,
                                 onSelect: @escaping (LauncherItem, Target) -> Void) {
         current?.dismiss()
         guard !items.isEmpty else {
@@ -201,6 +207,8 @@ public enum LauncherPanel {
             isRoot: true,
             panelPath: "",
             onReorder: onReorder,
+            themeName: themeName,
+            onDelete: onDelete,
             openAnim: openAnim,
             closeAnim: closeAnim,
             border: border,
@@ -922,6 +930,17 @@ private final class PanelController {
     /// for that level). `nil` = reordering disabled for this panel
     /// (toolbar layouts, dynamic expansions, external `tome --open`).
     private let onReorder: ((String, [String]) -> Void)?
+    /// Fires when the user picks Delete in a row's context menu, with
+    /// (panelPath, nodeID). `nil` = deletion disabled for this panel
+    /// (toolbar layouts, dynamic expansions, external `tome --open`).
+    private let onDelete: ((String, String) -> Void)?
+    /// Theme name from config ([tome].theme) — resolved lazily via
+    /// PaletteKit for the context menu's palette. The tome rows keep
+    /// their own TomeColors pipeline; only ThemedMenu consumes this.
+    private let themeName: String
+    /// Row context menu (t-k4hf). Created on first right-click,
+    /// reused for the panel's lifetime, dismissed in tearDown.
+    private var contextMenu: ThemedMenu?
     /// Open-time animation applied in `show()`. Inherited by child
     /// panels when they're spawned (so the whole cascade feels
     /// consistent). `.off` keeps the historical instant pop.
@@ -990,6 +1009,8 @@ private final class PanelController {
          isRoot: Bool,
          panelPath: String = "",
          onReorder: ((String, [String]) -> Void)? = nil,
+         themeName: String = "system",
+         onDelete: ((String, String) -> Void)? = nil,
          openAnim: LauncherOpenAnim = .off,
          closeAnim: LauncherCloseAnim = .off,
          border: LauncherBorder = .off,
@@ -1006,6 +1027,8 @@ private final class PanelController {
         self.isRoot = isRoot
         self.panelPath = panelPath
         self.onReorder = onReorder
+        self.themeName = themeName
+        self.onDelete = onDelete
         self.openAnim = openAnim
         self.closeAnim = closeAnim
         self.border = border
@@ -1054,6 +1077,15 @@ private final class PanelController {
                 row.enableReorder { [weak self] source, target, after in
                     self?.handleReorderDrop(source: source, target: target,
                                              after: after)
+                }
+            }
+        }
+        // Row context menu (t-k4hf) — same opt-in shape as reorder:
+        // native tome `.list` panels only, rows that carry a node id.
+        if layout == .list && onDelete != nil {
+            for row in rows where row.nodeID != nil {
+                row.enableContextMenu { [weak self] row, event in
+                    self?.showDeleteMenu(for: row, event: event)
                 }
             }
         }
@@ -1193,6 +1225,9 @@ private final class PanelController {
         if isClosing { return }
         isClosing = true
 
+        contextMenu?.dismiss(animated: false)
+        contextMenu = nil
+
         // Recursively tear down children first so the whole cascade
         // fades together — each child schedules its own close-anim,
         // running in parallel with this panel's.
@@ -1288,6 +1323,40 @@ private final class PanelController {
         onReorder?(panelPath, order)
     }
 
+    /// Right-click on an eligible row → ThemedMenu with one Delete
+    /// item. sill's PopupPanel refuses key/main (same discipline as
+    /// NonActivatingPanel), so presenting it can never steal focus
+    /// from the app under the tome panel.
+    private func showDeleteMenu(for row: ItemRow, event: NSEvent) {
+        guard let nodeID = row.nodeID, let win = row.window else { return }
+        let menu: ThemedMenu
+        if let existing = contextMenu {
+            menu = existing
+        } else {
+            menu = ThemedMenu(palette: PaletteKit.resolve(paletteFor(themeName)))
+            contextMenu = menu
+        }
+        menu.items = [ThemedMenu.MenuItem(
+            "Delete",
+            icon: NSImage(systemSymbolName: "trash",
+                          accessibilityDescription: "Delete"),
+            isDestructive: true) { [weak self, weak row] in
+                guard let self, let row else { return }
+                self.handleDelete(row: row, nodeID: nodeID)
+            }]
+        Log.line("launcher-panel: context menu on \"\(row.titleForLog)\" "
+                 + "at \"\(PanelTree.displayPath(panelPath))\"")
+        menu.present(at: event.locationInWindow, in: win)
+    }
+
+    /// Delete chosen from the context menu. Task 4 adds the live row
+    /// removal; the (panelPath, nodeID) report is final already.
+    private func handleDelete(row: ItemRow, nodeID: String) {
+        Log.line("launcher-panel: deleted \"\(row.titleForLog)\" at "
+                 + "\"\(PanelTree.displayPath(panelPath))\" (session-only)")
+        onDelete?(panelPath, nodeID)
+    }
+
     private func handleRowHover(_ row: ItemRow) {
         switch row.kind {
         case .folder(let name, let children):
@@ -1348,6 +1417,8 @@ private final class PanelController {
             isRoot: false,
             panelPath: childPath ?? "",
             onReorder: childPath == nil ? nil : onReorder,
+            themeName: themeName,
+            onDelete: childPath == nil ? nil : onDelete,
             openAnim: openAnim,
             closeAnim: closeAnim,
             border: border,
@@ -2020,6 +2091,23 @@ private final class ItemRow: NSView {
         _ onDrop: @escaping (ItemRow, ItemRow, Bool) -> Void) {
         reorderDrop = onDrop
         registerForDraggedTypes([Self.reorderType])
+    }
+
+    /// Set by `PanelController` on deletable rows only (t-k4hf —
+    /// `.list` layout, native tome, nodeID rows). `nil` keeps
+    /// NSView's default rightMouseDown behaviour.
+    private var contextMenuHandler: ((ItemRow, NSEvent) -> Void)?
+
+    func enableContextMenu(_ handler: @escaping (ItemRow, NSEvent) -> Void) {
+        contextMenuHandler = handler
+    }
+
+    override func rightMouseDown(with event: NSEvent) {
+        guard let contextMenuHandler, nodeID != nil else {
+            super.rightMouseDown(with: event)
+            return
+        }
+        contextMenuHandler(self, event)
     }
 
     override func mouseDown(with event: NSEvent) {
