@@ -176,8 +176,21 @@ public enum LauncherPanel {
                      + "panel suppressed")
             return
         }
-        let nodes = PanelTree.applyOrder(PanelTree.build(from: items),
-                                          path: "", override: orderOverride)
+        // Hidden filter first (deleted rows drop, emptied folders
+        // prune), then the DnD order re-applies to what's left.
+        // `counterLauncherShown` was already bumped by the caller;
+        // the rare "every visible item was session-deleted" case
+        // below skews it by one — accepted, the counter reads as
+        // "panel requested with visible items".
+        let built = PanelTree.applyHidden(PanelTree.build(from: items),
+                                           path: "", hidden: hiddenOverride)
+        guard !built.isEmpty else {
+            Log.line("launcher-panel: all items session-deleted for "
+                     + "\(target.bundleID) — panel suppressed")
+            return
+        }
+        let nodes = PanelTree.applyOrder(built, path: "",
+                                          override: orderOverride)
         let colors = TomeColors.resolve(palette)
         // Header (app icon + name) only makes sense on the vertical
         // list — in toolbar mode the panel is a single horizontal row
@@ -328,6 +341,27 @@ private enum PanelTree {
                            children: applyOrder(children,
                                                  path: childPath(path, name),
                                                  override: override))
+        }
+    }
+
+    /// Apply the session's context-menu deletes (t-k4hf) to every
+    /// level of the tree, BEFORE `applyOrder`. `hidden` maps a panel
+    /// path to the node ids the user deleted at that level. Folders
+    /// whose children all end up hidden are pruned — an empty child
+    /// panel must never appear.
+    static func applyHidden(_ nodes: [PanelNode], path: String,
+                             hidden: [String: Set<String>]) -> [PanelNode] {
+        guard !hidden.isEmpty else { return nodes }
+        let level = LauncherHidden.apply(nodes, id: { $0.orderID },
+                                          hidden: hidden[path] ?? [])
+        return level.compactMap { node in
+            guard case .folder(let name, let children) = node else {
+                return node
+            }
+            let kids = applyHidden(children,
+                                    path: childPath(path, name),
+                                    hidden: hidden)
+            return kids.isEmpty ? nil : .folder(name: name, children: kids)
         }
     }
 
@@ -1349,9 +1383,27 @@ private final class PanelController {
         menu.present(at: event.locationInWindow, in: win)
     }
 
-    /// Delete chosen from the context menu. Task 4 adds the live row
-    /// removal; the (panelPath, nodeID) report is final already.
+    /// Delete chosen from the context menu: remove the row from the
+    /// live panel (folder rows close their open child first), shrink
+    /// the panel keeping its TOP edge fixed, and report upward so the
+    /// next panel-open filters it out. Separators / section headers
+    /// don't travel with the row (same as DnD sort) — the next open
+    /// rebuilds them against the filtered tree.
     private func handleDelete(row: ItemRow, nodeID: String) {
+        if childAnchor === row { closeChild() }
+        if let stack = row.superview as? NSStackView {
+            stack.removeArrangedSubview(row)
+            row.removeFromSuperview()
+            if let content = panel.contentView {
+                let newHeight = content.fittingSize.height
+                let old = panel.frame
+                panel.setFrame(NSRect(x: old.minX,
+                                      y: old.maxY - newHeight,
+                                      width: old.width,
+                                      height: newHeight),
+                               display: true)
+            }
+        }
         Log.line("launcher-panel: deleted \"\(row.titleForLog)\" at "
                  + "\"\(PanelTree.displayPath(panelPath))\" (session-only)")
         onDelete?(panelPath, nodeID)

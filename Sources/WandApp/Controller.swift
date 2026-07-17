@@ -59,6 +59,13 @@ public final class Controller: @unchecked Sendable {
     /// Only the native middle-click path reads it; `tome --open`
     /// items files are caller-owned and skip the override.
     private var tomeOrder: [String: [String]] = [:]
+    /// Session-only context-menu deletes for the tome panel (t-k4hf):
+    /// panel path (same U+001F keying as `tomeOrder`) → node ids the
+    /// user deleted at that level. Deliberately NOT persisted —
+    /// discarded on config reload and daemon restart (persistence to
+    /// config.toml is a tracked follow-up on swift-toml-edit's
+    /// surgical writer). Only the native middle-click path reads it.
+    private var tomeHidden: [String: Set<String>] = [:]
     /// Last reload timestamp + cause, surfaced via `--status`.
     private var lastReload: (when: Date, cause: String) =
         (Date(), "initial-load")
@@ -247,9 +254,17 @@ public final class Controller: @unchecked Sendable {
                          + "\"\(shown)\" "
                          + "(\(order.count) row(s), session-only)")
             },
-            onDelete: { path, id in
-                Log.line("controller: tome delete requested — \(id) at "
-                         + "\"\(path.isEmpty ? "(root)" : path)\" (spike)")
+            hiddenOverride: tomeHidden,
+            onDelete: { [weak self] path, id in
+                self?.tomeHidden[path, default: []].insert(id)
+                let shown = path.isEmpty
+                    ? "(root)"
+                    : path.split(separator: Character("\u{1F}"),
+                                 omittingEmptySubsequences: false)
+                          .dropFirst()
+                          .joined(separator: "/")
+                Log.line("controller: tome delete saved for "
+                         + "\"\(shown)\" — \(id) (session-only)")
             }
         ) { [weak self] item, target in
             self?.counterLauncherDispatched += 1
@@ -425,6 +440,13 @@ public final class Controller: @unchecked Sendable {
         if !tomeOrder.isEmpty {
             tomeOrder.removeAll()
             Log.line("controller: reload — tome DnD sort override "
+                     + "discarded (session-only)")
+        }
+        // Session context-menu deletes die with the config too
+        // (wand#128 acceptance: reload restores deleted rows).
+        if !tomeHidden.isEmpty {
+            tomeHidden.removeAll()
+            Log.line("controller: reload — tome session deletes "
                      + "discarded (session-only)")
         }
         config = new
