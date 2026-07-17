@@ -43,6 +43,41 @@ sill when sill already owns it. It does; we adopt it. Migrating the
 whole launcher cascade onto `ThemedMenu` is out of scope and tracked
 as its own furrow task.
 
+### Spike outcome (2026-07-17, on hardware) — the gate caught a blocker
+
+**"Non-activating discipline is built in" above is only half true, and
+the missing half blocks shipping.** `PopupPanel` does refuse key/main,
+but it is not *accessory*-safe: sill's shared `themedPopupPanel`
+factory sets `hidesOnDeactivate = true`, and wand is `LSUIElement` — an
+`.accessory` app never becomes active, so the menu's panel is ordered
+out the instant it is shown. The failure is **silent**: no error, no
+warning, and wand's own `context menu on "…"` log line still fires. You
+only see it by looking at the screen.
+
+Same family as the `.activeAlways` NSTrackingArea regression CLAUDE.md
+records: AppKit defaults keyed on "is the app active" all resolve to the
+wrong thing under an accessory host.
+
+wand has no local workaround — `ThemedMenu`'s panel is private, so
+nothing wand owns can reach `hidesOnDeactivate`. The fix belongs in sill
+(house rule: extend the shared lib, don't reimplement its
+responsibility). Verified on hardware against a patched checkout,
+tracked as furrow **t-cp90**, which **t-k4hf now depends on**:
+
+```swift
+p.hidesOnDeactivate = NSApp.activationPolicy() != .accessory
+```
+
+A flat `false` would regress facet / perch, where a popup SHOULD vanish
+when the user switches away — hence the policy gate. The fix lands in
+the shared factory, so the tooltip and combo box (same `PopupPanel`)
+stop being accessory-broken with it.
+
+With that patch applied, the feature verified end-to-end — see Testing &
+verification. **The fallback (a wand-local mini panel) was NOT taken:**
+the spike proved the widget itself is right for the job once sill is
+accessory-aware.
+
 ## State & pure logic (WandCore / WandApp)
 
 - `Controller.tomeHidden: [String: Set<String>]` — panel path (`""` =
@@ -158,8 +193,35 @@ separately in furrow).
 
 ## Acceptance (from #128, restated against ThemedMenu)
 
-- [ ] Right-click on an eligible row shows the context menu
-- [ ] "Delete" removes the row from the panel (live + next open)
-- [ ] Menu on the non-activating panel never steals focus
-- [ ] Child-panel expansion and filtering still work after deletes
-- [ ] Config reload discards all deletions
+Verified on hardware 2026-07-17 (peekaboo + a CGEvent click helper —
+peekaboo has `--right` but no middle-click, and tome's trigger IS
+middle-click). **Every box below was checked against a build carrying
+the t-cp90 patch**; on stock sill 3.6 the first one fails silently and
+takes the rest with it.
+
+- [x] Right-click on an eligible row shows the context menu — 🗑 Delete,
+      with the `isDestructive` red accent, at the click point. Also
+      confirms the design's event-path claim: the cast tap swallows the
+      real right-down and the *replayed* pair drives `rightMouseDown`,
+      and the trailing `rightMouseUp` does not dismiss the menu.
+- [x] "Delete" removes the row from the panel (live + next open) — the
+      panel shrank with its TOP edge fixed; the row stayed gone across
+      a dismiss + re-open.
+- [x] Menu on the non-activating panel never steals focus — frontmost
+      stayed `Code` throughout.
+- [x] Child-panel expansion and filtering still work after deletes —
+      `apps` globs filtered 12/14 rows; hovering `Sort` opened its
+      child; **deleting a child then re-hovering the folder logged
+      `opened submenu "Sort" (1 items)`**, i.e. the delete survived the
+      rebuild (this is the resurrect bug commit 6316940 fixed).
+- [x] Config reload discards all deletions — `controller: reload — tome
+      session deletes discarded (session-only)`, every row back.
+
+Also confirmed: two same-named rows at one level hide TOGETHER (the
+name-keyed identity caveat, matching
+`LauncherHiddenTests.testDuplicateIdsHideTogether`).
+
+Not yet exercised, left for whoever finishes t-cp90's follow-up run:
+folder-pruned-on-reopen after deleting *every* child, the all-root-
+deleted dismiss, `theme = "neon"` menu colours, `line-pets` after a
+live reframe, and the `tome --open` carve-out staying inert.
