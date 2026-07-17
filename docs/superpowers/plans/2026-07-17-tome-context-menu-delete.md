@@ -29,7 +29,7 @@
 - Modify: `CLAUDE.md` (the "Swift 6, macOS 13+" line)
 
 **Interfaces:**
-- Consumes: sill v3.6.0 (`ThemedMenu` with `present(at:in:)` exists from v3.0.0; the only `:boom:` in 1.29→3.6 is the macOS-26 floor — verified in sill git history 2026-07-17).
+- Consumes: sill v3.6.0 (`ThemedMenu` with `present(at:in:)` already exists in 1.29.0's `ThemeKit` — v3.0.0's `:boom:` #17b M5 only MOVED it to `ThemeKitUI`, retiring the AppKit `ThemedList`; the bump is therefore elective, matching house policy rather than forced by the API. The only OTHER `:boom:` in 1.29→3.6 is the macOS-26 floor — verified in sill git history 2026-07-17).
 - Produces: `import PaletteKit` / `import ThemeKitUI` / `import Palette` compile inside `WandAdapterMacOS`. Later tasks rely on `ThemedMenu`, `ThemedMenu.MenuItem`, `PaletteKit.resolve(_:)`, `Palette.paletteFor(_:)`.
 
 - [ ] **Step 1: Edit Package.swift**

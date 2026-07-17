@@ -66,8 +66,13 @@ as its own furrow task.
   hidden** (an empty child panel must never appear). Order of
   application at panel build: hidden filter first, then
   `applyOrder`. If the ROOT level ends up empty, the panel is not
-  shown at all (log line; `counterLauncherShown` does not increment —
-  same semantics as "no items qualify").
+  shown at all (log line) — but `counterLauncherShown` has ALREADY
+  incremented by then: the Controller bumps it before calling
+  `present`, since it can only see the pre-hidden-filter item count,
+  not the built tree. This rare "every visible item was
+  session-deleted" case skews the counter by one — an accepted
+  trade-off (Core can't see the tree PanelTree builds), documented at
+  `LauncherPanel.present`'s guard.
 
 ## UI surface (WandAdapterMacOS + sill ThemedMenu)
 
@@ -128,9 +133,15 @@ separately in furrow).
    right-click, and verify focus non-theft on hardware before building
    the rest. Fallback if the spike fails: wand-local mini panel
    (decision record above gets amended).
-2. **Unit** (`WandCoreTests/LauncherHiddenTests`): hide leaf / hide
-   folder subtree / prune emptied folder / unknown id is a no-op /
-   levels are independent.
+2. **Unit** (`WandCoreTests/LauncherHiddenTests`, 6 tests): covers the
+   PURE per-level filter `LauncherHidden.apply` only — no-op when
+   nothing is hidden, hides matching ids, unknown id is a no-op,
+   nil-id elements always survive, all-hidden yields empty, duplicate
+   ids hide together. The RECURSIVE tree walk (`PanelTree.applyHidden`
+   — subtree hiding, folder pruning, per-level independence) is NOT
+   unit-tested: it lives in `LauncherPanel.swift`, a `WandAdapterMacOS`
+   (AppKit) type with no test target. Moving `PanelNode` / `PanelTree`
+   into `WandCore` would make it testable — tracked as furrow t-hf3r.
 3. **Build bar**: `swift build` clean (tests run in CI — XCTest needs
    Xcode).
 4. **GUI verification** (peekaboo, macos-gui-verify skill; macOS
