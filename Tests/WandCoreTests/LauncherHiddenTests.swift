@@ -36,4 +36,15 @@ final class LauncherHiddenTests: XCTestCase {
     func testAllHiddenYieldsEmpty() {
         XCTAssertEqual(apply(["a"], ["a"]), [])
     }
+
+    func testDuplicateIdsHideTogether() {
+        // Two rows share an id (the same item name twice at one
+        // level) — deleting one hides both. That's the name-keyed
+        // identity caveat `PanelNode.orderID` documents, pinned here
+        // so it can't change silently: the sibling DnD sort is
+        // indistinguishable on the same input (see
+        // LauncherOrderTests.testDuplicateIdsStayStable).
+        XCTAssertEqual(apply(["a", "dup", "dup", "b"], ["dup"]),
+                       ["a", "b"])
+    }
 }
