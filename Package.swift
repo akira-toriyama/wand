@@ -123,6 +123,8 @@ let package = Package(
                 "WandCore",
                 .product(name: "Palette", package: "sill"),
                 .product(name: "Effects", package: "sill"),
+                .product(name: "PaletteKit", package: "sill"),
+                .product(name: "ThemeKitUI", package: "sill"),
             ]),
         .target(name: "WandAdapterTest", dependencies: ["WandCore"]),
         .executableTarget(
