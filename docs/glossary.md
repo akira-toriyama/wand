@@ -216,18 +216,19 @@ separate issue (the surgical writer).
 - **Don't call it:** drag sort, reorder mode
 
 ### row context menu
-[[tome entry]] の行を右クリックすると開く、sill `ThemedMenu` 製の
-コンテキストメニュー。今は **Delete** の 1 エントリのみで、選んだ行を
-セッション中だけ非表示にする(パネル階層ごとに `Controller.tomeHidden`
-へ記録)。config reload / daemon 再起動で破棄される。[[DnD sort]] と
-同じ session-only の建て付け — folder の子を全部消すと folder ごと
-非表示になる。Native middle-click tome 限定;`tome --open` にも
-[[dynamic submenu]] の子行にも無い。
-- コード: `WandCore/LauncherHidden`(filter の pure core)、
+The context menu, built on sill's `ThemedMenu`, that opens when a
+[[tome entry]] row is right-clicked. It has one entry today, **Delete**,
+which hides the chosen row for the rest of the session (recorded per
+panel level in `Controller.tomeHidden`). Discarded on config reload and
+on daemon restart — the same session-only footing as [[DnD sort]].
+Deleting every child of a folder hides the folder too (on the next panel
+open; the live panel keeps the chevron row in place, unresponsive to
+hover). Native middle-click tome only: absent from `tome --open` and
+from the child rows of a [[dynamic submenu]].
+- Code: `WandCore/LauncherHidden` (the pure filter core),
   `PanelTree.applyHidden` / `LauncherPanel.showDeleteMenu` /
-  `handleDelete`(adapter 側)、`Controller.tomeHidden`(session state)
-- **Don't call it:** 右クリックメニュー(コード/ドキュメント内では),
-  NSMenu
+  `handleDelete` (adapter side), `Controller.tomeHidden` (session state)
+- **Don't call it:** right-click menu (in code / docs), NSMenu
 
 ### excludes
 The global blocklist that **fully disables cast and tome inside specific
