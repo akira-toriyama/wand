@@ -1373,6 +1373,57 @@ private final class PanelController {
         onReorder?(panelPath, order)
     }
 
+    /// The context menu's palette: start from sill's catalog lookup
+    /// (`paletteFor(themeName)` resolved via `PaletteKit`), then let
+    /// wand's own resolved `colors` — the SAME `TomeColors` the panel's
+    /// rows are painted with — override the roles it has an opinion on.
+    /// `paletteFor` only knows sill's catalog; `neon` and `splatoon` are
+    /// wand-local engine themes (see `Theme.swift`'s file header) that
+    /// are NOT in it, so `paletteFor` alone silently falls through to
+    /// its `terminal` default. That's the bug this fixes: a `neon`
+    /// panel's context menu rendered phosphor-green on black instead of
+    /// matching the panel's violet-black/cyan chrome. For a catalog
+    /// theme (terminal, mono, vapor, chomp, system, …) `colors` derives
+    /// from that identical sill spec, so the override is a same-value
+    /// no-op there — safe to apply unconditionally.
+    private func contextMenuPalette() -> PaletteKit.ResolvedPalette {
+        let base = PaletteKit.resolve(paletteFor(themeName))
+        let background = colors.background ?? base.background
+        let foreground = colors.text ?? base.foreground
+        // `splatoon` rolls a random ink per ROW (`accentRandomSplatoon`,
+        // `colors.accent == nil` by design) — there's no single "the"
+        // accent to theme one static menu with, so don't invent a
+        // random ink here: leave `primary` and everything derived from
+        // it (below) on sill's resolved value.
+        guard let accent = colors.accent else {
+            return PaletteKit.ResolvedPalette(
+                background: background, foreground: foreground,
+                muted: base.muted, tertiary: base.tertiary,
+                primary: base.primary, secondary: base.secondary,
+                border: base.border, hover: base.hover,
+                selection: base.selection, error: base.error,
+                font: base.font, backgroundAlpha: base.backgroundAlpha,
+                vibrancyMaterial: base.vibrancyMaterial,
+                forceDarkAqua: base.forceDarkAqua)
+        }
+        // Mirror sill's own non-system derive recipe (PaletteKit.swift
+        // `resolve`'s `.fixed` branch) instead of inventing new alpha
+        // constants: hover = the best-contrast ink against the
+        // background @ 0.05, selection = primary @ 0.18.
+        let neutral = base.bestContrast(on: background ?? .black)
+        return PaletteKit.ResolvedPalette(
+            background: background, foreground: foreground,
+            muted: base.muted, tertiary: base.tertiary,
+            primary: accent, secondary: base.secondary,
+            border: base.border,
+            hover: neutral.withAlphaComponent(0.05),
+            selection: accent.withAlphaComponent(0.18),
+            error: base.error, font: base.font,
+            backgroundAlpha: base.backgroundAlpha,
+            vibrancyMaterial: base.vibrancyMaterial,
+            forceDarkAqua: base.forceDarkAqua)
+    }
+
     /// Right-click on an eligible row → ThemedMenu with one Delete
     /// item. sill's PopupPanel refuses key/main (same discipline as
     /// NonActivatingPanel), so presenting it can never steal focus
@@ -1383,7 +1434,7 @@ private final class PanelController {
         if let existing = contextMenu {
             menu = existing
         } else {
-            menu = ThemedMenu(palette: PaletteKit.resolve(paletteFor(themeName)))
+            menu = ThemedMenu(palette: contextMenuPalette())
             contextMenu = menu
         }
         menu.items = [ThemedMenu.MenuItem(
