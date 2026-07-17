@@ -15,6 +15,9 @@
 //   - Dynamic items (`dynamic = "..."`) are rendered as a disabled
 //     placeholder; expanding them as a child panel is future work.
 //   - State markers (✓ / –) prefix the row title.
+//   - Right-click on a row opens a themed context menu (sill
+//     ThemedMenu) with Delete — session-only, discarded on config
+//     reload / restart. Native middle-click tome only.
 //
 // Spec contract:
 //   - `present(...)` returns **immediately** (unlike `NSMenu.popUp`,
@@ -1500,6 +1503,13 @@ private final class PanelController {
         } else {
             live = children
         }
+        // Every child session-deleted → the folder row itself is left
+        // stranded at this level (chevron intact, no-ops on hover)
+        // rather than being pruned too. Same trade-off as the
+        // separator/header note above: the live panel mutates rows
+        // only, so self-heals on the next panel-open; pruning the
+        // sibling folder row here would mean cascading the delete up
+        // through however many parent levels sit above it.
         guard !live.isEmpty else {
             Log.line("launcher-panel: openChild \"\(label)\" — every row "
                      + "session-deleted; child suppressed")

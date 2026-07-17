@@ -114,6 +114,10 @@ restart discards it and the `config.toml` document order applies
 again. To make an order permanent, reorder the
 `[[tome.cursor.item]]` tables in `config.toml`.
 
+Right-click a row to open its context menu — **Delete** hides the
+row for the rest of the session (a config reload or daemon restart
+restores it; deleting every child of a folder hides the folder too).
+
 Each row also accepts `subtitle`, a `header` separator, and
 `tint` / `tint-colors` / `icon-anim` for SF-Symbol icons — see
 [`config.toml`](config.toml) for the full per-row vocabulary. Panel-
