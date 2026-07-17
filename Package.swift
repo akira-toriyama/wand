@@ -62,9 +62,9 @@ let package = Package(
         //
         // Floor 0.9.0 = the `ConfigSchema` module — one declarative `Spec`
         // describes wand's whole config.toml surface and emits the JSON
-        // Schema taplo uses for completion/validation (`wand --emit-schema`).
-        // 0.9.0 is an additive superset of 0.7.x; the existing
-        // Palette / Toml / Effects usage is unaffected.
+        // Schema taplo uses for completion/validation
+        // (`wand config --emit-schema`). 0.9.0 is an additive superset of
+        // 0.7.x; the existing Palette / Toml / Effects usage is unaffected.
         // Floor 0.11.0 = the release that removed sill's in-tree `Toml`
         // (moved to swift-toml-edit, below). It also carries the `CLIKit`
         // module — the family's shared yabai-style argv tokenizer (Phase 3):
@@ -91,8 +91,9 @@ let package = Package(
                 .product(name: "Toml", package: "swift-toml-edit"),
                 // ConfigSchema: one declarative `Spec` describes wand's whole
                 // config.toml surface and emits the JSON Schema for taplo
-                // completion (`wand --emit-schema`) — generated from the same
-                // parser source, so editor schema and parser never drift.
+                // completion (`wand config --emit-schema`) — generated from
+                // the same parser source, so editor schema and parser never
+                // drift.
                 .product(name: "ConfigSchema", package: "sill"),
             ]),
         .target(
