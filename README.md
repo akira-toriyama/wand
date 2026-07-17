@@ -116,7 +116,8 @@ again. To make an order permanent, reorder the
 
 Right-click a row to open its context menu — **Delete** hides the
 row for the rest of the session (a config reload or daemon restart
-restores it; deleting every child of a folder hides the folder too).
+restores it; deleting every child of a folder hides the folder too,
+but only on the next panel-open — the live panel leaves it in place).
 
 Each row also accepts `subtitle`, a `header` separator, and
 `tint` / `tint-colors` / `icon-anim` for SF-Symbol icons — see

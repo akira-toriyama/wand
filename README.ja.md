@@ -109,7 +109,8 @@ bundle id で実行中アプリのアイコン)、`"~/icons/foo.png"` または
 
 行を右クリックするとコンテキストメニューが開き、**Delete** でその行を
 セッション中だけ非表示にできます(config reload / daemon 再起動で復活。
-folder の子を全部消すと folder ごと消えます)。
+folder の子を全部消すと folder ごと消えますが、それは次にパネルを
+開いたときで、live のパネルはその場に残ります)。
 
 各行には `subtitle`(副題)、`header`(セパレータ見出し)、
 SF Symbol アイコン向けの `tint` / `tint-colors` / `icon-anim`
