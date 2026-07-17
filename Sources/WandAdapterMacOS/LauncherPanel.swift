@@ -222,6 +222,7 @@ public enum LauncherPanel {
             onReorder: onReorder,
             themeName: themeName,
             onDelete: onDelete,
+            hidden: hiddenOverride,
             openAnim: openAnim,
             closeAnim: closeAnim,
             border: border,
@@ -1027,6 +1028,16 @@ private final class PanelController {
     /// The folder row that spawned `child` (so we can detect "still
     /// hovering the same folder" vs "moved to a different row").
     private weak var childAnchor: ItemRow?
+    /// Live session hidden-state for THIS panel tree (t-k4hf). Seeded
+    /// from the Controller's durable `tomeHidden` at panel-open and
+    /// updated in place by `handleDelete`, so a re-hover rebuilds a
+    /// child from the CURRENT truth rather than the frozen `children`
+    /// captured in `ItemRow.kind` at build time. Only the ROOT's copy
+    /// is authoritative — children reach it via `root`.
+    private var hidden: [String: Set<String>]
+    /// The tree's root controller — the one whose `hidden` is
+    /// authoritative. A child walks up; the root returns itself.
+    private var root: PanelController { parent?.root ?? self }
 
     private var globalMouseMonitor: Any?
     private var globalKeyMonitor: Any?
@@ -1045,6 +1056,7 @@ private final class PanelController {
          onReorder: ((String, [String]) -> Void)? = nil,
          themeName: String = "system",
          onDelete: ((String, String) -> Void)? = nil,
+         hidden: [String: Set<String>] = [:],
          openAnim: LauncherOpenAnim = .off,
          closeAnim: LauncherCloseAnim = .off,
          border: LauncherBorder = .off,
@@ -1063,6 +1075,7 @@ private final class PanelController {
         self.onReorder = onReorder
         self.themeName = themeName
         self.onDelete = onDelete
+        self.hidden = hidden
         self.openAnim = openAnim
         self.closeAnim = closeAnim
         self.border = border
@@ -1388,9 +1401,23 @@ private final class PanelController {
     /// the panel keeping its TOP edge fixed, and report upward so the
     /// next panel-open filters it out. Separators / section headers
     /// don't travel with the row (same as DnD sort) — the next open
-    /// rebuilds them against the filtered tree.
+    /// rebuilds them against the filtered tree. If the delete empties
+    /// this level entirely, the level tears itself down too (t-k4hf) —
+    /// the panel-open path already forbids an empty root / an empty
+    /// child panel, so the live tree can't be left showing one.
     private func handleDelete(row: ItemRow, nodeID: String) {
         if childAnchor === row { closeChild() }
+        // Record into the root's live state BEFORE anything else can
+        // rebuild from it — a re-hover on a sibling folder reads
+        // `root.hidden` via `openChild`, and it must see this delete
+        // even though the next real panel-open hasn't happened yet.
+        root.hidden[panelPath, default: []].insert(nodeID)
+        // Non-zero sentinel: if `row` turns out not to be inside an
+        // NSStackView (shouldn't happen — every row lives in the
+        // panel's arranged-subviews stack), skip the empty-level
+        // teardown below rather than misreading "didn't remove
+        // anything" as "removed the last row".
+        var remaining = 1
         if let stack = row.superview as? NSStackView {
             stack.removeArrangedSubview(row)
             row.removeFromSuperview()
@@ -1403,10 +1430,28 @@ private final class PanelController {
                                       height: newHeight),
                                display: true)
             }
+            // A level emptied by deletes must not linger — the
+            // panel-open path suppresses an empty root and prunes an
+            // emptied folder, so the live tree honours the same
+            // invariant. Rows carrying a node id are the interactive
+            // ones; the app-icon header / section headers /
+            // separators don't count as content.
+            remaining = stack.arrangedSubviews
+                .compactMap { $0 as? ItemRow }
+                .filter { $0.nodeID != nil }
+                .count
         }
         Log.line("launcher-panel: deleted \"\(row.titleForLog)\" at "
                  + "\"\(PanelTree.displayPath(panelPath))\" (session-only)")
         onDelete?(panelPath, nodeID)
+        guard remaining == 0 else { return }
+        // `row` / `panel` must not be touched past this point —
+        // `dismiss()` / `closeChild()` tear down views.
+        if isRoot {
+            dismiss()
+        } else {
+            parent?.closeChild()
+        }
     }
 
     private func handleRowHover(_ row: ItemRow) {
@@ -1443,6 +1488,23 @@ private final class PanelController {
             Log.line("launcher-panel: openChild: row has no window — skip")
             return
         }
+        // Re-apply the session's deletes (t-k4hf) — `children` was frozen
+        // into `ItemRow.kind` at panel-build time, so a row deleted since
+        // then would otherwise reappear on the next hover. Dynamic
+        // expansions (childPath == nil) are synthesized per hover and are
+        // not deletable, so they skip the filter.
+        let live: [PanelNode]
+        if let childPath {
+            live = PanelTree.applyHidden(children, path: childPath,
+                                          hidden: root.hidden)
+        } else {
+            live = children
+        }
+        guard !live.isEmpty else {
+            Log.line("launcher-panel: openChild \"\(label)\" — every row "
+                     + "session-deleted; child suppressed")
+            return
+        }
         let rowInWin = row.convert(row.bounds, to: nil)
         let rowOnScreen = win.convertToScreen(rowInWin)
         // Children are always vertical lists regardless of the
@@ -1453,7 +1515,7 @@ private final class PanelController {
         let outerMargin: CGFloat = linePets.isEmpty
             ? 0 : round(14 * petScale)
         let (content, rows) = PanelLayout.buildContent(
-            nodes: children, header: nil, layout: .list,
+            nodes: live, header: nil, layout: .list,
             fontSize: fontSize,
             colors: colors,
             outerMargin: outerMargin)
@@ -1485,7 +1547,7 @@ private final class PanelController {
         childAnchor = row
         c.show()
         Log.line("launcher-panel: opened submenu \"\(label)\" "
-                 + "(\(children.count) items)")
+                 + "(\(live.count) items)")
     }
 
     private func closeChild() {
