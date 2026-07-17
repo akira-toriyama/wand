@@ -10,7 +10,10 @@ public enum LauncherHidden {
     /// Filter one panel level's `elements` per the level's `hidden`
     /// id set. Elements whose `id` is `nil` (headers / placeholders)
     /// always survive; hidden ids not present in `elements` are
-    /// ignored.
+    /// ignored. Duplicate ids hide TOGETHER — ids are name-keyed
+    /// (`PanelNode.orderID`), so two same-named entries at one level
+    /// are indistinguishable here, exactly as they are to the DnD
+    /// sort. Real per-item identity arrives with config persistence.
     public static func apply<T>(_ elements: [T],
                                  id: (T) -> String?,
                                  hidden: Set<String>) -> [T] {
