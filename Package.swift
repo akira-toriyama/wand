@@ -33,7 +33,7 @@ import PackageDescription
 
 let package = Package(
     name: "wand",
-    platforms: [.macOS(.v13)],
+    platforms: [.macOS("26.0")],
     products: [
         .executable(name: "wand", targets: ["WandApp"]),
         .library(name: "WandCore", targets: ["WandCore"]),
@@ -43,10 +43,13 @@ let package = Package(
         // the pure `Palette` module (ThemeSpec → wand's String-token
         // CastThemePalette / TomeThemePalette bridge + EffectIntensity);
         // WandAdapterMacOS additionally takes `Effects` for the shared
-        // neon flash data + `drawLinePets`. Like perch, wand does NOT link
-        // PaletteKit (it has its own NSColorParse and never uses `pal` /
-        // `resolve`). sill 0.6.0 moves the pure `LinePet` vocabulary into
-        // `Palette` (so a no-AppKit Core can validate it) and adds
+        // decorations, and (since t-k4hf) `PaletteKit` + `ThemeKit` +
+        // `ThemeKitUI` for the row context menu (`ThemedMenu` — the
+        // family's themed pop-up action menu; wand is its first
+        // adopter). sill 3.x raised the macOS floor to 26, which wand
+        // adopts too (latest-macOS-only policy). sill 0.6.0 moves the
+        // pure `LinePet` vocabulary into `Palette` (so a no-AppKit Core
+        // can validate it) and adds
         // `drawLinePets(…chaseGap:)` — both consumed by wand's line-pets
         // dedup. WandCore also takes the `Toml` module — the family's ONE
         // TOML implementation (wand's in-tree TOML.swift folded into sill in
@@ -70,7 +73,7 @@ let package = Package(
         // `--verb=value` form. Palette / ConfigSchema / Effects usage is
         // unaffected.
         .package(url: "https://github.com/akira-toriyama/sill.git",
-                 .upToNextMinor(from: "1.29.0")),
+                 .upToNextMinor(from: "3.6.0")),
         // swift-toml-edit — the family's ONE TOML implementation (Sill-1).
         // Provides the `Toml` module WandCore reads config with
         // (`Toml.parseFlat`, whose `Document{tables,arrays}` matches wand's
@@ -98,6 +101,9 @@ let package = Package(
                 "WandCore",
                 .product(name: "Palette", package: "sill"),
                 .product(name: "Effects", package: "sill"),
+                .product(name: "PaletteKit", package: "sill"),
+                .product(name: "ThemeKit", package: "sill"),
+                .product(name: "ThemeKitUI", package: "sill"),
             ]),
         .target(name: "WandAdapterTest", dependencies: ["WandCore"]),
         .executableTarget(
