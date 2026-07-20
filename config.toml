@@ -178,7 +178,6 @@ intensity = "normal"
 #   "catppuccin-mocha" — soft pastel dark mauve
 #   "gruvbox"          — retro warm dark, orange accent
 #   "github-light"     — clean daytime white, link-blue (LIGHT)
-#   "catppuccin-latte" — warm-grey lavender (LIGHT)
 #
 # wand-only dynamic engine themes (no sill palette):
 #   "neon"     — per-frame cycling electric neon trail on violet cards
@@ -593,10 +592,10 @@ layout = "list"
 #                with `[tome.decoration.border].effect = "rainbow"` for the
 #                animated spectrum outline
 #   "cobalt2" / "shades-of-purple" / "tokyo-hack" / "github-dark" /
-#   "dracula" / "catppuccin-mocha" / "gruvbox" / "github-light" /
-#   "catppuccin-latte" — the shared sill catalog (hover <- primary,
+#   "dracula" / "catppuccin-mocha" / "gruvbox" /
+#   "github-light" — the shared sill catalog (hover <- primary,
 #                rows <- foreground, panel <- background). github-light
-#                and catppuccin-latte are LIGHT themes.
+#                is the catalog's LIGHT theme.
 #
 # wand-only dynamic engine themes (no sill palette):
 #   "neon"     — electric cyan hover on white rows, blue-black backdrop
