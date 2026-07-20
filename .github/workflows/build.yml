@@ -29,7 +29,7 @@ jobs:
           persist-credentials: false
 
       # Shared Swift build (setup-xcode + SPM cache + build + test).
-      - uses: akira-toriyama/.github/actions/swift-build@main
+      - uses: akira-toriyama/.github/actions/swift-build@v2
 
       # Smoke-check the CLI parser path (no event tap touched).
       - name: Smoke (--help, config --validate)
