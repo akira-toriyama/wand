@@ -423,10 +423,10 @@ deprecation シムは **無い** — 旧フラット flag は exit 2。対応表
 
 ## Contributing
 
-コミットメッセージは **gitmoji + Conventional Commits**。CI が PR
+コミットメッセージは **gitmoji 駆動**。CI が PR
 ごとに [CONTRIBUTING.md](https://github.com/akira-toriyama/.github/blob/main/CONTRIBUTING.md) のフォーマット
-に対して lint する。ローカル hook は
-`git config core.hooksPath scripts/hooks` で有効化。
+に対して lint する。ローカル hook は clone ごとに
+`glyph hook install` で導入。
 
 ## ソースからビルド
 

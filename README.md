@@ -441,9 +441,9 @@ in `/tmp/wand.log` at reload time.
 
 ## Contributing
 
-Commit messages use **gitmoji + Conventional Commits**; CI lints
+Commit messages are **gitmoji-driven**; CI lints
 each PR against [CONTRIBUTING.md](https://github.com/akira-toriyama/.github/blob/main/CONTRIBUTING.md).
-Enable the local hook with `git config core.hooksPath scripts/hooks`.
+Install the local hook once per clone with `glyph hook install`.
 
 ## Build from source
 
