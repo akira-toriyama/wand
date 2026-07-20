@@ -28,7 +28,7 @@ permissions:
 
 jobs:
   release:
-    uses: akira-toriyama/glyph/.github/workflows/release.yml@v0.8.0
+    uses: akira-toriyama/glyph/.github/workflows/release.yml@v0.8.1
     with:
       app: Wand
       smoke-cmd: "config --validate"
