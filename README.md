@@ -1,6 +1,6 @@
 # wand
 
-![platform](https://img.shields.io/badge/platform-macOS%2013%2B-lightgrey)
+![platform](https://img.shields.io/badge/platform-macOS%2026%2B-lightgrey)
 ![swift](https://img.shields.io/badge/Swift-6.0-orange)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 
@@ -113,6 +113,11 @@ The new order is **session-only** — a config reload or daemon
 restart discards it and the `config.toml` document order applies
 again. To make an order permanent, reorder the
 `[[tome.cursor.item]]` tables in `config.toml`.
+
+Right-click a row to open its context menu — **Delete** hides the
+row for the rest of the session (a config reload or daemon restart
+restores it; deleting every child of a folder hides the folder too,
+but only on the next panel-open — the live panel leaves it in place).
 
 Each row also accepts `subtitle`, a `header` separator, and
 `tint` / `tint-colors` / `icon-anim` for SF-Symbol icons — see

@@ -4,8 +4,8 @@
 //
 //   • the UNIFORM half of the decode (`WandConfig.parse` →
 //     `configSpec.decode` populates a scratch `Decoded` value)
-//   • the JSON Schema (`wand --emit-schema`) taplo uses for editor
-//     completion + validation
+//   • the JSON Schema (`wand config --emit-schema`) taplo uses for
+//     editor completion + validation
 //
 // so a plain scalar/table key can never be in the parser but missing
 // from the schema (or vice-versa). The `apply` closures reproduce the

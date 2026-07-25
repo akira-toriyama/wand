@@ -205,6 +205,22 @@ config reload（`ConfigWatcher` 含む）で破棄され、config.toml の
   `PanelController.handleReorderDrop`
 - **Don't call it:** drag sort, reorder mode, 並べ替えモード
 
+### row context menu
+[[tome entry]] の行を右クリックすると開く、sill `ThemedMenu` 製の
+コンテキストメニュー。今は **Delete** の 1 エントリのみで、選んだ行を
+セッション中だけ非表示にする(パネル階層ごとに `Controller.tomeHidden`
+へ記録)。config reload / daemon 再起動で破棄される。[[DnD sort]] と
+同じ session-only の建て付け — folder の子を全部消すと folder ごと
+非表示になる(次にパネルを開いたときで、live のパネルは chevron
+付きのまま・ホバーしても無反応でその場に残る)。Native middle-click
+tome 限定;`tome --open` にも
+[[dynamic submenu]] の子行にも無い。
+- コード: `WandCore/LauncherHidden`(filter の pure core)、
+  `PanelTree.applyHidden` / `LauncherPanel.showDeleteMenu` /
+  `handleDelete`(adapter 側)、`Controller.tomeHidden`(session state)
+- **Don't call it:** 右クリックメニュー(コード/ドキュメント内では),
+  NSMenu
+
 ### excludes
 cast と tome を **特定のアプリ内で完全に無効化** する
 グローバルブロックリスト。bundle id の glob 配列で、トリガー判定の

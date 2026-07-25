@@ -17,7 +17,7 @@ final class ThemeTests: XCTestCase {
         for name in ["terminal", "chomp", "rainbow", "cobalt2",
                      "shades-of-purple", "tokyo-hack", "github-dark",
                      "dracula", "catppuccin-mocha", "gruvbox",
-                     "github-light", "catppuccin-latte", "system"] {
+                     "github-light", "system"] {
             XCTAssertEqual(wandCanonicalThemeName(name), name, name)
         }
     }

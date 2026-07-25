@@ -1,6 +1,6 @@
 # wand
 
-![platform](https://img.shields.io/badge/platform-macOS%2013%2B-lightgrey)
+![platform](https://img.shields.io/badge/platform-macOS%2026%2B-lightgrey)
 ![swift](https://img.shields.io/badge/Swift-6.0-orange)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 
@@ -106,6 +106,11 @@ bundle id で実行中アプリのアイコン)、`"~/icons/foo.png"` または
 **session-only** — config reload やデーモン再起動で破棄され、
 `config.toml` の記述順に戻る。恒久的に変えたい場合は
 `config.toml` の `[[tome.cursor.item]]` の並びを入れ替えること。
+
+行を右クリックするとコンテキストメニューが開き、**Delete** でその行を
+セッション中だけ非表示にできます(config reload / daemon 再起動で復活。
+folder の子を全部消すと folder ごと消えますが、それは次にパネルを
+開いたときで、live のパネルはその場に残ります)。
 
 各行には `subtitle`(副題)、`header`(セパレータ見出し)、
 SF Symbol アイコン向けの `tint` / `tint-colors` / `icon-anim`
