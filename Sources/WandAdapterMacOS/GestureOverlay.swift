@@ -374,7 +374,7 @@ private final class TrailView: NSView {
     /// segments (the *confirmed* part — only finalised once the user
     /// turns), and `corners.last → freehandPoints → cursor` draws as
     /// the raw freehand tail of the current (un-confirmed) segment.
-    /// Every `曲がる` (direction change) snaps the freehand tail into
+    /// Every bend (direction change) snaps the freehand tail into
     /// a new straight segment and restarts a fresh freehand.
     fileprivate var origin: CGPoint?
     fileprivate var cursor: CGPoint?
@@ -1484,7 +1484,7 @@ private final class TrailView: NSView {
     }
 
     /// Fixed grid cell size for the `pixel` style (pt). Small enough
-    /// to read as ドット絵 rather than a chunky bar. `strokeWidth`
+    /// to read as pixel art rather than a chunky bar. `strokeWidth`
     /// no longer drives this — it drives the thickness (cells across
     /// the path) instead.
     private static let pixelCellSize: CGFloat = 5

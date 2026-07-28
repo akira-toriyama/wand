@@ -679,9 +679,10 @@ stray instances before relaunching.
   retired; legacy `<type>(scope):` tokens are accepted and ignored by the lint,
   so old history still passes). `glyph rules` is the machine source of truth.
   Install the local hook once per clone: `glyph hook install`.
-- **README is bilingual** ([README.md](README.md) English +
-  [README.ja.md](README.ja.md) Japanese). Keep them in sync
-  when user-visible behaviour changes — same rule as facet.
+- **Docs are English-only and code-first** — follow the fleet
+  [doc-consistency policy](https://github.com/akira-toriyama/.github/blob/main/docs/doc-consistency-policy.md)
+  (no stored translations — a JA reader translates the EN docs on
+  demand; truth lives in the code/CLI, docs point to it).
 - After source edits, **`swift build` must pass** before
   finishing a turn.
 
@@ -750,7 +751,7 @@ decisions. Subsections ordered broad → narrow.
 
 ### GitHub
 
-- [GitHub Docs (日本語)](https://docs.github.com/ja)
+- [GitHub Docs](https://docs.github.com/en)
   *(reviewed 2026-05-23)* — primary reference for the bits this
   repo actually touches: `gh` CLI, Actions workflow syntax,
   release drafts, branch protection, fine-grained PAT scoping
@@ -762,21 +763,33 @@ decisions. Subsections ordered broad → narrow.
   *(reviewed 2026-05-23)* — Japanese-language mouse-gesture
   utility; useful as prior art for direction-string rule shape,
   trigger button + modifier conventions, and the user-facing
-  vocabulary native users expect ("ジェスチャー" / "アクション" /
-  方向の表記). Reference for design feel, not for code.
+  vocabulary native Japanese users expect (the katakana loanwords
+  for gesture / action, and the direction notation). Reference for
+  design feel, not for code.
 
 ## Shared libraries (atelier)
 
-このアプリは swift app family の共有ライブラリに乗る（plan [atelier](https://github.com/akira-toriyama/atelier)）。
-共有 lib が持つ責務は**再実装せずライブラリ側を拡張**する（北極星＝「facet の theme を真似て」を二度と言わない）。
-モジュール → target の正確な配線は [Package.swift](Package.swift) を正とする。
+This app sits on the swift app family's shared libraries (plan:
+[atelier](https://github.com/akira-toriyama/atelier)). A responsibility a
+shared lib owns is **extended on the library side, never reimplemented here**
+(the north star: never again say "imitate facet's theme"). The exact
+module → target wiring is canonical in [Package.swift](Package.swift).
 
-- **[sill](https://github.com/akira-toriyama/sill)** — 共有 theming / CLI 基盤。設計 → [`docs/DESIGN.md`](https://github.com/akira-toriyama/sill/blob/main/docs/DESIGN.md)。wand が使う: `Palette` / `Effects`（line-pets・border）/ `CLIKit`（CLI tokenizer）/ `ConfigSchema`（taplo schema）。
-- **[swift-toml-edit](https://github.com/akira-toriyama/swift-toml-edit)** — family 唯一の TOML 実装（`Toml` module・Swift 版 toml_edit）。wand は config.toml パースに使用。
+- **[sill](https://github.com/akira-toriyama/sill)** — shared theming / CLI
+  foundation. Design → [`docs/DESIGN.md`](https://github.com/akira-toriyama/sill/blob/main/docs/DESIGN.md).
+  wand uses: `Palette` / `Effects` (line-pets, border) / `CLIKit` (CLI
+  tokenizer) / `ConfigSchema` (taplo schema).
+- **[swift-toml-edit](https://github.com/akira-toriyama/swift-toml-edit)** —
+  the family's only TOML implementation (`Toml` module, a Swift port of
+  toml_edit). wand uses it to parse config.toml.
 
-**自己完結しない — 共有候補は sill に PR を模索**: app 単独で実装する前に「2 つ以上の app で冗長になりそうか」を問い、そうなら sill への PR を検討する（過剰共通化はしない・zero-debt ≠ 全部共有）。
+**Don't be self-contained — a sharing candidate goes to sill as a PR**: before
+implementing app-side, ask "would this become redundant across 2+ apps?" — if
+so, consider a sill PR (no over-generalization either; zero-debt ≠ share
+everything).
 
 ## Roadmap board (GitHub Projects)
 
-issue 運用（集約 Project「roadmap」#5・Inbox 既定 / Status フロー / `Closes #N`）は
-family 共通ポリシー。正典 → https://github.com/akira-toriyama/atelier/blob/main/docs/roadmap-board.md
+Issue handling (the aggregate Project "roadmap" #5, Inbox as the default
+lane, the Status flow, `Closes #N`) is family-wide policy. Canonical doc →
+https://github.com/akira-toriyama/atelier/blob/main/docs/roadmap-board.md

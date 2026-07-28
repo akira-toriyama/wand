@@ -287,11 +287,12 @@ public final class Controller: @unchecked Sendable {
                      + "request dropped")
             return
         }
-        // CLI --title が来てればそれを使い、無ければ AX で frontmost
-        // app の focused window title を取る。action-cmd 側に
-        // $WAND_TARGET_TITLE として届く。AX-fetch は menu 表示時点の
-        // スナップショット — 重い AX 応答の app では空文字に倒れる
-        // ことがあるので、確実性が要る trigger 側は --title を渡す。
+        // Use the CLI --title when given; otherwise fetch the frontmost
+        // app's focused window title via AX. It reaches the action-cmd
+        // side as $WAND_TARGET_TITLE. The AX fetch is a snapshot at
+        // menu-open time — apps with slow AX responses can collapse it
+        // to an empty string, so a trigger that needs certainty passes
+        // --title itself.
         let resolvedTitle = title
             ?? AXTarget.focusedWindowTitle(pid: app.processIdentifier)
         let target = Target(pid: app.processIdentifier,
