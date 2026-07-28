@@ -7,6 +7,7 @@
 // compile-checked on the dev box.
 
 import XCTest
+import Palette
 @testable import WandCore
 
 final class ThemeTests: XCTestCase {
@@ -14,10 +15,20 @@ final class ThemeTests: XCTestCase {
     // MARK: - Name validation (sill catalog + wand engine themes)
 
     func testCanonicalAcceptsSillCatalog() {
-        for name in ["terminal", "chomp", "rainbow", "cobalt2",
-                     "shades-of-purple", "tokyo-hack", "github-dark",
-                     "dracula", "catppuccin-mocha", "gruvbox",
-                     "github-light", "catppuccin-latte", "system"] {
+        // Derived from sill, NOT copied. A hardcoded list is exactly how
+        // `catppuccin-latte`'s removal reached wand as a surprise: sill cut
+        // the theme under a non-major gitmoji, this test kept asserting a
+        // name that no longer existed, and the break surfaced at the next pin
+        // bump instead of at the removal (t-n158). Reading the live catalog
+        // means a sill addition is covered for free and a sill removal can
+        // only fail where wand actually depends on the name.
+        //
+        // `random` is excluded because wand resolves it to a CONCRETE name by
+        // design (asserted in testRandomResolvesToConcreteName below), so it
+        // is the one catalog entry that must not round-trip.
+        let catalog = canonicalThemeNames.filter { $0 != "random" }
+        XCTAssertFalse(catalog.isEmpty, "sill's canonicalThemeNames is empty")
+        for name in catalog {
             XCTAssertEqual(wandCanonicalThemeName(name), name, name)
         }
     }

@@ -178,7 +178,14 @@ intensity = "normal"
 #   "catppuccin-mocha" — soft pastel dark mauve
 #   "gruvbox"          — retro warm dark, orange accent
 #   "github-light"     — clean daytime white, link-blue (LIGHT)
-#   "catppuccin-latte" — warm-grey lavender (LIGHT)
+#
+# The named themes above are a CURATED SELECTION, not the whole catalog:
+# sill ships ~30 and adds to them, so an exhaustive list here would go
+# stale silently (it did — "catppuccin-latte" was listed here for weeks
+# after sill retired it). The authoritative list is the enum in
+# config.schema.json, regenerated with `wand config --emit-schema`; your
+# editor completes from it, and `wand config --validate` rejects a name
+# that is not in it.
 #
 # wand-only dynamic engine themes (no sill palette):
 #   "neon"     — per-frame cycling electric neon trail on violet cards
@@ -593,10 +600,14 @@ layout = "list"
 #                with `[tome.decoration.border].effect = "rainbow"` for the
 #                animated spectrum outline
 #   "cobalt2" / "shades-of-purple" / "tokyo-hack" / "github-dark" /
-#   "dracula" / "catppuccin-mocha" / "gruvbox" / "github-light" /
-#   "catppuccin-latte" — the shared sill catalog (hover <- primary,
-#                rows <- foreground, panel <- background). github-light
-#                and catppuccin-latte are LIGHT themes.
+#   "dracula" / "catppuccin-mocha" / "gruvbox" / "github-light"
+#              — a CURATED SELECTION of the shared sill catalog (hover
+#                <- primary, rows <- foreground, panel <- background).
+#                "github-light" is a LIGHT theme. sill ships ~30 and keeps
+#                adding, so the authoritative list is the enum in
+#                config.schema.json (`wand config --emit-schema`), which
+#                your editor completes from and `wand config --validate`
+#                enforces.
 #
 # wand-only dynamic engine themes (no sill palette):
 #   "neon"     — electric cyan hover on white rows, blue-black backdrop
