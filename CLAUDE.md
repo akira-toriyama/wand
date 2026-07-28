@@ -71,7 +71,7 @@ the concept, not the project name. Don't rename those.
 Architecturally a sibling of
 [facet](https://github.com/akira-toriyama/facet) and
 [focusfx](https://github.com/akira-toriyama/focusfx): Swift 6,
-macOS 13+, three-layer hexagonal split.
+macOS 26+, three-layer hexagonal split.
 
 ## Build / run
 

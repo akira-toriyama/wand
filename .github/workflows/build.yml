@@ -18,7 +18,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: macos-15
+    runs-on: macos-26
     # Bounded so a hung `swift build` can't burn 6 h of free macOS minutes.
     timeout-minutes: 20
     steps:

@@ -33,7 +33,12 @@ import PackageDescription
 
 let package = Package(
     name: "wand",
-    platforms: [.macOS(.v13)],
+    // macOS-26 floor, inherited from sill. sill v2.0.0 raised its own floor to
+    // 26 for the SwiftUI migration, so any consumer that steps past sill 1.x
+    // adopts it too — this is that step (family policy t-tbar D2 / t-fs7p).
+    // Spelled as a string because `.v26` does not exist in this toolchain's
+    // PackageDescription.
+    platforms: [.macOS("26.0")],
     products: [
         .executable(name: "wand", targets: ["WandApp"]),
         .library(name: "WandCore", targets: ["WandCore"]),
@@ -69,8 +74,15 @@ let package = Package(
         // consumes values (incl. negative `--at` coords) without the
         // `--verb=value` form. Palette / ConfigSchema / Effects usage is
         // unaffected.
+        // Floor 5.0.0. The 1.29.0→5.x jump crosses four sill majors, but wand
+        // links `Palette` / `Effects` / `CLIKit` / `ConfigSchema` — never
+        // ThemeKitUI — and every one of those majors reshaped the SwiftUI
+        // widget layer. Measured: `swift build` is clean with zero source
+        // changes. What the jump DOES bring is catalog churn: sill retired
+        // `catppuccin-latte` and added biolume / midas / spectre, so the
+        // theme-name test and the emitted schema move with this bump.
         .package(url: "https://github.com/akira-toriyama/sill.git",
-                 .upToNextMinor(from: "1.29.0")),
+                 .upToNextMinor(from: "5.0.0")),
         // swift-toml-edit — the family's ONE TOML implementation (Sill-1).
         // Provides the `Toml` module WandCore reads config with
         // (`Toml.parseFlat`, whose `Document{tables,arrays}` matches wand's
@@ -114,7 +126,13 @@ let package = Package(
                 // surfaces ValidationError from WandConfig.validate (t-0029).
                 .product(name: "ConfigSchema", package: "sill"),
             ]),
-        .testTarget(name: "WandCoreTests", dependencies: ["WandCore"]),
+        .testTarget(
+            name: "WandCoreTests",
+            // Palette: ThemeTests validates wand's name bridge against sill's
+            // LIVE `canonicalThemeNames` rather than a copied list — see the
+            // comment there. WandCore imports Palette but does not re-export
+            // it, so the test target needs its own link.
+            dependencies: ["WandCore", .product(name: "Palette", package: "sill")]),
         // Drives the synthetic MouseSource end-to-end through Core's
         // recognition + matching — the real consumer of
         // WandAdapterTest that the docs describe.
