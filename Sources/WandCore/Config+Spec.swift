@@ -729,6 +729,17 @@ private extension ConfigSchema.Field where Root == WandConfig.Decoded {
                   if let name = wandCanonicalThemeName(raw) {
                       c[keyPath: kp] = name; return
                   }
+                  // A retired catalog member gets its death certificate
+                  // (sill tombstone) — the truthful story, not the
+                  // Levenshtein guess `suggest` would fabricate from a
+                  // name that was once perfectly correct.
+                  if let tomb = retiredTheme(raw) {
+                      let alt = tomb.tryInstead.map { " — try \"\($0)\"" } ?? ""
+                      Log.line("config: \(key) = \"\(raw)\" was retired from the "
+                               + "sill catalog in \(tomb.retiredIn) (\(tomb.reason))"
+                               + alt + "; falling back to \"\(wandDefaultThemeName)\"")
+                      return
+                  }
                   let hint = wandThemeNameSuggestion(raw)
                       .map { " (did you mean \"\($0)\"?)" } ?? ""
                   Log.line("config: \(key) = \"\(raw)\" not recognised — "

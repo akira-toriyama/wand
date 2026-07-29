@@ -18,7 +18,7 @@
 //     adapter's `TrailColorMode`. Their surrounding chrome stays the
 //     hand-tuned wand palette.
 //   * `chomp` — IS a sill catalog theme; its arcade constants derive
-//     from `paletteFor("chomp")` (see `Chomp`), but the wall-blue
+//     from the typed `Theme.chomp.spec` (see `Chomp`), but the wall-blue
 //     outline/border arrangement + the rainbow firing border are wand
 //     motion, so the special `Chomp.castPalette` / `.tomePalette` shape
 //     is kept (over sill values).
@@ -43,10 +43,8 @@ public let wandLocalThemeNames = ["neon", "splatoon"]
 /// sill's shared `canonical(_:)` mechanism wrapped with wand's local
 /// engine themes (neon / splatoon, which sill doesn't know), returning
 /// the canonical name or `nil` for an unknown name so the caller can
-/// clamp + log (wand's loud-typo discipline — sill's `paletteFor` is
-/// silent and would mask a typo as `terminal`). `random` resolves HERE
-/// to a concrete name (excluding `system`) so the chosen theme is
-/// stable for the session.
+/// clamp + log. `random` resolves HERE to a concrete name (excluding
+/// `system`) so the chosen theme is stable for the session.
 public func wandCanonicalThemeName(_ raw: String) -> String? {
     let t = raw.trimmingCharacters(in: .whitespaces).lowercased()
     if t.isEmpty { return nil }
@@ -85,6 +83,18 @@ private func levenshteinClose(_ a: String, _ b: String) -> Bool {
     return max(a.count, b.count) - common <= 2
 }
 
+/// Loud unwrap of sill's failable `paletteFor` for the projection
+/// functions below: every name reaching their `default` branch already
+/// passed `wandCanonicalThemeName` at config decode (unknown names were
+/// clamped to `wandDefaultThemeName` there, with the log line), so a miss
+/// here is a wand bug — crash rather than paint a wrong theme.
+private func wandSpec(_ name: String) -> ThemeSpec {
+    guard let spec = paletteFor(name) else {
+        preconditionFailure("wand: unknown theme name '\(name)' reached palette projection")
+    }
+    return spec
+}
+
 // MARK: - Cast HUD palette
 
 /// Project a (canonical) theme name onto the cast HUD's String-token
@@ -98,7 +108,7 @@ public func wandCastPalette(_ name: String) -> CastThemePalette {
     case "chomp":    return Chomp.castPalette       // sill-derived constants
     case "system":   return .wandSystem
     default:
-        let spec = paletteFor(name)                 // sill canonical palette
+        let spec = wandSpec(name)                   // sill canonical palette
         let bg = themeHex(spec.background ?? HexColor(0x000000))
         return CastThemePalette(
             trailColor:           themeHex(spec.primary),
@@ -161,7 +171,7 @@ public func wandTomePalette(_ name: String) -> TomeThemePalette {
     case "chomp":    return Chomp.tomePalette       // sill-derived constants
     case "system":   return TomeThemePalette()      // all empty → native vibrancy
     default:
-        let spec = paletteFor(name)
+        let spec = wandSpec(name)
         return TomeThemePalette(
             accentColor:     themeHex(spec.primary),
             accentTextColor: themeHex(spec.primary.bestForeground),

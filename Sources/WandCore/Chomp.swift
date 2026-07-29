@@ -63,7 +63,10 @@ public enum Chomp {
     /// byte-match to wand's historical literals (pellet/ghost/wall/
     /// backdrop = primary/error/secondary/background), so deriving them
     /// from sill is a no-op visually while killing the duplication.
-    private static let spec = paletteFor("chomp")
+    /// The typed `Theme.chomp` member (not `paletteFor("chomp")`): this is
+    /// a compile-time identity, so a catalog cut must surface as a build
+    /// break here — not as a silently substituted palette.
+    private static let spec = Theme.chomp.spec
 
     /// Arcade Chomp yellow — sill `chomp` primary (0xFFEA00).
     public static let pellet: String = themeHex(spec.primary)
