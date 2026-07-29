@@ -51,6 +51,18 @@ final class ThemeTests: XCTestCase {
         }
     }
 
+    func testRetiredNameRejectsWithTombstoneHint() {
+        // Derived from sill's tombstone list, NOT a copied name: whatever
+        // the catalog has retired must reject, and the did-you-mean hint
+        // must be the tombstone's `tryInstead` (sill's `suggest` short-
+        // circuits retired names there), not a Levenshtein guess.
+        XCTAssertFalse(retiredThemeNames.isEmpty, "sill's tombstone list is empty")
+        for tomb in retiredThemeNames {
+            XCTAssertNil(wandCanonicalThemeName(tomb.name), tomb.name)
+            XCTAssertEqual(wandThemeNameSuggestion(tomb.name), tomb.tryInstead, tomb.name)
+        }
+    }
+
     func testRandomResolvesToConcreteName() {
         guard let r = wandCanonicalThemeName("random") else {
             return XCTFail("random should resolve to a concrete name")

@@ -1,13 +1,13 @@
 {
-  "originHash" : "2c531639fd045d237601c015dca1bdfecd785f912ab80c98cb228bbb84da60f3",
+  "originHash" : "9dfd88b65b128d96bfeb9dd18b107db1c98d07a78c1884aa1715ccd74f96415e",
   "pins" : [
     {
       "identity" : "sill",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/akira-toriyama/sill.git",
       "state" : {
-        "revision" : "150e0d3520a9b4a321ff3d23addd960200129cc6",
-        "version" : "5.0.0"
+        "revision" : "d4a0fe687148c0ef49736390461b67d5ff3e3ab0",
+        "version" : "6.0.0"
       }
     },
     {
@@ -22,7 +22,7 @@
     {
       "identity" : "swift-markdown",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/apple/swift-markdown.git",
+      "location" : "https://github.com/swiftlang/swift-markdown.git",
       "state" : {
         "revision" : "3c6f9523da3a1ec2fd829673e472d95b8097a3b8",
         "version" : "0.8.0"

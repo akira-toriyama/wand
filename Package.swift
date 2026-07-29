@@ -81,8 +81,14 @@ let package = Package(
         // changes. What the jump DOES bring is catalog churn: sill retired
         // `catppuccin-latte` and added biolume / midas / spectre, so the
         // theme-name test and the emitted schema move with this bump.
+        // Floor 6.0.0. The breaking piece wand feels is `paletteFor` going
+        // FAILABLE (returns `ThemeSpec?` — the old `?? .terminal` clamp is
+        // gone, t-0j0z): wand's bridge unwraps loudly on its pre-validated
+        // names and `Chomp` moves to the typed `Theme.chomp.spec`. v6 also
+        // brings `RetiredTheme` tombstones, so the config reject hint can
+        // say "retired in v1.36.0" instead of a Levenshtein guess.
         .package(url: "https://github.com/akira-toriyama/sill.git",
-                 .upToNextMinor(from: "5.0.0")),
+                 .upToNextMinor(from: "6.0.0")),
         // swift-toml-edit — the family's ONE TOML implementation (Sill-1).
         // Provides the `Toml` module WandCore reads config with
         // (`Toml.parseFlat`, whose `Document{tables,arrays}` matches wand's
