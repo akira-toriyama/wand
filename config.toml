@@ -957,7 +957,7 @@ action-verb = "minimize"
 # # `{line}` substitution works on dynamic-item templates too.
 # [[tome.cursor.item]]
 # name = "Translate"
-# subtitle = "選択テキストを日本語へ"
+# subtitle = "Translate the selection to Japanese"
 # icon = "SF:globe"
 # action-type = "shell"
 # action-cmd  = 'echo "$WAND_SELECTION" | translate --to ja'

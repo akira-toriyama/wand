@@ -4,8 +4,6 @@
 ![swift](https://img.shields.io/badge/Swift-6.0-orange)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 
-**English** · [日本語](README.ja.md)
-
 A global mouse-gesture daemon for macOS. Hold a mouse button, draw a
 short shape with the cursor — down, then right — and wand fires an
 action: close a tab, reopen one, minimize a window, run a shell

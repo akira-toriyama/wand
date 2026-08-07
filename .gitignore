@@ -22,3 +22,6 @@ Wand.iconset/
 
 # Logs (local dev)
 /tmp/*.log
+
+# Obsidian editor state (docs vault)
+docs/.obsidian/

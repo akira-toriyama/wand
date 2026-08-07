@@ -99,8 +99,8 @@ struct TomeColors {
     /// across every hover. Set when the palette's `accentColor` is
     /// the `"splatoon"` token. Panel-open creates fresh `ItemRow`
     /// instances → fresh per-row inks; the colour only changes
-    /// when the menu is dismissed and re-opened. Matches "各行は
-    /// ランダム、tome を閉じるまでは固定."
+    /// when the menu is dismissed and re-opened. Matches the spec:
+    /// "each row random, fixed until the tome closes."
     let accentRandomSplatoon: Bool
 
     static func resolve(_ palette: TomeThemePalette) -> TomeColors {
@@ -1117,7 +1117,7 @@ private final class PanelController {
     /// (on contentView, on bg.layer, then on a dedicated overlay
     /// view) and every one of them suffered from anti-aliasing
     /// mismatch at bg's rounded mask edge — a faint dark fringe
-    /// outside the rim, the "黒い枠" issue. CALayer's native border
+    /// outside the rim, the "black rim" issue. CALayer's native border
     /// is drawn by the compositor as a single operation with the
     /// layer's `cornerRadius`, so the rounded curve and the rim are
     /// anti-aliased together with no seam between them.
