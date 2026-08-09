@@ -139,8 +139,6 @@ final class MatcherTests: XCTestCase {
                             rules: rules, excludes: ["com.apple.finder"]))
     }
 
-    // MARK: - glob
-
     func testGlobWildcards() {
         XCTAssertTrue(Matcher.glob("*chrome*", "com.google.chrome"))
         XCTAssertTrue(Matcher.glob("com.apple.?afari", "com.apple.safari"))

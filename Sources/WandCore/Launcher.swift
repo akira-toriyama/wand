@@ -212,8 +212,6 @@ public enum LauncherLayout: String, Sendable, Hashable, CaseIterable {
     }
 }
 
-// MARK: - Theme
-
 /// Coordinated colour palette for the tome panel. Fields are paths
 /// the colour-parser understands (named `"systemRed"` / `"accent"`,
 /// hex `"#rrggbb"`, …) or empty string to fall back to the system

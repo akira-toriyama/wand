@@ -7,8 +7,6 @@ import XCTest
 
 final class ConfigTests: XCTestCase {
 
-    // MARK: - Trigger + modifier fallbacks
-
     func testTriggerButtonAndModifierFallback() {
         // Unknown button → .right (safe default). Mixed-validity
         // modifier list → only the known ones (compactMap typo
@@ -21,8 +19,6 @@ final class ConfigTests: XCTestCase {
         XCTAssertEqual(cfg.trigger.button, .right)
         XCTAssertEqual(cfg.trigger.modifiers, [.cmd])
     }
-
-    // MARK: - [cast.recognition] clamps
 
     func testMinStrokePxClampLowHighDefault() {
         XCTAssertEqual(WandConfig.parse("").recognition.minStrokePx, 16)
@@ -80,8 +76,6 @@ final class ConfigTests: XCTestCase {
         XCTAssertEqual(cfg.excludeApps,
                        ["com.apple.dt.Xcode", "com.example.foo"])
     }
-
-    // MARK: - [cast.overlay] + sub-blocks
 
     func testOverlayConfigParsed() {
         let cfg = WandConfig.parse("""
@@ -144,8 +138,6 @@ final class ConfigTests: XCTestCase {
         XCTAssertEqual(WandConfig.parse(
             "[cast.overlay.badge]\nsize = 4").overlay.badge.size, 32)
     }
-
-    // MARK: - [[cast.cursor.rule]]
 
     func testConfigParsesArrayOfTables() {
         let toml = """
@@ -307,8 +299,6 @@ final class ConfigTests: XCTestCase {
                 + String(describing: cfg.launcher.items.first?.action))
         }
     }
-
-    // MARK: - Namespace schema (v8 / cursor + focused)
 
     func testCursorAndFocusedRulesParseWithContext() {
         // Both namespaces parse into the same `cfg.rules` array, each

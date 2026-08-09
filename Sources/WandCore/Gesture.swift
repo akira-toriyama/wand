@@ -9,8 +9,6 @@ import CoreGraphics
 import Foundation
 import Palette   // LinePet (shared pet vocabulary)
 
-// MARK: - Theme
-
 /// Coordinated colour palette for the cast HUD — supplies defaults
 /// for `[cast.overlay.trail]` + `[cast.overlay.cards]` colour
 /// fields. Individual config keys override per field, so
@@ -75,8 +73,6 @@ public struct CastThemePalette: Sendable, Equatable {
     }
 }
 
-// MARK: - Recognition tuning
-
 /// `[cast.recognition]` — knobs that tune how raw mouse samples turn
 /// into a direction string. Independent of any visual output; purely
 /// a recognition-quality axis.
@@ -111,8 +107,6 @@ public struct GestureRecognitionSpec: Sendable, Equatable {
 
     public static let `default` = GestureRecognitionSpec()
 }
-
-// MARK: - Overlay sub-blocks
 
 /// `[cast.overlay.trail]` — the line itself.
 public struct GestureOverlayTrailSpec: Sendable, Equatable {
@@ -300,8 +294,6 @@ public struct GestureOverlaySpec: Sendable, Equatable {
 
     public static let `default` = GestureOverlaySpec()
 }
-
-// MARK: - Fire-moment sub-blocks
 
 /// `[cast.fire.burst]` — omnidirectional particle explosion at the
 /// cursor when a rule fires. Lives in its own click-through window so

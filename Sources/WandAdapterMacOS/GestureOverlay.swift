@@ -202,7 +202,6 @@ public final class GestureOverlay {
         view.reset()
     }
 
-
     /// Cocoa-coordinate union of every screen — the window covers the
     /// whole virtual desktop so a gesture on any display is drawn.
     private static func unionFrame() -> CGRect {
@@ -214,9 +213,7 @@ public final class GestureOverlay {
         return u
     }
 
-
 }
-
 
 private final class TrailView: NSView {
     /// Resolved trail-colour mode for the matching side. `.static` is
@@ -524,7 +521,6 @@ private final class TrailView: NSView {
     /// Reflected live via `GestureOverlay.applyConfig(_:)`.
     fileprivate var finalHoldDuration: TimeInterval = 0.40
 
-    // MARK: - Chomp post-fire "eat the app icon" sequence
     //
     // chomp theme only: when a rule fires, place the target-app icon
     // one chomp-cell past the trail's snapped end, advance the face
@@ -1717,7 +1713,6 @@ private final class TrailView: NSView {
     // `draw(_:)` dispatch hands the relevant TrailView state over
     // via `ChompRenderer.State`.
 
-
     /// Snap `p` onto the axis defined by `dir` and the point `from` —
     /// horizontal directions preserve `from.y`, vertical preserve
     /// `from.x`. Used in two places: committing a corner that sits on
@@ -1785,8 +1780,6 @@ private final class TrailView: NSView {
         }
         walkPath(origin: origin, interval: interval, step: drawChevron)
     }
-
-    // MARK: - Paws style constants
 
     /// Spacing between paw prints along the path (pt at scale=1).
     /// Has to clear the print's rendered size with visible gap,
@@ -1884,8 +1877,6 @@ private final class TrailView: NSView {
         }
         walkPath(origin: origin, interval: spacing, step: plot)
     }
-
-    // MARK: - HUD layout
 
     private let badgeAnimDuration: TimeInterval = 0.15
 
