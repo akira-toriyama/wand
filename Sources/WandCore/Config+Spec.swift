@@ -513,8 +513,6 @@ public extension WandConfig {
         ]
     }
 
-    // MARK: - JSON Schema (taplo) — emitted from the SAME `configSpec`
-
     /// The `config.toml` JSON Schema (Draft-07). Drives `wand
     /// --emit-schema` and the sidecar install — generated from the one
     /// `configSpec`, so it can never drift from the decode.
@@ -556,7 +554,6 @@ public extension WandConfig {
     }
 }
 
-// MARK: - Field builders (keypath + Toml accessor + clamp/enum → field)
 //
 // Each builder reproduces the EXACT read the old `parse` did for that
 // key (same `Toml.Value` accessor, same clamp bounds + log, same enum /

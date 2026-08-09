@@ -9,8 +9,6 @@ import CoreGraphics
 
 final class RecognitionTests: XCTestCase {
 
-    // MARK: - recognize(samples:minStrokePx:)
-
     func testStraightDownThenRight() {
         // Explicit `[Sample]` annotation needed — without it Swift 6's
         // type checker bails on the two chained closures + `+`
@@ -137,8 +135,6 @@ final class RecognitionTests: XCTestCase {
         XCTAssertEqual(Recognition.reversals(""), 0)
         XCTAssertEqual(Recognition.reversals("L"), 0)
     }
-
-    // MARK: - patternIssue (config validation)
 
     func testPatternIssueAcceptsWellFormed() {
         XCTAssertNil(Recognition.patternIssue("D"))

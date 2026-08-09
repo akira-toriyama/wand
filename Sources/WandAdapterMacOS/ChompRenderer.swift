@@ -97,8 +97,6 @@ enum ChompRenderer {
         let faceLagOverride: CGFloat?
     }
 
-    // MARK: - Tuning constants
-
     /// Pellet dot diameter (pt at scale=1).
     private static let pelletDiameter: CGFloat = 4
     /// Spacing between pellets along the path (pt at scale=1).
@@ -211,8 +209,6 @@ enum ChompRenderer {
     /// Stroke width of each wall (pt at scale=1). Thin so the read
     /// is "neon line", not "filled bar".
     private static let wallStroke: CGFloat = 2.5
-
-    // MARK: - Entry point
 
     /// Chomp trail: pellets along a snapped polyline; if
     /// `outline` is set, two neon walls flanking a black corridor;
@@ -451,8 +447,6 @@ enum ChompRenderer {
         return currentFaceArc
     }
 
-    // MARK: - Centerline helpers
-
     /// Shared point sequence for every chomp-style geometry pass:
     /// corridor centerline, wall offsets, pellet steps, and the
     /// face-anchor walk all use this exact list so the visuals stay
@@ -634,8 +628,6 @@ enum ChompRenderer {
             step(last, lastTangent, traveled)
         }
     }
-
-    // MARK: - Sprite rendering
 
     /// Draw the chomp face as a chunky pixel-grid sprite — a
     /// circle minus a mouth wedge rasterised onto a square grid.
@@ -938,8 +930,6 @@ enum ChompRenderer {
             }
         }
     }
-
-    // MARK: - Utility
 
     /// Snap `p` onto the axis defined by `dir` and the point
     /// `from`. Horizontal directions preserve `from.y`; vertical

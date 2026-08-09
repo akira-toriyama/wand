@@ -120,8 +120,6 @@ public final class FailsafeMonitor: @unchecked Sendable {
         }
     }
 
-    // MARK: - mouseUp synthesis
-
     @MainActor
     private func postMouseUp(button: CGMouseButton) {
         let type: CGEventType
@@ -139,8 +137,6 @@ public final class FailsafeMonitor: @unchecked Sendable {
             mouseButton: button) else { return }
         event.post(tap: .cghidEventTap)
     }
-
-    // MARK: - Button table
 
     private struct ButtonEntry {
         let button: CGMouseButton

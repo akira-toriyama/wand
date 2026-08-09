@@ -95,8 +95,6 @@ private func wandSpec(_ name: String) -> ThemeSpec {
     return spec
 }
 
-// MARK: - Cast HUD palette
-
 /// Project a (canonical) theme name onto the cast HUD's String-token
 /// palette. Standard themes derive every surface from sill roles;
 /// `neon` / `splatoon` / `chomp` / `system` are the documented
@@ -160,8 +158,6 @@ extension CastThemePalette {
         badgeBackgroundColor: "")
 }
 
-// MARK: - Tome launcher palette
-
 /// Project a (canonical) theme name onto the tome panel's String-token
 /// palette. Same exception set as `wandCastPalette`.
 public func wandTomePalette(_ name: String) -> TomeThemePalette {
@@ -193,8 +189,6 @@ extension TomeThemePalette {
         textColor: "#ffffff",
         backgroundColor: "#1a1a1a")
 }
-
-// MARK: - Hex formatting
 
 /// Format a sill `HexColor` as a wand color token: `#RRGGBB`, or
 /// `#RRGGBBAA` when the color carries a non-opaque alpha. The adapter's
