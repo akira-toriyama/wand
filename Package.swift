@@ -88,7 +88,7 @@ let package = Package(
         // brings `RetiredTheme` tombstones, so the config reject hint can
         // say "retired in v1.36.0" instead of a Levenshtein guess.
         .package(url: "https://github.com/akira-toriyama/sill.git",
-                 .upToNextMinor(from: "6.0.0")),
+                 .upToNextMinor(from: "8.0.0")),
         // swift-toml-edit — the family's ONE TOML implementation (Sill-1).
         // Provides the `Toml` module WandCore reads config with
         // (`Toml.parseFlat`, whose `Document{tables,arrays}` matches wand's
