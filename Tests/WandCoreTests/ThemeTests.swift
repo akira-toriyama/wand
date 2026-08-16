@@ -12,8 +12,6 @@ import Palette
 
 final class ThemeTests: XCTestCase {
 
-    // MARK: - Name validation (sill catalog + wand engine themes)
-
     func testCanonicalAcceptsSillCatalog() {
         // Derived from sill, NOT copied. A hardcoded list is exactly how
         // `catppuccin-latte`'s removal reached wand as a surprise: sill cut

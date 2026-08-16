@@ -38,8 +38,6 @@ import Effects   // drawLinePets (shared line-pet drawing; re-exports Palette)
 import Foundation
 import WandCore
 
-// MARK: - Static border colour
-
 /// Per-kind stroke colour for non-animated `LauncherBorder` cases.
 /// Lives in the adapter (Core stays AppKit-free). `.off` and
 /// `.rainbow` are handled by their own code paths and never query
@@ -77,8 +75,6 @@ extension LauncherBorder {
     }
 }
 
-// MARK: - Theme
-
 /// Resolved theme colours for the panel. Each field is `nil` when the
 /// corresponding `TomeThemePalette` slot was empty (or its colour
 /// string didn't parse), in which case the row/panel falls back to
@@ -99,8 +95,8 @@ struct TomeColors {
     /// across every hover. Set when the palette's `accentColor` is
     /// the `"splatoon"` token. Panel-open creates fresh `ItemRow`
     /// instances → fresh per-row inks; the colour only changes
-    /// when the menu is dismissed and re-opened. Matches "各行は
-    /// ランダム、tome を閉じるまでは固定."
+    /// when the menu is dismissed and re-opened. Matches the spec:
+    /// "each row random, fixed until the tome closes."
     let accentRandomSplatoon: Bool
 
     static func resolve(_ palette: TomeThemePalette) -> TomeColors {
@@ -136,8 +132,6 @@ struct TomeColors {
         return luma > 0.55 ? .black : .white
     }
 }
-
-// MARK: - Public entry
 
 @MainActor
 public enum LauncherPanel {
@@ -215,8 +209,6 @@ public enum LauncherPanel {
         controller.show()
     }
 }
-
-// MARK: - Tree types
 
 /// One node in the panel tree. Built from the flat `[LauncherItem]`
 /// list by `PanelTree.build`. `separatorBefore` is carried on
@@ -345,8 +337,6 @@ private enum PanelTree {
         }
     }
 }
-
-// MARK: - Layout
 
 /// Content-view construction + screen-aware frame placement. Pulled
 /// out of `PanelController` so the init becomes a thin wire-up step
@@ -892,8 +882,6 @@ private enum PanelLayout {
     }
 }
 
-// MARK: - Panel
-
 /// NSPanel subclass that refuses key/main status. With
 /// `canBecomeKey = false` the panel can receive mouse events but
 /// macOS won't deliver key events to it — the underlying app keeps
@@ -1117,7 +1105,7 @@ private final class PanelController {
     /// (on contentView, on bg.layer, then on a dedicated overlay
     /// view) and every one of them suffered from anti-aliasing
     /// mismatch at bg's rounded mask edge — a faint dark fringe
-    /// outside the rim, the "黒い枠" issue. CALayer's native border
+    /// outside the rim, the "black rim" issue. CALayer's native border
     /// is drawn by the compositor as a single operation with the
     /// layer's `cornerRadius`, so the rounded curve and the rim are
     /// anti-aliased together with no seam between them.
@@ -1244,8 +1232,6 @@ private final class PanelController {
         }
     }
 
-    // MARK: Row callbacks
-
     private func handleRowClick(_ row: ItemRow) {
         switch row.kind {
         case .leaf(let item):
@@ -1314,8 +1300,6 @@ private final class PanelController {
         }
     }
 
-    // MARK: Child management
-
     private func openChild(for row: ItemRow, children: [PanelNode],
                             label: String, childPath: String? = nil) {
         guard let win = row.window else {
@@ -1371,8 +1355,6 @@ private final class PanelController {
         childAnchor = nil
     }
 
-    // MARK: Dismiss monitors (root only)
-
     private func installDismissMonitors() {
         // Global monitor (other-app events). Because wand is
         // LSUIElement + the panel is non-activating, "another app" is
@@ -1397,9 +1379,6 @@ private final class PanelController {
         }
     }
 }
-
-
-// MARK: - Chomp line-pet overlay
 
 /// Click-through view that paints one or more chomp "pets"
 /// (`chomp`, `ghost`) walking the panel's rounded outline. Pets
@@ -1476,8 +1455,6 @@ private final class TomePetsView: NSView {
     }
 
 }
-
-// MARK: - Row view
 
 /// One row's visual + behavioural kind. `header` is the app-icon
 /// banner at top of the root panel; `placeholder` is a disabled row
@@ -1992,8 +1969,6 @@ private final class ItemRow: NSView {
         guard isInteractive else { return }
         onClick?()
     }
-
-    // MARK: Session DnD sort (wand#127)
 
     /// Private in-app pasteboard type marking a tome-row drag. The
     /// payload (the row's `nodeID`) is informational — drop handling

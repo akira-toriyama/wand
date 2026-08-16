@@ -103,8 +103,6 @@ public final class MacOSLauncherSource: LauncherSource, @unchecked Sendable {
         // `pending-restart` in `--status`.
     }
 
-    // MARK: - tap callback
-
     private func handle(type: CGEventType,
                         event: CGEvent) -> Unmanaged<CGEvent>? {
         // The tap is auto-disabled on timeout or user-input throttling;

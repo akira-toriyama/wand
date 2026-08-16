@@ -15,7 +15,7 @@
 //   2. Record + fire the gesture (this script):
 //        swift scripts/capture-demo.swift 3975 951 /tmp/wand-demo.mov
 //      Sends a heads-up notification, screen-records for 7s, and synthesizes a
-//      right-button DU ("下→上") drag = the "新しいタブ" gesture rule.
+//      right-button DU (down, then up) drag = the "New Tab" gesture rule.
 //
 //   3. Crop to the overlay + convert to GIF (crop is centered on the start
 //      point; scale = video_width / display_point_width, here 4096/5120 = 0.8,
@@ -62,7 +62,7 @@ func key(_ vk: CGKeyCode) {
 // 1) heads-up notification
 let n = Process()
 n.launchPath = "/usr/bin/osascript"
-n.arguments = ["-e", "display notification \"録画開始。まもなくDUジェスチャー発火。対象ウィンドウを見てください。\" with title \"wand デモ｜実行中\" sound name \"Glass\""]
+n.arguments = ["-e", "display notification \"Recording started. The DU gesture fires shortly — watch the target window.\" with title \"wand demo — running\" sound name \"Glass\""]
 try? n.run(); n.waitUntilExit()
 
 // 2) start recording (7s, -k draws clicks)
@@ -76,14 +76,14 @@ sleepMs(1500)            // recorder warmup + lead-in
 key(0x35); sleepMs(150)  // clear any stray context menu
 warp(start); sleepMs(250)
 
-// 3) gesture DU -> "新しいタブ" (down, then up past start). One reversal < cancel=2.
+// 3) gesture DU -> "New Tab" (down, then up past start). One reversal < cancel=2.
 post(.rightMouseDown, start); sleepMs(280)
 var p = start
 for _ in 0..<8  { p.y += 12; post(.rightMouseDragged, p); sleepMs(20) }  // D (+96)
 sleepMs(320)                                                            // assist cards settle
 for _ in 0..<14 { p.y -= 12; post(.rightMouseDragged, p); sleepMs(20) } // U (-168 -> above start)
 sleepMs(280)
-post(.rightMouseUp, p)   // fires 新しいタブ + match exit effect
+post(.rightMouseUp, p)   // fires the New Tab rule + match exit effect
 sleepMs(1800)            // hold to record the effect
 
 rec.waitUntilExit()      // recording auto-stops at 7s

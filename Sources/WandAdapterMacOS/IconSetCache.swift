@@ -164,8 +164,6 @@ public final class IconSetCache {
         }
     }
 
-    // MARK: - Disk persistence
-
     private static var rootDirectory: URL {
         let home = FileManager.default.homeDirectoryForCurrentUser
         return home.appendingPathComponent(
@@ -225,8 +223,6 @@ public final class IconSetCache {
             at: dir, withIntermediateDirectories: true)
         try? data.write(to: path)
     }
-
-    // MARK: - Fetch
 
     /// Detached download. Returns `nil` on transport error, non-2xx,
     /// or empty body / invalid SVG. The caller (on the main actor)

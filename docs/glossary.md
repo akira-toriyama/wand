@@ -1,280 +1,289 @@
 ---
-title: wand 用語集
+title: wand glossary
 tags: [glossary, macos, cast, tome]
 repo: wand
 aliases: []
 ---
 
-# 用語集 — wand のユビキタス言語
+# Glossary — wand's ubiquitous language
 
-wand を構成する各パーツの **正規の呼び名** をまとめた規範ドキュメント。
-**コード・ドキュメント・コミットメッセージ・PR タイトル・Claude Code への
-プロンプト、すべてここに載っている名前のみを使う**。同義語は揺らぎを生む。
-1 つに決めて、それで通す。
+The normative document collecting the **canonical names** for every part of
+wand. **Code, docs, commit messages, PR titles, and prompts to Claude Code all
+use only the names listed here.** Synonyms breed drift: pick one name and use
+it everywhere.
 
-なお **正規名は英語のまま** 保持する。コード識別子・設定キー
-（`[cast.overlay]`, `PanelController` など）と一対一に対応させるため。
-日本語化するのは説明文だけ。
+Canonical names are kept **in English**, in one-to-one correspondence with
+code identifiers and config keys (`[cast.overlay]`, `PanelController`, …).
 
-用語が足りなければ、その用語を導入する PR で同時にこのファイルへ追記する。
-用語名を変える場合は、コード・ドキュメント・このファイルを **同一 PR で**
-書き換える。
+When a term is missing, add it to this file in the same PR that introduces it.
+When a term is renamed, rewrite the code, the docs, and this file **in the
+same PR**.
 
-> 各エントリの形式: **正規名**, 1〜2 行の定義, 設定 / コードでの所在,
-> そして `Don't call it:` 行 — このエントリが置き換える誤った呼び名のリスト。
+> Entry format: **canonical name**, a 1–2 line definition, where it lives in
+> config / code, and a `Don't call it:` line — the wrong names this entry
+> replaces.
 
 ---
 
-## cast 面（ジェスチャー描画系）
+## The cast surface (gesture drawing)
 
-下の GIF は Chrome 上で `DU`（下→上）を描いて `新しいタブ` ルールを
-発火させた様子。中央の Chrome アイコンが `badge`、カーソルを追う青線が
-`trail`、それを取り囲む各カードが `assist card`（マッチした `新しいタブ`
-だけ match color で強調）。3 つの正規名がひとつの操作の中でどう同居するかを示す。
+The GIF below shows a `DU` (down, then up) drawn over Chrome firing the
+"New Tab" rule. The Chrome icon at the centre is the `badge`, the blue line
+following the cursor is the `trail`, and the cards surrounding it are the
+`assist card`s (only the matched "New Tab" card is highlighted in the match
+color). It shows how the three canonical names coexist inside one operation.
 
-![DU ジェスチャーで 新しいタブ ルールが発火する様子 — badge / trail / assist card](images/gesture-demo.gif)
+![The DU gesture firing the New Tab rule — badge / trail / assist card](images/gesture-demo.gif)
 
-> 再生成: `swift scripts/capture-demo.swift <x> <y>` で録画し、ヘッダ記載の
-> ffmpeg + gifski でクロップ → `docs/images/gesture-demo.gif` 化。
+> Regenerate: record with `swift scripts/capture-demo.swift <x> <y>`, then
+> crop with the ffmpeg + gifski commands in that script's header →
+> `docs/images/gesture-demo.gif`.
 
 ### cast
-右ボタンドラッグでカーソルを動かして形（LURD 文字列）を描き、
-「呪文を唱える」感覚で `[[cast.cursor.rule]]` にマッチさせ cursor-anchored
-target にアクションを実行する第 1 のトリガーファミリー。`[cast]` の
-`button` / `modifiers` で起動条件を切り替える。
-- 設定: `[cast]`
-- **Don't call it:** gesture, ジェスチャー
+The first trigger family: drag with the right button to draw a shape (an LURD
+string) with the cursor — "casting a spell" — matching it against a
+`[[cast.cursor.rule]]` and running the action on the cursor-anchored target.
+`[cast]`'s `button` / `modifiers` switch the activation condition.
+- Config: `[cast]`
+- **Don't call it:** gesture
 
 ### assist card
-カーソル周囲に配置される小さなカード。**今この瞬間ここから到達可能な方向**
-を 1 方向 = 1 カードで提示する。現在マッチしているルールに対応する
-カードは match color で強調される。1 行は `矢印 [icon] 名前` の
-3 カラムレイアウトで、`[[cast.cursor.rule]].icon` が空でないルールでは
-矢印と名前の間にアイコンが入る。退場 / 発動アニメは
-`[cast.overlay.cards]` の `cancel` / `fire` / `armed` で個別に指定する。
-- 設定: `[cast.overlay]` / `[cast.overlay.cards]`
-- コード: `WandAdapterMacOS` overlay
-- **Don't call it:** tooltip, popup, hint, chip, balloon, label, ツールチップ, ポップアップ, ヒント
+The small cards placed around the cursor, presenting **the directions
+reachable from this exact moment** — one direction = one card. The card for
+the currently-matched rule is highlighted in the match color. A row is the
+three-column layout `arrow [icon] name`; rules with a non-empty
+`[[cast.cursor.rule]].icon` get an icon between the arrow and the name. The
+exit / fire animations are set individually via `[cast.overlay.cards]`'s
+`cancel` / `fire` / `armed`.
+- Config: `[cast.overlay]` / `[cast.overlay.cards]`
+- Code: the `WandAdapterMacOS` overlay
+- **Don't call it:** tooltip, popup, hint, chip, balloon, label
 
-![assist card と badge — Chrome 上で D を描いた瞬間の overlay](images/assist-card.png)
+![assist card and badge — the overlay the moment D is drawn over Chrome](images/assist-card.png)
 
-> 上のキャプチャは Chrome 上で D（下）方向に描いた瞬間。中央の Chrome
-> アイコン＋赤枠が `badge`、それを取り囲む `→↑ ウィンドウを閉じる`
-> などの黒いカードが `assist card`。再生成するには
-> `swift scripts/capture-overlays.swift docs/images`。
+> The capture above is the moment a D (down) is drawn over Chrome. The Chrome
+> icon + red frame at the centre is the `badge`; the black cards surrounding
+> it (`→↑ Close Window`, …) are the `assist card`s. Regenerate with
+> `swift scripts/capture-overlays.swift docs/images`.
 
 ### badge
-ジェスチャー開始点に固定表示される小さなマーカー。**ターゲットアプリの
-アイコン** を表示し、キーボードフォーカスが別ウィンドウにあっても
-「wand がどのウィンドウに作用するのか」を一目で示す。
-- 設定: `[cast.overlay.badge]`（`enabled` / `size` / `anim-enabled`）
-- **Don't call it:** icon, indicator, marker, anchor, アイコン, インジケータ
+The small marker pinned at the gesture's start point. Shows **the target
+app's icon**, making it obvious at a glance which window wand will act on
+even when keyboard focus is in another window.
+- Config: `[cast.overlay.badge]` (`enabled` / `size` / `anim-enabled`)
+- **Don't call it:** icon, indicator, marker, anchor
 
 ### trail
-ジェスチャー描画中にカーソルを追従する半透明の軌跡。これまでに描いた
-形がルールにマッチしていれば match color、マッチしなければ no-match color。
-- 設定: `[cast.overlay.trail]`（`color` / `color-no-match` /
-  `width` / `style` / `final-hold-ms`）
-- **Don't call it:** path, stroke, line, ink, パス, 軌跡（説明文中の比喩を除く）
+The translucent track following the cursor while a gesture is drawn. If the
+shape drawn so far matches a rule it uses the match color, otherwise the
+no-match color.
+- Config: `[cast.overlay.trail]` (`color` / `color-no-match` / `width` /
+  `style` / `final-hold-ms`)
+- **Don't call it:** path, stroke, line, ink (metaphors inside prose are fine)
 
 ### cast rule
-1 つの `[[cast.cursor.rule]]` エントリ。`pattern`（例: `DR`）と
-アクションのペアで、必要に応じて `apps` / `filter-title` /
-`filter-shell` で適用範囲を絞る。任意の `icon` は assist card 上で
-名前の左に表示される（`[[tome.cursor.item]].icon` と同じ syntax）。
-発動コンテキストはセクションヘッダで選ぶ: `[[cast.cursor.rule]]`
-（既定・カーソル下のウィンドウを [[AX target]] として解決）と
-`[[cast.focused.rule]]`（AX で解決できない面＝デスクトップ / Dock /
-メニューバー用の frontmost-app フォールバック）。
-- 設定: `[[cast.cursor.rule]]`（既定）/ `[[cast.focused.rule]]`（frontmost フォールバック）
-- **Don't call it:** gesture, binding, mapping, shortcut, バインド, ショートカット
+One `[[cast.cursor.rule]]` entry. A pair of a `pattern` (e.g. `DR`) and an
+action, optionally scoped with `apps` / `filter-title` / `filter-shell`. The
+optional `icon` is shown left of the name on the assist card (same syntax as
+`[[tome.cursor.item]].icon`). The firing context is chosen by the section
+header: `[[cast.cursor.rule]]` (default — resolves the window under the
+cursor as the [[AX target]]) and `[[cast.focused.rule]]` (the frontmost-app
+fallback for surfaces AX cannot resolve — desktop / Dock / menu bar).
+- Config: `[[cast.cursor.rule]]` (default) / `[[cast.focused.rule]]`
+  (frontmost fallback)
+- **Don't call it:** gesture, binding, mapping, shortcut
 
 ### wand pattern
-`cast rule` がマッチ対象とする方向文字列。アルファベットは `L U R D`
-のみ、連続同方向は不可（認識器が同方向の動きを 1 セグメントに集約する
-ため）。
-- 例: `DR`, `URD`, `L`
-- **Don't call it:** shape, sequence, path, motion, 形, 軌跡
+The direction string a `cast rule` matches against. The alphabet is only
+`L U R D`; consecutive same directions are impossible (the recognizer
+collapses same-direction movement into one segment).
+- Examples: `DR`, `URD`, `L`
+- **Don't call it:** shape, sequence, path, motion
 
 ### fire burst
-ジェスチャーが発動した瞬間にカーソル位置でパーティクルを放射する
-クリックスルー演出。`[cast.overlay].enabled = false` でも独立に
-動作する。`kind = "burst"` で有効、`kind = "off"` で無効。
-- 設定: `[cast.fire.burst]`
-- コード: `WandAdapterMacOS/BurstManager`
-- **Don't call it:** particles, explosion, effect, flare, パーティクル, エフェクト
+The click-through effect radiating particles at the cursor position the
+moment a gesture fires. Works independently even with
+`[cast.overlay].enabled = false`. `kind = "burst"` enables, `kind = "off"`
+disables.
+- Config: `[cast.fire.burst]`
+- Code: `WandAdapterMacOS/BurstManager`
+- **Don't call it:** particles, explosion, effect, flare
 
 ### fire decal
-ジェスチャー発動の瞬間にカーソル位置へ描かれ、しばらく残留してから
-フェードアウトする痕跡。`ink-splatter` / `paint-blob` / `scorch` /
-`star` から選ぶ（`off` で無効）。trail と違って描画中ではなく
-**発動の瞬間に一度だけ**置かれる。
-- 設定: `[cast.fire.decal]`(`kind` / `duration-ms` / `size`)
-- コード: `WandAdapterMacOS/DecalManager`
-- **Don't call it:** splash, stain, mark, sticker, スタンプ, シール
+The mark drawn at the cursor position the moment a gesture fires, lingering
+for a while before fading out. Choose from `ink-splatter` / `paint-blob` /
+`scorch` / `star` (`off` disables). Unlike the trail it is placed **once, at
+the moment of firing**, not while drawing.
+- Config: `[cast.fire.decal]` (`kind` / `duration-ms` / `size`)
+- Code: `WandAdapterMacOS/DecalManager`
+- **Don't call it:** splash, stain, mark, sticker
 
 ### chomp
-`theme = "chomp"` で有効になる特別テーマ。`trail` がアーケード風の
-ペレット列＋顔スプライトに置き換わり、`assist card` や tome パネルも
-そろって配色が切り替わる。スケールは `[cast.overlay.trail].width`
-ではなく `[cast.chomp].size`（`s` / `m` / `l`、既定 `m`）で決まる。
-cast 側は `[cast].theme`、tome 側は `[tome].theme` で個別に選ぶ。
-- 設定: `[cast].theme` / `[tome].theme` / `[cast.chomp]`
-- コード: `WandCore/Chomp`（`ChompSize`）/ `WandAdapterMacOS/ChompRenderer`
-- **Don't call it:** pacman, パックマン, game theme, arcade theme, ゲームテーマ
+The special theme enabled by `theme = "chomp"`. The `trail` is replaced by an
+arcade-style pellet row + face sprite, and the `assist card`s and tome panel
+switch their palette in concert. Scale is decided by `[cast.chomp].size`
+(`s` / `m` / `l`, default `m`), not `[cast.overlay.trail].width`. The cast
+side picks it via `[cast].theme`, the tome side independently via
+`[tome].theme`.
+- Config: `[cast].theme` / `[tome].theme` / `[cast.chomp]`
+- Code: `WandCore/Chomp` (`ChompSize`) / `WandAdapterMacOS/ChompRenderer`
+- **Don't call it:** pacman, game theme, arcade theme
 
 ### line-pet
-サーフェスの輪郭を歩く小さなアーケードキャラ（`chomp` / `ghost`）。
-`assist card` の枠（`[cast.overlay.cards].line-pets`）や tome パネルの
-装飾（`[tome.decoration].line-pets`）に 0 個以上並べる。配列順が描画順で、
-後ろのものが前を追う（`["chomp", "ghost"]` = ghost が chomp を追う）。
-`[]` で無効。語彙にない名前は drop + 警告される。
-- 設定: `[cast.overlay.cards].line-pets` / `[tome.decoration].line-pets`
-- コード: `Palette.LinePet`（sill・語彙）/ `Effects.drawLinePets`（sill・描画）
-- **Don't call it:** sprite, mascot, decoration char, スプライト, マスコット
+The small arcade characters (`chomp` / `ghost`) walking the outline of a
+surface. Zero or more line up on the `assist card` frame
+(`[cast.overlay.cards].line-pets`) or the tome panel's decoration
+(`[tome.decoration].line-pets`). Array order is draw order; a later one
+chases the one before it (`["chomp", "ghost"]` = the ghost chases the chomp).
+`[]` disables. A name outside the vocabulary is dropped with a warning.
+- Config: `[cast.overlay.cards].line-pets` / `[tome.decoration].line-pets`
+- Code: `Palette.LinePet` (sill, the vocabulary) / `Effects.drawLinePets`
+  (sill, the drawing)
+- **Don't call it:** sprite, mascot, decoration char
 
 ### match color / no-match color
-[[assist card]] の枠色および [[trail]] の線色を切り替える 2 色のペア。
-描画中のジェスチャーが [[cast rule]] にマッチしている瞬間は
-match color、まだマッチしていなければ no-match color。同時に表示中の
-`assist card` のうち、現在マッチしている候補だけが match color で
-強調され、ほかは通常色のまま残る。
-- 設定: `[cast.overlay]`
-- コード: `WandAdapterMacOS/GestureOverlay`
-- **Don't call it:** active color, hit color, highlight color, success color, fail color, アクティブ色, ハイライト色, 成功色
+The two-color pair switching the [[assist card]] frame color and the
+[[trail]] line color. The moment the gesture being drawn matches a
+[[cast rule]] it shows the match color; before that, the no-match color. Of
+the `assist card`s on screen, only the currently-matched candidate is
+highlighted in the match color — the rest stay in the normal color.
+- Config: `[cast.overlay]`
+- Code: `WandAdapterMacOS/GestureOverlay`
+- **Don't call it:** active color, hit color, highlight color, success
+  color, fail color
 
 ---
 
-## tome 面（ポップアップメニュー系）
+## The tome surface (popup menu)
 
 ### tome
-中クリック（既定）で開く呪文書スタイルのコンテキストメニュー。
-non-activating NSPanel を cursor 下にアンカーして開き、各
-`[[tome.cursor.item]]` がメニュー 1 行に対応する。第 2 のトリガーファミリー。
-opt-in (`[tome].enabled = true`)。
-- 設定: `[tome]`
-- **Don't call it:** launcher, ランチャー
+The spellbook-style context menu opened by middle click (default). Opens a
+non-activating NSPanel anchored under the cursor; each `[[tome.cursor.item]]`
+is one menu row. The second trigger family. Opt-in
+(`[tome].enabled = true`).
+- Config: `[tome]`
+- **Don't call it:** launcher
 
 ### non-activating panel
-tome のメインメニュー。トリガーボタンを押した瞬間に出現する
-**キーボードフォーカスを奪わない浮遊パネル**（ソースアプリのフォーカスを保つ）。
-ボタン押下時にカーソル下にあったウィンドウにアンカーされる。
-- 設定: `[tome]`
-- コード: `PanelController`
-- **Don't call it:** modal, popup, window, menu, dialog, モーダル, ポップアップ, ダイアログ, ウィンドウ
+tome's main menu. The **floating panel that never steals keyboard focus**
+(the source app keeps focus), appearing the moment the trigger button is
+pressed. Anchored to the window that was under the cursor at button-press.
+- Config: `[tome]`
+- Code: `PanelController`
+- **Don't call it:** modal, popup, window, menu, dialog
 
 ### child panel
-`group = [...]` を持つ行にホバーした時、[[non-activating panel]] の **隣** に
-開くサブメニュー。non-activating の性質は親パネルから引き継ぐ。
-- コード: `PanelController.openChild`
-- **Don't call it:** submenu, dropdown, flyout, nested menu, サブメニュー, ドロップダウン
+The submenu that opens **next to** the [[non-activating panel]] when a row
+with `group = [...]` is hovered. Inherits the non-activating nature from its
+parent panel.
+- Code: `PanelController.openChild`
+- **Don't call it:** submenu, dropdown, flyout, nested menu
 
 ### tome entry
-1 つの `[[tome.cursor.item]]` エントリ。[[non-activating panel]] もしくは
-[[child panel]] に並ぶ 1 行を指す。静的なもの、`group` で child panel に
-展開されるもの、`dynamic` でメニュー展開時に行を生成するものがある。
-- 設定: `[[tome.cursor.item]]`
-- **Don't call it:** entry, row, button, command, action, 項目, ボタン, アクション
+One `[[tome.cursor.item]]` entry — one row in the [[non-activating panel]]
+or a [[child panel]]. Comes in three kinds: static, `group` (expands into a
+child panel), and `dynamic` (generates rows when the menu opens).
+- Config: `[[tome.cursor.item]]`
+- **Don't call it:** entry, row, button, command, action
 
 ### dynamic submenu
-`dynamic = "<shell>"` を持つ `tome entry` が、メニュー展開時に
-シェルコマンドを実行し、その標準出力 1 行 = 1 子行として
-`template-*` フィールドを適用して生成する [[child panel]]。500ms の
-ハードタイムアウトあり。
-- 設定: `[[tome.cursor.item]]` で `dynamic` 指定時
-- **Don't call it:** generated submenu, shell submenu, computed menu, 動的メニュー
+The [[child panel]] a `tome entry` with `dynamic = "<shell>"` generates when
+the menu opens: it runs the shell command and turns each stdout line into
+one child row through the `template-*` fields. Hard 500ms timeout.
+- Config: a `[[tome.cursor.item]]` with `dynamic` set
+- **Don't call it:** generated submenu, shell submenu, computed menu
 
 ### tome layout
-[[non-activating panel]] の並びモード。`list`（縦並び、デフォルト）/
-`toolbar`（横並び、アイコンのみ）/ `labeled-toolbar`（横並び、ラベル付き）
-の 3 つ。`[tome].layout` でデーモン全体、`tome --open --items`
-のファイル内の `[tome].layout` でその呼び出し限定に切り替えられる。
-- 設定: `[tome].layout`
-- **Don't call it:** orientation, mode, panel style, 並び順
-  （`layout` 単体は `[tome].layout` のキー名なので可。「並びモード」
-  を指す名詞としては `tome layout` を使う）
+The [[non-activating panel]]'s arrangement mode: `list` (vertical, default) /
+`toolbar` (horizontal, icons only) / `labeled-toolbar` (horizontal, with
+labels). `[tome].layout` switches the whole daemon; a `[tome].layout` inside
+a `tome --open --items` file switches just that invocation.
+- Config: `[tome].layout`
+- **Don't call it:** orientation, mode, panel style (`layout` alone is fine —
+  it is the `[tome].layout` key name; as the noun for the arrangement mode,
+  use `tome layout`)
 
 ### DnD sort
-[[non-activating panel]] / [[child panel]] の行をマウスドラッグで
-並び替える操作。並び順は **session-only** — デーモン再起動・
-config reload（`ConfigWatcher` 含む）で破棄され、config.toml の
-記述順が正に戻る。`list` layout のみ（toolbar 系は対象外）。
-[[dynamic submenu]] の生成行と [[external trigger]] 経由のパネルは
-並び替え不可。config.toml への永続化は別 issue（surgical writer）。
-- コード: `LauncherOrder.apply`（Core の slot-merge）、
+Reordering the rows of the [[non-activating panel]] / [[child panel]] by
+mouse drag. The order is **session-only** — discarded on daemon restart or
+config reload (including `ConfigWatcher`), when the config.toml order becomes
+canonical again. `list` layout only (the toolbar variants are excluded). Rows
+generated by a [[dynamic submenu]] and panels opened via an
+[[external trigger]] cannot be reordered. Persisting into config.toml is a
+separate issue (the surgical writer).
+- Code: `LauncherOrder.apply` (Core's slot-merge),
   `PanelController.handleReorderDrop`
-- **Don't call it:** drag sort, reorder mode, 並べ替えモード
+- **Don't call it:** drag sort, reorder mode
 
 ### excludes
-cast と tome を **特定のアプリ内で完全に無効化** する
-グローバルブロックリスト。bundle id の glob 配列で、トリガー判定の
-最初に短絡するためルール / アイテム個別の `apps` よりも上位で効く。
-- 設定: `[exclude].apps`
-- **Don't call it:** blacklist, blocklist, denylist, ignore list,
-  ブラックリスト, 除外リスト
+The global blocklist that **fully disables cast and tome inside specific
+apps**. An array of bundle-id globs, short-circuiting at the top of trigger
+evaluation — so it outranks per-rule / per-item `apps`.
+- Config: `[exclude].apps`
+- **Don't call it:** blacklist, blocklist, denylist, ignore list
 
 ---
 
-## ターゲティング
+## Targeting
 
 ### external trigger
-トリガー（chord のホットキーやテキスト選択監視など）が
-`wand tome --open --items <PATH> --at <X> <Y>` 経由で tome を
-呼び出す経路。ボタン押下に紐付かないため [[AX target]] では解決
-できず、**フロントモストアプリを対象**として spine の例外扱い
-となる。`--selection` で `$WAND_SELECTION`、`--title` で
-`WAND_TARGET_TITLE` を呼び出し側から上書きできる。
-- コード: `Sources/WandApp/Controller.swift` の `handleShowMenu`
-- **Don't call it:** remote menu, ipc menu, dnc menu,
-  リモートメニュー, 外部メニュー
+The path where a trigger (a chord hotkey, a text-selection watcher, …) opens
+tome via `wand tome --open --items <PATH> --at <X> <Y>`. Not tied to a
+button press, so it cannot resolve an [[AX target]] and instead **targets the
+frontmost app** — the spine's one exception. `--selection` overrides
+`$WAND_SELECTION` and `--title` overrides `WAND_TARGET_TITLE` from the
+calling side.
+- Code: `handleShowMenu` in `Sources/WandApp/Controller.swift`
+- **Don't call it:** remote menu, ipc menu, dnc menu
 
 ### AX target
-**ボタンを押した瞬間にカーソルが乗っていたウィンドウ**。キーボード
-フォーカスが別ウィンドウにあっても、すべてのアクションはこの
-ウィンドウに対して実行される。AX ウォークで解決を試み、失敗時は
-`CGWindowListCopyWindowInfo` にフォールバック（Chrome のレンダラ
-プロセスなどが対象）。
-- ログ行: `AX: resolved … via ax-walk` / `via cg-window`
-- shell アクションに渡される環境変数: `WAND_TARGET_BUNDLE_ID`,
+**The window the cursor was over at the moment the button was pressed.**
+Every action runs against this window even when keyboard focus is elsewhere.
+Resolution first tries an AX walk, then falls back to
+`CGWindowListCopyWindowInfo` (for Chrome renderer processes and the like).
+- Log lines: `AX: resolved … via ax-walk` / `via cg-window`
+- Environment variables passed to shell actions: `WAND_TARGET_BUNDLE_ID`,
   `WAND_TARGET_PID`, `WAND_TARGET_TITLE`, `WAND_TARGET_FRAME`
-- **Don't call it:** focused window, active window, frontmost window,
-  target app, フォーカスウィンドウ, アクティブウィンドウ
-  （frontmost / focused は AX target と一致しないことがある）
+- **Don't call it:** focused window, active window, frontmost window, target
+  app (frontmost / focused can differ from the AX target)
 
 ### `$WAND_SELECTION`
-tome トリガー発火の瞬間に、フォーカスされている要素で選択
-されていたテキスト。`shell` 系 [[tome entry]] に環境変数として
-渡される。何も選択されていない場合、もしくはフォーカス先のアプリ
-が AX selection を公開していない場合は **unset**（空文字列ではない
-— `[ -n "${WAND_SELECTION:-}" ]` で有無を判定できる）。
-**信頼できない値**としてシェル内では必ずクォートすること。
-- **Don't call it:** `$SELECTION`（旧名・wand#137 で廃止）, clipboard,
-  highlighted text, current selection, クリップボード,
-  選択範囲（コード側 AX の "current selection" と衝突するため）
+The text selected in the focused element at the moment the tome trigger
+fired. Passed as an environment variable to `shell`-type [[tome entry]]s.
+When nothing is selected, or the focused app does not expose an AX
+selection, it is **unset** (not an empty string — test presence with
+`[ -n "${WAND_SELECTION:-}" ]`). An **untrusted value**: always quote it
+inside shell.
+- **Don't call it:** `$SELECTION` (the old name, retired in wand#137),
+  clipboard, highlighted text, current selection (collides with AX's
+  "current selection" on the code side)
 
 ### env-var contract
-wand が `shell` アクションへ context を渡す環境変数の規約
-（wand#137）: (1) すべて `WAND_` prefix、(2) 存在しない context の
-変数は unset（空文字を入れない）、(3) 値は untrusted としてシェル内
-で必ずクォート。trigger 族が増えても変数を 1 個足すだけで済む
-（例: `$WAND_SHELF_FILES` / `$WAND_CLIPBOARD` は予約済みの将来枠）。
-- コード: `Dispatch.execute(extraEnv:)`（`WAND_` prefix を強制）
-- **Don't call it:** env spec, variable convention, 環境変数仕様
+The convention for the environment variables wand passes to `shell` actions
+(wand#137): (1) all `WAND_`-prefixed, (2) a variable for absent context is
+unset (never an empty string), (3) values are untrusted — always quote them
+in shell. Growing the trigger family only ever costs one more variable
+(e.g. `$WAND_SHELF_FILES` / `$WAND_CLIPBOARD` are reserved future slots).
+- Code: `Dispatch.execute(extraEnv:)` (enforces the `WAND_` prefix)
+- **Don't call it:** env spec, variable convention
 
 ---
 
-## エントリ追加時のルール
+## Rules for adding entries
 
-- 1 つの概念につき正規名は 1 つ。複数の呼び方が流通しているなら、
-  このファイルで勝者を選び、敗者は `Don't call it:` 行に並べる。
-- 正規名は **英語のまま小文字で書く**。コード識別子・設定キー
-  （`[[cast.cursor.rule]]`, `PanelController`）はその表記を維持する。
-- 定義は **1〜2 文** に収める。動作の詳細は設定セクションやソース
-  ファイルへリンクし、ここで説明し直さない。
-- 用語にスクリーンショットを付ける場合は `docs/images/` に置き、
-  `![](images/<name>.png)` の形で埋め込む。
-- **コードと剥離させない**: 設定キー / コード識別子（`[[cast.cursor.rule]]`,
-  `[cast.chomp]`, `Palette.LinePet` など）や CLI の verb（`wand <domain> --<verb>`）
-  を変更・追加・廃止したら、必ず同一 PR でこのファイルの該当箇所も書き換える。
-  パーサが drop する旧綴り（例: 旧 `[[cast.rule]]` / `[[tome.item]]`、旧フラグ CLI
-  `--show-menu`）を live shape の説明に使わない（それらは移行警告の中だけに残す）。
+- One canonical name per concept. If several names are in circulation, pick
+  the winner in this file and list the losers on the `Don't call it:` line.
+- Canonical names are written **in English, lowercase**, keeping the exact
+  spelling of code identifiers and config keys (`[[cast.cursor.rule]]`,
+  `PanelController`).
+- Keep a definition to **1–2 sentences**. Link behaviour details to the
+  config section or the source file instead of re-explaining them here.
+- A screenshot for a term goes in `docs/images/`, embedded as
+  `![](images/<name>.png)`.
+- **Never let this file drift from the code**: when a config key / code
+  identifier (`[[cast.cursor.rule]]`, `[cast.chomp]`, `Palette.LinePet`, …)
+  or a CLI verb (`wand <domain> --<verb>`) is changed, added, or retired,
+  rewrite the matching part of this file in the same PR. Never describe the
+  live shape with a spelling the parser drops (the old `[[cast.rule]]` /
+  `[[tome.item]]`, the old flag CLI `--show-menu` — those stay only inside
+  migration warnings).

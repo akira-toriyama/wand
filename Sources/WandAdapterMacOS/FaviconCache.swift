@@ -156,8 +156,6 @@ public final class FaviconCache {
         return trimmed.isEmpty ? nil : trimmed.lowercased()
     }
 
-    // MARK: - Disk persistence
-
     private static var directory: URL {
         let home = FileManager.default.homeDirectoryForCurrentUser
         return home.appendingPathComponent(".cache/wand/favicons",
@@ -203,8 +201,6 @@ public final class FaviconCache {
         else { return }
         try? png.write(to: Self.diskPath(for: host))
     }
-
-    // MARK: - Fetch
 
     /// Build the Google s2 endpoint for `host`. Lives here rather
     /// than at the call site so an eventual `direct` source can swap

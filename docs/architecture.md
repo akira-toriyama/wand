@@ -28,7 +28,7 @@ by a fixture (`WandAdapterTest`) in unit tests.
               │                 │   - Matcher (rule globs + excludes)
               │                 │   - TOML parser, WandConfig
               │                 │   - MouseSource protocol (the seam)
-              │                 │  AppKit / AX / CGEvent 非依存
+              │                 │  no AppKit / AX / CGEvent
               └────────┬────────┘
                        │
        ┌───────────────┴────────────────────────┐
