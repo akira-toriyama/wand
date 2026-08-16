@@ -755,7 +755,8 @@ decisions. Subsections ordered broad → narrow.
   *(reviewed 2026-05-23)* — primary reference for the bits this
   repo actually touches: `gh` CLI, Actions workflow syntax,
   release drafts, branch protection, fine-grained PAT scoping
-  (the recurring foot-gun behind `HOMEBREW_TAP_TOKEN`).
+  (the recurring foot-gun behind the retired `HOMEBREW_TAP_TOKEN`,
+  since replaced by the `HOMEBREW_TAP_DEPLOY_KEY` deploy key).
 
 ### Inspiration
 

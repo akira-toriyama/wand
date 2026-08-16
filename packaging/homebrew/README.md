@@ -25,8 +25,8 @@ The release plumbing is automated end-to-end:
    `release:published`**, downloads the source tarball, computes its
    sha256, and bumps `Formula/wand.rb` in the tap repo to the new tag.
    Idempotent — re-running on the same tag is a no-op when the formula
-   already matches. Requires the `HOMEBREW_TAP_TOKEN` repo secret
-   (fine-grained PAT with `Contents: Read & write` scoped to the tap).
+   already matches. Requires the `HOMEBREW_TAP_DEPLOY_KEY` repo secret
+   (the private half of the tap's write deploy key; fleet-sync fans it out).
 4. **Users get the update.** `brew upgrade stroke` pulls the new tag and
    re-installs from source.
 
