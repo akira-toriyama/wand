@@ -26,8 +26,8 @@ timeline that matches the severity. There is no bug bounty.
 
 ## Supported versions
 
-The latest minor release on `main` is supported. Older releases get
-fixes only by upgrading.
+The latest release on `main` is supported. Older releases get fixes only by
+upgrading.
 
 ## Trust boundary in `.shell` actions
 
