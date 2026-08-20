@@ -1939,24 +1939,20 @@ private final class ItemRow: NSView {
         onHover?()
     }
 
-    /// Fire the configured SF Symbol effect on the icon. macOS 14+ only —
-    /// older OS silently no-ops via the @available guard, so a config
-    /// that opts in on a 13.x host still loads and the icon just stays
-    /// static. Unknown effect strings log + skip.
+    /// Fire the configured SF Symbol effect on the icon. Unknown effect
+    /// strings log + skip.
     private func playIconAnim() {
         guard !iconAnim.isEmpty, iconView.image != nil else { return }
-        if #available(macOS 14, *) {
-            switch iconAnim.lowercased() {
-            case "bounce":
-                iconView.addSymbolEffect(.bounce, options: .nonRepeating,
-                                          animated: true)
-            case "pulse":
-                iconView.addSymbolEffect(.pulse, options: .nonRepeating,
-                                          animated: true)
-            default:
-                Log.line("launcher-panel: unknown icon-anim \"\(iconAnim)\" "
-                         + "(supported: bounce, pulse) — skipped")
-            }
+        switch iconAnim.lowercased() {
+        case "bounce":
+            iconView.addSymbolEffect(.bounce, options: .nonRepeating,
+                                      animated: true)
+        case "pulse":
+            iconView.addSymbolEffect(.pulse, options: .nonRepeating,
+                                      animated: true)
+        default:
+            Log.line("launcher-panel: unknown icon-anim \"\(iconAnim)\" "
+                     + "(supported: bounce, pulse) — skipped")
         }
     }
 
