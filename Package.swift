@@ -87,16 +87,22 @@ let package = Package(
         // names and `Chomp` moves to the typed `Theme.chomp.spec`. v6 also
         // brings `RetiredTheme` tombstones, so the config reject hint can
         // say "retired in v1.36.0" instead of a Levenshtein guess.
+        // Floor 8.8.4 is COUPLED to swift-toml-edit 3.x below: sill >= 8.1.0
+        // requires toml-edit 3.x, so bumping either dependency alone fails
+        // resolution — move both in one commit. Dependabot ignores
+        // akira-toriyama/*, so nothing else will flag the pairing.
         .package(url: "https://github.com/akira-toriyama/sill.git",
-                 .upToNextMinor(from: "8.0.0")),
+                 .upToNextMinor(from: "8.8.4")),
         // swift-toml-edit — the family's ONE TOML implementation (Sill-1).
         // Provides the `Toml` module WandCore reads config with
         // (`Toml.parseFlat`, whose `Document{tables,arrays}` matches wand's
         // old `TOMLDocument`). Module name unchanged so `import Toml` survives.
-        // 2.0.0 only changes the nested `parse`/`.arrayOfTables` surface
-        // (now `[Toml.Row]`), which wand doesn't use — parseFlat is unchanged.
+        // 3.0.0 makes `parse` strict (it delegates to the span tiler); wand
+        // calls it only in `WandConfig.validate`, whose daemon-path caller
+        // already reads an unparseable source as zero warnings. `parseFlat`
+        // is unchanged by design — its leniency can't ride the strict tiler.
         .package(url: "https://github.com/akira-toriyama/swift-toml-edit.git",
-                 .upToNextMajor(from: "2.0.0")),
+                 .upToNextMajor(from: "3.0.0")),
     ],
     targets: [
         .target(
