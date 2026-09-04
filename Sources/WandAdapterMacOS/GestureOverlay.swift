@@ -45,9 +45,9 @@ public final class GestureOverlay {
     private let window: NSWindow
     private let view: TrailView
 
-    /// Spin up the window + view, then funnel every `[overlay]` field
-    /// through `applyConfig` so the init and hot-reload paths share
-    /// one setter — no chance of a knob landing in only one of them.
+    /// Every `[cast.overlay]` field is applied through `applyConfig`
+    /// so init and hot-reload share one setter — a knob cannot land in
+    /// only one of them.
     public init(_ cfg: WandConfig) {
         let frame = Self.unionFrame()
         let v = TrailView(frame: CGRect(origin: .zero, size: frame.size),
@@ -71,14 +71,11 @@ public final class GestureOverlay {
         w.contentView = v
         self.window = w
 
-        // Single source of truth: the same setter the hot-reload path
-        // calls. Drops the four-fold knob threading the audit flagged.
         applyConfig(cfg)
     }
 
-    /// Order the (empty, transparent) window on screen. Safe to call
-    /// once at startup; it stays up for the daemon's lifetime and is
-    /// invisible until points arrive.
+    /// Called once at startup: the window stays up for the daemon's
+    /// lifetime and is invisible until points arrive.
     public func show() {
         window.orderFrontRegardless()
     }
@@ -111,8 +108,8 @@ public final class GestureOverlay {
         set { view.onCherryEatenGlobal = newValue }
     }
 
-    /// Apply a config change live — drives `[overlay]` hot-reload from
-    /// `ConfigWatcher`. Every overlay field is reflected without a
+    /// Apply a config change live — drives `[cast.overlay]` hot-reload
+    /// from `ConfigWatcher`. Every overlay field is reflected without a
     /// daemon restart, including `blur-enabled` (the blur subview is
     /// added or removed in place via `TrailView.setBlurEnabled`). The
     /// only restart-required overlay transition is `enabled = false → true`
@@ -241,10 +238,10 @@ private final class TrailView: NSView {
     var strokeWidth: CGFloat = 3
     /// Named preset that swaps the trail's whole personality (width,
     /// glow, dash, per-segment color). Resolved from
-    /// `[gesture.overlay].trail-style` and reflected live via
-    /// `GestureOverlay.applyConfig(_:)`. Heavier styles
-    /// (`brush` / `splatoon` / …) are reserved for follow-up PRs of #63
-    /// and not represented in this enum yet.
+    /// `[cast.overlay.trail].style` and reflected live via
+    /// `GestureOverlay.applyConfig(_:)`. Colour is never part of a
+    /// style — it flows from `[cast.overlay.trail].color` (see
+    /// `TrailStyle`).
     var trailStyle: TrailStyle = .normal
     /// `[cast.chomp]` payload. Non-nil flips the whole
     /// trail render path to `ChompRenderer` (bypassing the
@@ -264,7 +261,7 @@ private final class TrailView: NSView {
     /// Cocoa-global origin of the window; subtracted to get view-local
     /// coords from a global point.
     var originOffset: CGPoint = .zero
-    /// User-visible knobs from `[overlay]`. All hot-reloadable via
+    /// User-visible knobs from `[cast.overlay]`. All hot-reloadable via
     /// `GestureOverlay.applyConfig(_:)` — colours and toggles update
     /// without restart; `setBlurEnabled` even adds/removes the
     /// `NSVisualEffectView` subview in place.
@@ -272,9 +269,9 @@ private final class TrailView: NSView {
     var badgeEnabled: Bool = true
     var badgeSize: CGFloat = 56
     var animEnabled: Bool = true
-    /// Exit-animation kinds from `[effect]`. Typed values come straight
-    /// from `WandConfig` — `GestureOverlay.applyConfig` assigns them
-    /// on init + hot-reload.
+    /// Exit-animation kinds from `[cast.overlay.cards]`. Typed values
+    /// come straight from `WandConfig` — `GestureOverlay.applyConfig`
+    /// assigns them on init + hot-reload.
     var effectCancel: Effect = .off
     var effectFire: Effect = .off
     /// Live "armed" cue for the firing assist card while a stroke is
@@ -516,7 +513,7 @@ private final class TrailView: NSView {
     fileprivate var holdingFinal: Bool = false
     fileprivate var finalizeStartedAt: TimeInterval?
     /// Seconds the post-fire snapped trail stays visible (hold +
-    /// fade). Sourced from `[gesture.overlay].final-hold-ms`; `0`
+    /// fade). Sourced from `[cast.overlay.trail].final-hold-ms`; `0`
     /// disables the hold and falls back to immediate clear.
     /// Reflected live via `GestureOverlay.applyConfig(_:)`.
     fileprivate var finalHoldDuration: TimeInterval = 0.40
@@ -673,7 +670,6 @@ private final class TrailView: NSView {
                     let segStart = corners.last ?? origin ?? a
                     let corner = Self.snap(a, to: last, from: segStart)
                     corners.append(corner)
-                    // Restart the freehand tail at the new corner.
                     // Carry over samples that arrived *after* the last
                     // anchor update — those were the user's actual
                     // transition motion into the new direction, so the
@@ -735,7 +731,7 @@ private final class TrailView: NSView {
 
         // The trail-end burst used to fire here in v4; v5 moved it
         // into a standalone `BurstManager` so the burst still fires
-        // when `[gesture.overlay].enabled = false`. The manager is
+        // when `[cast.overlay].enabled = false`. The manager is
         // driven by the same `Controller.onGestureFire` hook the
         // decal uses.
 
@@ -827,9 +823,8 @@ private final class TrailView: NSView {
         self.cursor = snappedEnd
     }
 
-    /// The real reset — null out every piece of trail / HUD state and
-    /// nudge a redraw. `reset()` defers here either immediately (no
-    /// fire) or after `finalHoldDuration` (fire).
+    /// `reset()` defers here either immediately (no fire) or after
+    /// `finalHoldDuration` (fire).
     private func _actualReset() {
         holdingFinal = false
         finalizeStartedAt = nil
@@ -866,9 +861,8 @@ private final class TrailView: NSView {
         kickExitAnimationTick()
     }
 
-    /// Add or remove the blur subview in place when `[overlay]
-    /// blur-enabled` flips during a hot-reload. No-op if already at
-    /// the requested state.
+    /// Add or remove the blur subview in place when
+    /// `[cast.overlay].blur-enabled` flips during a hot-reload.
     func setBlurEnabled(_ enabled: Bool) {
         guard enabled != blurEnabled else { return }
         blurEnabled = enabled
@@ -898,7 +892,6 @@ private final class TrailView: NSView {
         guard let origin, let cursor,
               origin != cursor || !corners.isEmpty
         else { return }
-        // Resolve the current frame's colour from the active mode.
         // For dynamic modes (`rainbow` / `neon`) `CACurrentMediaTime`
         // drives the cycle; for `splatoon` the per-stroke seed picks
         // one team's colour and holds it. Static modes are a no-op
@@ -915,7 +908,7 @@ private final class TrailView: NSView {
         // While holding the post-fire snapped polyline, fade the trail
         // out over the last third of the hold so it doesn't pop off.
         // Chomp's eat sequence overrides `finalHoldDuration` (0.40 s
-        // default) with the longer `chompFireHoldDuration` (0.85 s);
+        // default) with the longer `chompFireHoldDuration`;
         // the fade timing has to track THAT, otherwise the trail goes
         // transparent at 0.40 s — well before the eat animation, the
         // bonus-icon overlay, and the arcade-score popup are done.
@@ -1161,9 +1154,8 @@ private final class TrailView: NSView {
     }
 
     /// Build the standard hybrid corner-smoothed + freehand polyline
-    /// path used by every single-color style. Centralised so dashed /
-    /// dotted / glow / thin / thick all share the same geometry and
-    /// only differ in stroke parameters.
+    /// path shared by `normal` / `dashed` / `dotted`. Centralised so
+    /// they differ only in stroke parameters, never in geometry.
     ///
     /// When `straightenOnTurn = false`, return a pure polyline through
     /// every raw mouse sample instead — no corner snapping, no
@@ -1186,9 +1178,8 @@ private final class TrailView: NSView {
             return path
         }
 
-        // Straight part: origin → corners, with each interior corner
-        // softened by a quadratic-style bezier (radius capped to half
-        // each adjacent segment so tight corners never overshoot).
+        // The corner-softening radius is capped to half of each
+        // adjacent segment so tight corners never overshoot.
         let straight = [origin] + corners
         path.move(to: straight[0])
         if straight.count == 2 {
@@ -1229,17 +1220,13 @@ private final class TrailView: NSView {
     /// been reachable. Chomp theme only — called from the chomp
     /// branch of `draw`, gated on `gameOverStartedAt != nil`.
     ///
-    /// First ~140 ms after appearance: scale-in pop (0.7 → 1.0
-    /// ease-out cubic) so the message lands with arcade impact. After
-    /// the pop, a 2 Hz alpha blink (1.0 ↔ 0.55) sells the classic
-    /// arcade "respawn screen" feel. Colour is hot arcade-red on a
-    /// black backdrop with a yellow outline, matching chomp's
+    /// Pop-then-blink is the classic arcade "respawn screen" cue, and
+    /// hot arcade-red on black with a yellow outline matches chomp's
     /// danger palette.
     private func drawGameOverOverlay(cursor: CGPoint,
                                       startedAt: TimeInterval) {
         let now = CACurrentMediaTime()
         let elapsed = now - startedAt
-        // Scale-in pop over the first 140 ms.
         let popDuration: Double = 0.14
         let scale: CGFloat
         if elapsed < popDuration {
@@ -1271,7 +1258,6 @@ private final class TrailView: NSView {
         ]
         let textSize = text.size(withAttributes: attrs)
 
-        // Background card: rounded black rect inset around the text.
         let padX: CGFloat = 14
         let padY: CGFloat = 8
         let cardSize = CGSize(width: textSize.width + 2 * padX,
@@ -1320,12 +1306,11 @@ private final class TrailView: NSView {
         NSGraphicsContext.restoreGraphicsState()
     }
 
-    /// Render a single-color trail. `normal` / `thin` / `thick` / `glow`
-    /// / `dashed` / `dotted` all funnel through here — they only differ
-    /// in lineWidth, glow radius, and dash pattern. When `outline` is
-    /// set, the same path is stroked first with a wider line in the
-    /// outline colour so the main stroke reads against backgrounds
-    /// that would otherwise swallow it.
+    /// `normal` / `dashed` / `dotted` all funnel through here — they
+    /// differ only in lineWidth, glow radius, and dash pattern. When
+    /// `outline` is set, the same path is stroked first with a wider
+    /// line in the outline colour so the main stroke reads against
+    /// backgrounds that would otherwise swallow it.
     private func drawSinglePath(origin: CGPoint, cursor: CGPoint,
                                  color: NSColor, outline: NSColor?) {
         let p = styleParams(base: strokeWidth)
@@ -1403,9 +1388,6 @@ private final class TrailView: NSView {
         // path before emitting — used by the Chomp style to leave a
         // visible gap between the trailing pellets and the cursor's
         // face, so it reads as Chomp running ahead of the trail.
-        // When set, compute total length once and derive the cutoff
-        // distance; bail early if there isn't enough path to clear
-        // the trim.
         let cutoff: CGFloat?
         if trimTail > 0 {
             var totalLen: CGFloat = 0
@@ -1516,10 +1498,8 @@ private final class TrailView: NSView {
                 let rect = NSRect(x: CGFloat(gx) * cell,
                                   y: CGFloat(gy) * cell,
                                   width: cell, height: cell)
-                // Outline = full-cell outline-colour fill, then a
-                // 1pt-inset main-colour fill on top. Adjacent cells
-                // don't overdraw each other because both rects are
-                // contained within the cell's own grid square.
+                // Both rects stay inside the cell's own grid square,
+                // so adjacent cells never overdraw each other.
                 if let outlineFill {
                     outlineFill.setFill()
                     NSBezierPath(rect: rect).fill()
@@ -1625,7 +1605,6 @@ private final class TrailView: NSView {
                     Self.splitmix(seed &+ index &+ (timeTick &<< 16))
                         % UInt64(glyphs.count))
                 index &+= 1
-                // Centre the glyph on the offset point.
                 let r = NSRect(x: cx - glyphSize.width / 2,
                                y: cy - glyphSize.height / 2,
                                width: glyphSize.width,
@@ -1888,9 +1867,8 @@ private final class TrailView: NSView {
         cardLayouts.removeAll()
         badgeLayout = nil
 
-        // Same resolver the trail uses — dynamic modes get the current
-        // time + the stroke seed + the cycle period; static modes pass
-        // through.
+        // Same resolver the trail uses, so cards and trail cycle in
+        // lockstep under the dynamic modes.
         let mode = valid ? matchMode : noMatchMode
         let accent = mode.currentColor(at: CACurrentMediaTime(),
                                         strokeSeed: strokeSeed,
@@ -2103,9 +2081,8 @@ private final class TrailView: NSView {
         }
     }
 
-    /// Emit a CAEmitterLayer for particle effects. No-op for the non-
-    /// particle effects — those are drawn each frame in
-    /// `HUDContentView`. The emitter auto-cleans after the effect's
+    /// No-op for the non-particle effects — those are drawn each frame
+    /// in `HUDContentView`. The emitter auto-cleans after the effect's
     /// duration via a `DispatchQueue.main.asyncAfter`.
     private func scheduleParticleEffect(_ layout: CardLayout,
                                          effect: Effect) {
@@ -2582,10 +2559,10 @@ private final class HUDContentView: NSView {
     /// Draw one card (fill + border + text). `alpha` multiplies into
     /// the CGContext so the entire card fades uniformly; `dx`/`dy`/
     /// `scale` place the rect through the exit animation. `armed`
-    /// layers a live "would-fire-on-release" cue on top; `chomp`
-    /// adds a chomp pellet orbiting the rect, independent of
-    /// `armed` so the two stack. Only the firing card mid-stroke
-    /// passes a non-`.off` armed or a non-empty `linePets`.
+    /// layers a live "would-fire-on-release" cue on top; `linePets`
+    /// walk the rect's outline, independent of `armed` so the two
+    /// stack. Only the firing card mid-stroke passes a non-`.off`
+    /// armed or a non-empty `linePets`.
     private func drawCard(_ c: TrailView.CardLayout,
                           in o: TrailView,
                           alpha: CGFloat,

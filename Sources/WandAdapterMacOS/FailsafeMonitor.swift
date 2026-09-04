@@ -40,7 +40,7 @@ public final class FailsafeMonitor: @unchecked Sendable {
         holdTimer = nil
     }
 
-    // MARK: - Layer 2: emergency release key
+    // Layer 2: emergency release key.
 
     @MainActor
     private func installEscMonitor() {
@@ -77,7 +77,7 @@ public final class FailsafeMonitor: @unchecked Sendable {
             + "(released: \(released.joined(separator: ", ")))")
     }
 
-    // MARK: - Layer 1: button-hold timeout
+    // Layer 1: button-hold timeout.
 
     @MainActor
     private func installHoldWatchdog() {

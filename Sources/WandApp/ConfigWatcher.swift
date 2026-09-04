@@ -1,5 +1,5 @@
 // Watches config.toml and fires `onChange` when it's edited, so the
-// daemon live-reloads without an explicit `wand --reload`.
+// daemon live-reloads without an explicit `wand daemon --reload`.
 //
 // Editors save in two flavors: in-place writes (`.write`) and atomic
 // replace (write temp + rename over the original — fires `.rename` /
@@ -23,7 +23,7 @@ final class ConfigWatcher: @unchecked Sendable {
     /// Cap the file-appearance poll so a daemon that never sees a
     /// config file doesn't tick every 2s for the whole process
     /// lifetime. After this many tries (≈60 s) we stop watching —
-    /// a `wand --reload` after creating the file picks back up.
+    /// a `wand daemon --reload` after creating the file picks back up.
     private var armAttemptsRemaining = 30
 
     init(path: String, onChange: @escaping () -> Void) {

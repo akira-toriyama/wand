@@ -1,8 +1,8 @@
 // String → NSColor parser shared by every adapter surface that takes
 // a colour from config. Originally lived as a `private static` on
 // `GestureOverlay`; promoted out so the launcher panel (#59 tint)
-// and the upcoming theme system (#62) can reuse the same name +
-// hex grammar without copy-paste.
+// and the theme system (#62) can reuse the same name + hex grammar
+// without copy-paste.
 //
 // Grammar:
 //   - Named: blue / red / green / orange / purple / pink / yellow /
@@ -118,9 +118,10 @@ public enum NSColorParse {
 @MainActor
 public enum TrailColorMode: Equatable {
     case `static`(NSColor)
-    /// Smooth hue cycle 0..1 over ~3 seconds.
+    /// Smooth hue cycle; the period is the caller's `cyclePeriod`.
     case rainbow
-    /// Smooth interpolation through `NSColorParse.neonInks` over ~2 s.
+    /// Smooth interpolation through `NSColorParse.neonInks`; same
+    /// `cyclePeriod` contract as `rainbow`.
     case neon
     /// Random pick from `NSColorParse.splatoonInks`, deterministic
     /// per stroke (so the trail stays one team's colour through the

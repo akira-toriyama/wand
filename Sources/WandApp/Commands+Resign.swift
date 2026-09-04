@@ -10,7 +10,7 @@ import WandAdapterMacOS
 
 extension WandApp {
 
-    /// `wand --resign` re-signs the installed Wand.app with the
+    /// `wand daemon --resign` re-signs the installed Wand.app with the
     /// persistent `wand Local Signing` self-signed identity and
     /// restarts the daemon. Necessary after every `brew install` /
     /// `brew upgrade wand`, because Homebrew's build sandbox

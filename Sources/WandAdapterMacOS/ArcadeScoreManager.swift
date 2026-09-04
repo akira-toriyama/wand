@@ -5,14 +5,10 @@
 // `[cast.overlay].enabled`, same way the other fire-moment effects
 // do.
 //
-// Visually: a single monospaced "+N" label rises ~40pt over 800ms
-// and fades to transparent. The value picks at random per fire
-// from the canonical arcade bonus-tile scores (100 / 200 / 300 /
-// 500 / 700 / 1000 / 2000 / 5000) so successive fires don't all
-// flash the same number. Distinct from the chomp card-level
-// popup (which floats from the firing HUD card) — this popup
-// lands at the cursor instead, matching where the arcade frame
-// flashes "+200" right next to Chomp as he eats the fruit.
+// Distinct from the chomp card-level popup (which floats from the
+// firing HUD card) — this popup lands at the cursor instead,
+// matching where the arcade frame flashes "+200" right next to
+// Chomp as he eats the fruit.
 
 import AppKit
 import WandCore
@@ -31,7 +27,6 @@ public final class ArcadeScoreManager {
     /// `TrailView.scorePopupDurationMs` so the two popup surfaces
     /// (cursor / card) stay in lockstep when both are enabled.
     private static let durationSec: TimeInterval = 0.8
-    /// How far the label rises during its animation.
     private static let riseDistancePt: CGFloat = 40
     /// Footprint of the popup window. Wide enough for the longest
     /// "+5000" string at 22pt monospaced; the rise distance pads
@@ -105,10 +100,10 @@ public final class ArcadeScoreManager {
         win.orderFrontRegardless()
         live.append(win)
 
-        // Rise (translate.y up by riseDistancePt) + fade (alpha 1 →
-        // 0). `fillMode = .forwards` keeps the final values applied
-        // after the animation ends, so the layer stays invisible
-        // and positioned correctly until the window is torn down.
+        // `fillMode = .forwards` (with `isRemovedOnCompletion =
+        // false`) keeps the final values applied after the animation
+        // ends, so the layer stays invisible and positioned
+        // correctly until the window is torn down.
         let rise = CABasicAnimation(keyPath: "transform.translation.y")
         rise.fromValue = 0
         rise.toValue = Self.riseDistancePt
@@ -128,9 +123,8 @@ public final class ArcadeScoreManager {
         textLayer.add(rise, forKey: "rise")
         textLayer.add(fade, forKey: "fade")
 
-        // Tear down the window once the animation completes (small
-        // pad so the final frame fully paints before the window
-        // disappears).
+        // Small pad past `durationSec` so the last frame fully
+        // paints before the window disappears.
         DispatchQueue.main.asyncAfter(
             deadline: .now() + Self.durationSec + 0.1
         ) { [weak self, weak win] in

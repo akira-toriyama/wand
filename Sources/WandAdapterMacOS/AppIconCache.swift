@@ -66,10 +66,8 @@ final class AppIconCache {
            let url = NSWorkspace.shared.urlForApplication(
                withBundleIdentifier: bundleID) {
             icon = NSWorkspace.shared.icon(forFile: url.path)
-            // Derive a friendlier name from the bundle if we got one,
-            // since LaunchServices doesn't carry `localizedName`. The
-            // `.deletingPathExtension().lastPathComponent` strips
-            // `Google Chrome.app` → `Google Chrome`.
+            // LaunchServices doesn't carry `localizedName`, so derive
+            // a friendlier name from the bundle path instead.
             if name == bundleID {
                 name = url.deletingPathExtension().lastPathComponent
             }

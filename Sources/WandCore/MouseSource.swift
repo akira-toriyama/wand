@@ -19,7 +19,7 @@ public protocol MouseSource: AnyObject, Sendable {
     /// MacOSMouseSource fires on the event-tap main-thread callback.
     func start(_ handler: @escaping @Sendable (WandEvent) -> Void)
     func stop()
-    /// Hot-apply `[recognition]` timing knobs without reinstalling the
+    /// Hot-apply `[cast.recognition]` timing knobs without reinstalling the
     /// event tap. Implementations that can swap fields in place do so;
     /// the synthetic test source uses the default no-op since fixtures
     /// supply their own samples and don't read the live config.
@@ -27,7 +27,7 @@ public protocol MouseSource: AnyObject, Sendable {
 }
 
 public extension MouseSource {
-    func updateConfig(_ cfg: WandConfig) {}   // default: no-op
+    func updateConfig(_ cfg: WandConfig) {}
 }
 
 /// One launcher trigger fire: the button-down screen point plus the
@@ -50,8 +50,8 @@ public protocol LauncherSource: AnyObject, Sendable {
     func start(_ handler: @escaping @Sendable (LauncherEvent) -> Void)
     func stop()
     /// Hot-apply launcher-side knobs without reinstalling the tap.
-    /// The tap's event mask is baked at install time, so a `[launcher].
-    /// trigger` change still needs a restart — caller surfaces that.
+    /// The tap's event mask is baked at install time, so a `[tome]` button or
+    /// modifier change still needs a restart — caller surfaces that.
     func updateConfig(_ cfg: WandConfig)
 }
 

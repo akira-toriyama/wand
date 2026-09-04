@@ -4,7 +4,7 @@ import XCTest
 /// The committed `config.schema.json` (shipped next to `config.toml`,
 /// pointed at by its `#:schema` directive) MUST equal what the live spec
 /// emits — otherwise editor completion drifts from the actual parser.
-/// Regenerate with: `wand --emit-schema > config.schema.json`.
+/// Regenerate with: `wand config --emit-schema > config.schema.json`.
 final class ConfigSchemaDriftTests: XCTestCase {
 
     func testCommittedSchemaMatchesSpec() throws {

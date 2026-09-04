@@ -8,7 +8,7 @@ import XCTest
 /// silently clamps or drops.
 final class ConfigValidateTests: XCTestCase {
 
-    // MARK: - no regression: the shipped template validates clean
+    // No regression: the shipped template validates clean.
 
     /// The committed `config.toml` template MUST validate with zero errors —
     /// the keys it uses are exactly the keys the spec declares. Guards against
@@ -30,7 +30,7 @@ final class ConfigValidateTests: XCTestCase {
         XCTAssertEqual(try WandConfig.validate(""), [])
     }
 
-    // MARK: - it catches what load() silently accepts
+    // It catches what load() silently accepts.
 
     func testUnknownKeyIsReported() throws {
         let errors = try WandConfig.validate("""
@@ -62,7 +62,7 @@ final class ConfigValidateTests: XCTestCase {
         XCTAssertThrowsError(try WandConfig.validate("[cast.overlay\nbad"))
     }
 
-    // MARK: - A1: the daemon LOAD path warns on a schema violation (no reject)
+    // A1: the daemon LOAD path warns on a schema violation (no reject).
 
     func testLoadPathWarnsOnSchemaViolation() throws {
         Log.resetLineCount()

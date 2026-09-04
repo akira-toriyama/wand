@@ -1,9 +1,8 @@
-// Dominant-axis quantisation:
-//   walk samples; when |dx| or |dy| since the last anchor exceeds
-//   minStrokePx, emit a Direction on the dominant axis and reset the
-//   anchor. Coalesce consecutive duplicates so a long single stroke
-//   is one direction, not many. Keeps the mental model "draw a path
-//   of arrow keys" instead of something fancier.
+// Dominant-axis quantisation — deliberately dumber than a template
+// matcher so the user's mental model stays "draw a path of arrow
+// keys". Consecutive duplicates coalesce, so a long single stroke is
+// one direction and a pattern like `DRR` can never be drawn
+// (`patternIssue` rejects such rules at config load).
 
 import CoreGraphics
 

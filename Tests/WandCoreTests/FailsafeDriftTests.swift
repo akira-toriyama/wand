@@ -11,7 +11,7 @@ final class FailsafeDriftTests: XCTestCase {
 
     private func obj(_ any: Any?) -> [String: Any]? { any as? [String: Any] }
 
-    // MARK: - descriptor side: the emitted schema == the constants
+    // Descriptor side: the emitted schema == the constants.
 
     func testEmittedSchemaMatchesFailsafeConstants() throws {
         let root = try XCTUnwrap(obj(try JSONSerialization.jsonObject(
@@ -37,28 +37,25 @@ final class FailsafeDriftTests: XCTestCase {
                        "schema default key drifted from FailsafeConfig constant")
     }
 
-    // MARK: - clamp side: parse() enforces exactly the constants
+    // Clamp side: parse() enforces exactly the constants.
 
     func testParseClampsToFailsafeConstants() {
         let lo = FailsafeConfig.mouseHoldTimeoutRange.lowerBound
         let hi = FailsafeConfig.mouseHoldTimeoutRange.upperBound
 
-        // below the floor → clamped up to lo
         XCTAssertEqual(
             WandConfig.parse("[failsafe]\nmouse-hold-timeout-seconds = \(lo - 1)")
                 .failsafe.mouseHoldTimeoutSec, lo)
-        // above the ceiling → clamped down to hi
         XCTAssertEqual(
             WandConfig.parse("[failsafe]\nmouse-hold-timeout-seconds = \(hi + 1)")
                 .failsafe.mouseHoldTimeoutSec, hi)
-        // in range → unchanged
         let mid = (lo + hi) / 2
         XCTAssertEqual(
             WandConfig.parse("[failsafe]\nmouse-hold-timeout-seconds = \(mid)")
                 .failsafe.mouseHoldTimeoutSec, mid)
     }
 
-    // MARK: - default side: parse() falls back to the constants
+    // Default side: parse() falls back to the constants.
 
     func testParseDefaultsToFailsafeConstants() {
         // absent block → struct defaults, which are the constants
@@ -81,7 +78,7 @@ final class FailsafeDriftTests: XCTestCase {
             FailsafeConfig.mouseHoldTimeoutDefault)
     }
 
-    // MARK: - the struct's own `.default` reflects the constants
+    // The struct's own `.default` reflects the constants.
 
     func testFailsafeConfigDefaultUsesConstants() {
         XCTAssertEqual(FailsafeConfig.default.mouseHoldTimeoutSec,

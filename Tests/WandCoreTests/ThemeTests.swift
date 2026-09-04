@@ -70,7 +70,7 @@ final class ThemeTests: XCTestCase {
         XCTAssertNotNil(wandCanonicalThemeName(r))  // the pick is itself valid
     }
 
-    // MARK: - Config clamps theme to the native default
+    // Config clamps theme to the native default.
 
     func testConfigClampsCutThemeToSystem() {
         XCTAssertEqual(WandConfig.parse("[cast]\ntheme = \"nord\"").theme, "system")
@@ -87,7 +87,7 @@ final class ThemeTests: XCTestCase {
         XCTAssertEqual(WandConfig.parse("[tome]\ntheme = \"gruvbox\"").launcher.theme, "gruvbox")
     }
 
-    // MARK: - Cast palette derives from sill roles (Q5 maximal map)
+    // Cast palette derives from sill roles (Q5 maximal map).
 
     func testCastTerminalDerivesGreenFromSill() {
         // sill terminal: primary 0x33FF66, error 0xFF3B3B,
@@ -108,7 +108,7 @@ final class ThemeTests: XCTestCase {
         XCTAssertEqual(p.trailColorNoMatch, "#FF5555")   // sill dracula error
     }
 
-    // MARK: - Tome palette derives from sill roles
+    // Tome palette derives from sill roles.
 
     func testTomeTerminalDerivesFromSill() {
         let p = wandTomePalette("terminal")
@@ -118,7 +118,7 @@ final class ThemeTests: XCTestCase {
         XCTAssertEqual(p.backgroundColor, "#050805")      // panel ← background
     }
 
-    // MARK: - chomp: sill-derived constants, wand arcade arrangement
+    // chomp: sill-derived constants, wand arcade arrangement.
 
     func testChompConstantsMatchSill() {
         // Byte-match to sill chomp (primary 0xFFEA00, error 0xFF0000,
@@ -138,7 +138,7 @@ final class ThemeTests: XCTestCase {
         XCTAssertEqual(p.cardsFiresBorderColor, "rainbow")// animated firing border (wand motion)
     }
 
-    // MARK: - Engine + system exceptions keep their tokens
+    // Engine + system exceptions keep their tokens.
 
     func testEngineThemesKeepDynamicTokens() {
         XCTAssertEqual(wandCastPalette("neon").trailColor, "neon")

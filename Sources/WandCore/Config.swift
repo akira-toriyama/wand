@@ -156,7 +156,7 @@ public struct WandConfig: Sendable {
     public static func parse(_ text: String) -> WandConfig {
         let doc = Toml.parseFlat(text)
 
-        // ── Uniform half: the plain scalar/table keys are driven by the
+        // Uniform half: the plain scalar/table keys are driven by the
         // single declarative `configSpec` (which ALSO emits the JSON
         // Schema — see `Config+Spec.swift`). `decode` runs the SAME
         // clamp / enum-parse / theme-resolve the hand-written reads did,
@@ -170,11 +170,11 @@ public struct WandConfig: Sendable {
         var d = Decoded()
         configSpec.decode(doc.tables, into: &d)
 
-        // ── [exclude] ─────────────────────────────────────────
+        // [exclude]
         let excludes = d.excludeApps
 
-        // ── [cast] ────────────────────────────────────────────
-        // Trigger identity + family-wide knobs (intensity, theme).
+        // [cast] — trigger identity + family-wide knobs (intensity,
+        // theme).
         let button = d.button
         let mods = d.modifiers
         let intensity = d.intensity
@@ -325,8 +325,7 @@ public struct WandConfig: Sendable {
 
         let fire = GestureFireSpec(burst: burst, decal: decal)
 
-        // ── [tome.*] ──────────────────────────────────────────
-        // Middle-click (or other configured button) contextual menu.
+        // [tome.*] — middle-click (or other configured button) menu.
         // Tap not installed when `enabled = false` (default). The plain
         // scalar/table keys come from the spec decode; the items
         // array-of-tables + trigger collision stay bespoke below.
@@ -396,7 +395,7 @@ public struct WandConfig: Sendable {
             .compactMap { idx, row in parseItem(row, idx: idx) }
         warnToolbarOnlyFields(items: items, layout: launcherLayout)
 
-        // ── Trigger collision detection ───────────────────────
+        // Trigger collision detection.
         // Two trigger families sharing the same (button, modifiers)
         // would have their CGEventTaps fight over the same down
         // event. Declaration-order wins (gesture > launcher > future
@@ -475,15 +474,17 @@ public struct WandConfig: Sendable {
         )
     }
 
-    /// Per-row action shape, decomposed across dotted-style keys so
-    /// the minimal TOML parser can read it without inline-table
-    /// support:
-    ///
-    ///     action-type = "key"           # key | ax | shell | url
-    ///     action-keys = "cmd+w"         # for type=key
-    ///     action-verb = "close"         # for type=ax
-    ///     action-cmd  = "open ..."      # for type=shell
-    ///     action-url  = "https://..."   # for type=url
+    // Per-row action shape, decomposed across dotted-style keys:
+    //
+    //     action-type = "key"           # key | ax | shell | url
+    //     action-keys = "cmd+w"         # for type=key
+    //     action-verb = "close"         # for type=ax
+    //     action-cmd  = "open ..."      # for type=shell
+    //     action-url  = "https://..."   # for type=url
+    //
+    // Convention, not a parser limit: swift-toml-edit is full TOML
+    // 1.0, so inline tables would parse — the flat form predates it
+    // and every row / doc / bundled config.toml is written this way.
 
     /// Parse a homogeneous batch of cast rule rows from the given
     /// array-of-tables, tagging each with the supplied `context`.

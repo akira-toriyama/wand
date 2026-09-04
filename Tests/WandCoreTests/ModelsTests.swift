@@ -16,7 +16,7 @@ final class ModelsTests: XCTestCase {
 
     func testSampleSpan() {
         // span = largest |dx|, |dy| from the first sample. Drives the
-        // `samples=N, max|dx|=…, max|dy|=…` diagnostic in --record and
+        // `samples=N, max|dx|=…, max|dy|=…` diagnostic in `cast --record` and
         // the no-stroke-recognised log line.
         let samples = [
             Sample(p: CGPoint(x: 0, y: 0), t: 0),

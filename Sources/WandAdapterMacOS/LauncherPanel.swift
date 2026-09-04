@@ -12,8 +12,6 @@
 //     from the folder row into the child works reliably; the native
 //     NSMenu diagonal-cursor tolerance is NOT reproduced — hovering
 //     a non-folder row inside the parent closes the child.
-//   - Dynamic items (`dynamic = "..."`) are rendered as a disabled
-//     placeholder; expanding them as a child panel is future work.
 //   - State markers (✓ / –) prefix the row title.
 //
 // Spec contract:
@@ -23,15 +21,6 @@
 //     the whole panel tree closing.
 //   - Only one panel tree is visible at a time. A second
 //     `present(...)` dismisses the first.
-//
-// File structure:
-//   - `LauncherPanel`         — public entry (just `present(...)`)
-//   - `PanelNode`             — tree node enum (item / folder)
-//   - `PanelTree`             — flat `[LauncherItem]` → `[PanelNode]`
-//   - `PanelLayout`           — builds content NSView, computes frames
-//   - `PanelController`       — one panel level's lifecycle
-//   - `NonActivatingPanel`    — NSPanel subclass that refuses key
-//   - `RowKind` / `ItemRow`   — row view + its state machine
 
 import AppKit
 import Effects   // drawLinePets (shared line-pet drawing; re-exports Palette)
@@ -136,8 +125,8 @@ struct TomeColors {
 @MainActor
 public enum LauncherPanel {
 
-    /// Strong reference holder for the currently-visible root panel.
-    /// Replaced when a new panel opens; cleared in `dismiss()`.
+    /// Strong reference holder for the currently-visible root panel —
+    /// nothing else retains the tree once `present` returns.
     private static var current: PanelController?
 
     public static func present(filteredItems items: [LauncherItem],
@@ -245,11 +234,9 @@ private struct HeaderSpec {
     let icon: NSImage?
 }
 
-/// Convert `[LauncherItem]` → `[PanelNode]`. Walks each item's `group`
-/// path, creating folders on first reference and appending into them
-/// on subsequent ones — same shape as the prior `LauncherMenu`
-/// folder-building, but produces an immutable tree instead of
-/// mutating NSMenus.
+/// `[LauncherItem]` → `[PanelNode]`. Folder order follows first
+/// mention in config, not alphabetical — the user orders rows by
+/// writing them, so the tree must not resort.
 private enum PanelTree {
     static func build(from items: [LauncherItem]) -> [PanelNode] {
         let root = FolderBuilder(name: "")
@@ -348,8 +335,6 @@ private enum PanelLayout {
     /// breadcrumbed labels without wrapping; narrow enough not to feel
     /// like a dialog.
     static let contentWidth: CGFloat = 240
-    /// Visual gap between content edge and accent-highlighted hover
-    /// fill on each side. Matches the row's own internal padding.
     static let cornerRadius: CGFloat = 8
 
     static func makeHeaderSpec(for target: Target) -> HeaderSpec? {
@@ -359,11 +344,8 @@ private enum PanelLayout {
         return HeaderSpec(name: name, icon: icon)
     }
 
-    /// Build the content view (NSVisualEffectView wrapping a
-    /// stack of rows) and return both the view and the row list so
-    /// the caller can wire callbacks. `layout` picks the orientation:
-    /// `.list` builds a vertical stack of full-width rows; `.toolbar`
-    /// builds a horizontal stack of icon-only buttons.
+    /// Returns the row list alongside the view: the caller owns row
+    /// callback wiring, so the rows have to survive the build.
     static func buildContent(nodes: [PanelNode],
                               header: HeaderSpec?,
                               layout: LauncherLayout,
@@ -436,11 +418,10 @@ private enum PanelLayout {
             views.append(makeSeparator(layout: layout))
         }
 
-        // Track the current section as we walk nodes. Section headers
-        // only fire in list mode — toolbar variants are short horizontal
-        // strips where a header band would dominate the panel — and
-        // only on `.item` nodes (folders / placeholders pass through
-        // without disturbing the section).
+        // Section headers only fire in list mode — toolbar variants
+        // are short horizontal strips where a header band would
+        // dominate the panel — and only on `.item` nodes (folders /
+        // placeholders pass through without disturbing the section).
         //
         // An empty `header` on an item inherits whatever the previous
         // run used, so a config can carry one `header = "Editing"` on
@@ -631,7 +612,7 @@ private enum PanelLayout {
         if !item.dynamic.isEmpty {
             // Dynamic item — render as a folder-style row that
             // hover-expands into a child panel populated by running
-            // `item.dynamic` (see `PanelController.openDynamicChild`).
+            // `item.dynamic` (see `PanelController.handleRowHover`).
             let icon = resolveItemIconWithFallback(item: item, layout: layout,
                                                     iconChip: iconChip,
                                                     fontSize: fontSize)
@@ -835,11 +816,9 @@ private enum PanelLayout {
         return parts.joined(separator: " ")
     }
 
-    /// Separator wrapper. List mode: a horizontal 1pt rule with 7pt
-    /// vertical padding. Toolbar mode: a vertical rule between
-    /// buttons (used in practice only for `separator-before` we
-    /// already skip in toolbar — kept for completeness if a future
-    /// toolbar feature wants section dividers).
+    /// The toolbar branch is unreachable today — `separator-before` is
+    /// skipped in toolbar layouts — and is kept only for a future
+    /// toolbar section divider.
     private static func makeSeparator(layout: LauncherLayout) -> NSView {
         let wrap = NSView()
         wrap.translatesAutoresizingMaskIntoConstraints = false
@@ -1166,9 +1145,8 @@ private final class PanelController {
         content.addSubview(view)
     }
 
-    /// Dismiss the entire tree from any level. Walks up to root, then
-    /// tears down monitors and orders out every panel from the deepest
-    /// child back to the root.
+    /// Dismiss the entire tree from any level — a child row's click
+    /// must not leave its ancestors on screen.
     func dismiss() {
         var top: PanelController = self
         while let p = top.parent { top = p }
@@ -1533,7 +1511,7 @@ private final class ItemRow: NSView {
     /// Right-edge "⌘W"-style display string, derived from the item's
     /// `action-keys` by `KeyCombo.format` when this row was built.
     /// Empty for non-`.key` actions, toolbar layouts, or when the
-    /// global `[launcher].shortcut-badge = false`. Rendered as a
+    /// global `[tome.row].shortcut-badge = false`. Rendered as a
     /// muted-grey label inside `installListLayout` only.
     private let shortcutText: String
     private var shortcutField: NSTextField?
@@ -1646,9 +1624,6 @@ private final class ItemRow: NSView {
             }
         }
 
-        // Section headers get their own compact layout (no icon, smaller
-        // font, shorter row). Everything else goes through the
-        // layout-specific installer.
         if case .sectionHeader = kind {
             iconView.isHidden = true
             installSectionHeaderLayout(label: label)
@@ -1663,10 +1638,9 @@ private final class ItemRow: NSView {
         applyIdleStyle()
     }
 
-    /// Compact band: smaller height, no icon column, 10pt semibold
-    /// uppercased label hugging the left edge. Used by `.sectionHeader`
-    /// rows to split a long `.list` panel into labelled groups without
-    /// stealing space from the items themselves.
+    /// Splits a long `.list` panel into labelled groups without
+    /// stealing space from the items themselves — hence the compact
+    /// band rather than a full-height row.
     private func installSectionHeaderLayout(label: String) {
         titleField.translatesAutoresizingMaskIntoConstraints = false
         // Uppercase + small-cap weight reads as a band rather than a
@@ -1753,12 +1727,9 @@ private final class ItemRow: NSView {
             titleTrailingConst = -8
         }
 
-        // Subtitle-aware vertical layout. Without a subtitle the row
-        // stays single-line at `listRowHeight` and the title sits on
-        // the centre Y. With a subtitle the row grows to
-        // `listRowHeightWithSubtitle`; the title hangs from the top
-        // and the muted-grey subtitle hangs below it, while the icon
-        // stays centred so the visual baseline doesn't drift.
+        // With a subtitle the title hangs from the top, but the icon
+        // stays centred — otherwise a captioned row's icon baseline
+        // drifts away from the plain rows above and below it.
         let hasSubtitle = !subtitleText.isEmpty
         let rowHeight: CGFloat = hasSubtitle
             ? listRowHeightWithSubtitle : listRowHeight

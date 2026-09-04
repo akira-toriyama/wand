@@ -1,5 +1,5 @@
 // Wires MouseSource → Recognition → Matcher → Dispatch, plus the
-// DNC IPC channel used by `wand --reload` / `wand --quit`. Lives
+// DNC IPC channel used by `daemon --reload` / `daemon --quit`. Lives
 // in App (not Core) because adapter selection and IPC are startup
 // concerns. `@unchecked Sendable` because `config` mutation lives
 // only on the main thread (stroke handler + DNC observer both run
@@ -16,9 +16,9 @@ public final class Controller: @unchecked Sendable {
     /// Optional launcher tap — created at init only when
     /// `cfg.launcher.enabled` was true at startup, so the second
     /// CGEventTap isn't even allocated when the user hasn't opted in.
-    /// Like `[trigger]`, the launcher's button / modifiers are baked
+    /// Like the `[cast]` trigger keys, the launcher's button / modifiers are baked
     /// into the tap at install; flipping them needs a daemon restart
-    /// (surfaced in --status as pending-restart).
+    /// (surfaced in `daemon --show` as pending-restart).
     private let launcher: LauncherSource?
     /// Mutated by `reload()` on the main thread. The stroke handler
     /// reads `self.config` per-event (not captured locals) so a
@@ -28,12 +28,12 @@ public final class Controller: @unchecked Sendable {
     /// the assist tooltips would stay frozen at startup rules while
     /// dispatch already saw the new ones.
     public private(set) var config: WandConfig
-    /// Last few recognised gestures (newest last), for `wand --status` —
+    /// Last few recognised gestures (newest last), for `wand daemon --show` —
     /// a ring buffer big enough to read out "user drew DR then D then DRU"
     /// while diagnosing remotely.
     private var recentGestures: [String] = []
     private let recentGesturesCap = 5
-    /// Counters surfaced via `--status`. Numbers survive between gestures
+    /// Counters surfaced via `daemon --show`. Numbers survive between gestures
     /// so a remote agent can see "the daemon HAS seen events" even when
     /// no recent gesture matches.
     private var counterRecognised = 0
@@ -59,16 +59,16 @@ public final class Controller: @unchecked Sendable {
     /// Only the native middle-click path reads it; `tome --open`
     /// items files are caller-owned and skip the override.
     private var tomeOrder: [String: [String]] = [:]
-    /// Last reload timestamp + cause, surfaced via `--status`.
+    /// Last reload timestamp + cause, surfaced via `daemon --show`.
     private var lastReload: (when: Date, cause: String) =
         (Date(), "initial-load")
     /// Frozen at init so we can diff later edits against startup. A
-    /// `[trigger]` change or `overlay.enabled = false → true` only
-    /// takes effect on restart; `--status` flags the divergence so
+    /// `[cast]` trigger change or `overlay.enabled = false → true` only
+    /// takes effect on restart; `daemon --show` flags the divergence so
     /// users notice without needing to scan the log.
     private let startupConfig: WandConfig
     /// Fires after `reload()` swaps the in-memory config, with the new
-    /// snapshot. Used by the overlay wiring to hot-apply `[overlay]`
+    /// snapshot. Used by the overlay wiring to hot-apply `[cast.overlay]`
     /// changes (colours, badge toggles, blur, …) without a restart.
     public var onConfigChanged: ((WandConfig) -> Void)?
     /// Fires immediately after a gesture rule's action has been
@@ -365,7 +365,6 @@ public final class Controller: @unchecked Sendable {
         }
     }
 
-    /// Append to the ring buffer, dropping the oldest entry past the cap.
     private func record(_ entry: String) {
         recentGestures.append(entry)
         if recentGestures.count > recentGesturesCap {
@@ -375,14 +374,14 @@ public final class Controller: @unchecked Sendable {
 
 
     /// Re-read `~/.config/wand/config.toml` and swap the in-memory
-    /// config. Rules, excludes, every `[recognition]` timing knob, and
-    /// (mostly) the full `[overlay]` block apply live. Two transitions
+    /// config. Rules, excludes, every `[cast.recognition]` timing knob, and
+    /// (mostly) the full `[cast.overlay]` block apply live. Two transitions
     /// require a full daemon restart, since the underlying object was
     /// never created at startup (or is baked into `tapCreate`'s mask):
-    ///   - `[trigger]` (button / modifiers)
-    ///   - `[overlay].enabled = false → true` when the window was
+    ///   - `[cast]` trigger keys (button / modifiers)
+    ///   - `[cast.overlay].enabled = false → true` when the window was
     ///     never instantiated
-    /// Both are flagged here and surfaced in `--status` as
+    /// Both are flagged here and surfaced in `daemon --show` as
     /// `pending-restart`.
     public func reload(cause: String = "manual") {
         let new = WandConfig.load()
@@ -441,7 +440,7 @@ public final class Controller: @unchecked Sendable {
                 .map { "  \($0.offset + 1). \($0.element)" }
                 .joined(separator: "\n")
         // Restart-required diff against startup. Two cases:
-        // - `[trigger]` is baked into `tapCreate`'s event mask
+        // - the `[cast]` trigger keys are baked into `tapCreate`'s event mask
         // - overlay.enabled = false → true: the window was never
         //   created at startup, so applyConfig has nothing to show
         var pending: [String] = []
@@ -468,7 +467,7 @@ public final class Controller: @unchecked Sendable {
               + "dispatched=\(counterLauncherDispatched))"
             : "\ntome=off"
         // `show-menu` line surfaces only after the external trigger
-        // has fired at least once — keeps `--status` quiet for users
+        // has fired at least once — keeps `daemon --show` quiet for users
         // who haven't wired an external trigger.
         let showMenuLine = counterShowMenuShown > 0
             ? "\nshow-menu: shown=\(counterShowMenuShown), "
