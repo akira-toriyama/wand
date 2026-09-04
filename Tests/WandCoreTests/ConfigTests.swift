@@ -395,7 +395,7 @@ final class ConfigTests: XCTestCase {
     }
 
     func testParseItemsRespectsCursorNamespace() {
-        // The standalone --show-menu items file also uses
+        // The standalone `tome --open` items file also uses
         // `[[tome.cursor.item]]`. Legacy `[[tome.item]]` drops here too.
         let toml = """
         [tome]

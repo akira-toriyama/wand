@@ -13,9 +13,9 @@ source of truth.
 
 The release plumbing is automated end-to-end:
 
-1. **Merge `feat:` / `fix:` / `perf:` commits to `main`.**
-   [`release.yml`](../../.github/workflows/release.yml) runs git-cliff to
-   compute the next semver, builds `Wand.app` (ad-hoc signed for CI;
+1. **Merge a PR whose gitmoji sigil carries a version bump to `main`.**
+   [`release.yml`](../../.github/workflows/release.yml) runs `glyph release`
+   to compute the next semver from the merged commits, builds `Wand.app` (ad-hoc signed for CI;
    reproducible per-machine when users `brew reinstall`), zips it, and
    updates a single rolling **DRAFT** GitHub Release with notes +
    `Wand.zip` attached. No tag is created yet.
@@ -27,7 +27,7 @@ The release plumbing is automated end-to-end:
    Idempotent — re-running on the same tag is a no-op when the formula
    already matches. Requires the `HOMEBREW_TAP_DEPLOY_KEY` repo secret
    (the private half of the tap's write deploy key; fleet-sync fans it out).
-4. **Users get the update.** `brew upgrade stroke` pulls the new tag and
+4. **Users get the update.** `brew upgrade wand` pulls the new tag and
    re-installs from source.
 
 `workflow_dispatch` with `dry_run = true` is a full preview (no draft, no

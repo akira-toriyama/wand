@@ -46,14 +46,14 @@ enum WandApp {
                                               "wand Local Signing" identity + restart
                                               (run once after `brew install` / upgrade)
 
-        cast — gesture engine
+        cast — stroke recognition
           wand cast --test PATTERN [APP]    dry-run: which rule would fire for a
                                               pattern (optionally for a bundle id)
           wand cast --record                interactive recorder: draw a gesture,
                                               get a paste-ready [[cast.cursor.rule]] on
                                               stdout. Refuses if the daemon runs.
 
-        tome — launcher menu
+        tome — menu rows
           wand tome --open                  ask the daemon to pop the tome menu
             --items <PATH>                    at a screen point with the given
             --at <X> <Y>                      [[tome.cursor.item]] file. Cocoa coords

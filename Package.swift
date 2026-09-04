@@ -2,9 +2,9 @@
 //
 // wand — macOS daemon for cursor-anchored mouse automation.
 // Ships two trigger families on one daemon:
-//   - gesture (mouse button + drag — the original `stroke` project's
-//     feature; "stroke" remains the domain term for a drawn gesture)
-//   - launcher (middle-click + contextual NSMenu)
+//   - cast (right-button + drag — the original `stroke` project's
+//     feature; "stroke" remains the domain term for the drawn shape)
+//   - tome (middle-click + non-activating NSPanel of rows)
 // Both dispatch actions against the cursor-anchored window.
 //
 // Architecture is hexagonal (Ports & Adapters), mirroring facet's

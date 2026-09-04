@@ -963,8 +963,8 @@ enum ChompRenderer {
     }
 
     /// Convert an `NSBezierPath` of move/line/curve segments into a
-    /// `CGPath`. We target macOS 13+, but the framework-supplied
-    /// `NSBezierPath.cgPath` accessor only landed in 14.
+    /// `CGPath`. Hand-rolled equivalent of `NSBezierPath.cgPath`,
+    /// written before the macOS floor made that accessor available.
     private static func toCGPath(_ ns: NSBezierPath) -> CGPath {
         let path = CGMutablePath()
         var points = [NSPoint](repeating: .zero, count: 3)

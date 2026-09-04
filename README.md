@@ -1,6 +1,6 @@
 # wand
 
-![platform](https://img.shields.io/badge/platform-macOS%2013%2B-lightgrey)
+![platform](https://img.shields.io/badge/platform-macOS%2026%2B-lightgrey)
 ![swift](https://img.shields.io/badge/Swift-6.0-orange)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 
@@ -370,8 +370,8 @@ intensity = "wild"      # subtle | normal | bold | wild
 ## CLI
 
 yabai-style `wand <domain> --<verb> [VALUE …]`. Four domains —
-**daemon** (lifecycle), **cast** (gesture engine), **tome** (launcher
-menu), **config** (settings). Bare `wand` runs the agent.
+**daemon** (lifecycle), **cast** (stroke recognition), **tome** (menu
+rows), **config** (settings). Bare `wand` runs the agent.
 
 ```sh
 wand                    # run as agent (CGEventTap loop)
@@ -384,11 +384,11 @@ wand daemon --quit      # terminate the running daemon
 wand daemon --resign    # re-sign the installed Wand.app + restart
                         #   (run once after `brew install` / upgrade)
 
-# cast — gesture engine
+# cast — stroke recognition
 wand cast --test DR [app]   # dry-run: which rule fires for a pattern
 wand cast --record          # interactive recorder → paste-ready [[cast.cursor.rule]]
 
-# tome — launcher menu (external trigger)
+# tome — external trigger
 wand tome --open --items <PATH> --at <X> <Y> [--selection <TEXT>] [--title <TEXT>]
                         #   pop the tome at <X> <Y> (Cocoa coords, Y-up;
                         #   --at accepts negative coords). --selection →
@@ -414,18 +414,6 @@ the manual trigger. `daemon --reload` / `daemon --show` / `daemon --quit`
 / `tome --open` need a running daemon (exit 3 with a helpful message if
 none). `cast --record` is the reverse — it refuses if the daemon *is*
 running, because both would fight over the same CGEventTap.
-
-### Migration (flat flags → yabai-style domains)
-
-There is **no deprecation shim** — the old flat flags exit 2. Map:
-
-| old | new |
-|---|---|
-| `wand --reload` / `--status` / `--quit` / `--resign` | `wand daemon --reload` / `--show` / `--quit` / `--resign` |
-| `wand --test P [app]` / `--record` | `wand cast --test P [app]` / `--record` |
-| `wand --show-menu --items … --at …` | `wand tome --open --items … --at …` |
-| `wand --validate --items P` | `wand tome --validate --items P` |
-| `wand --validate` / `--doctor` / `--emit-schema` | `wand config --validate` / `--doctor` / `--emit-schema` |
 
 **Two transitions need a daemon restart** — everything else hot-reloads:
 - `[cast]` (button / modifiers) — baked into the running tap's

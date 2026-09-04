@@ -18,7 +18,7 @@ by a fixture (`WandAdapterTest`) in unit tests.
 ```
 ┌─────────────────────────────────────────────────────────┐
 │  WandApp       @main, CLI argv, Controller wiring,      │
-│                IPC observer for --reload / --quit       │  app
+│                IPC observer for daemon --reload / --quit│  app
 └──────────────────────┬──────────────────────────────────┘
                        │
               ┌────────┴────────┐
