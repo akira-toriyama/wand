@@ -105,10 +105,9 @@ public struct LauncherItem: Sendable, Equatable {
     /// text icons ignore this entirely.
     public let tintColors: [String]
     /// Optional **SF Symbol icon animation**, fired on row hover.
-    /// Recognised values: `"bounce"` / `"pulse"` (macOS 14+). Empty
-    /// (default) = static icon. Unknown values log + fall back to
-    /// no animation. macOS 13 ignores the field entirely. Only
-    /// affects SF Symbol icons (file / emoji / text icons have no
+    /// Recognised values: `"bounce"` / `"pulse"`. Empty (default) =
+    /// static icon. Unknown values log + fall back to no animation.
+    /// Only affects SF Symbol icons (file / emoji / text icons have no
     /// SymbolEffect path).
     public let iconAnim: String
     /// Title-glob filter on top of `apps`. Empty = no filter.

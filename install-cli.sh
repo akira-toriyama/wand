@@ -24,5 +24,5 @@ case ":$PATH:" in
   *":$DIR:"*) : ;;
   *) echo "note: add $DIR to PATH (e.g. in ~/.zshrc)";;
 esac
-echo "usage: wand --reload | --quit | --validate | --record | --help"
+echo "usage: wand daemon --reload | --quit  /  wand config --validate  /  wand cast --record  /  wand --help"
 echo "       (run \`wand\` alone for the daemon)"

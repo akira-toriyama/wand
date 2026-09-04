@@ -39,6 +39,9 @@
 #
 # Sections:
 #   [exclude]                       — global: applies to every trigger
+#   [failsafe]                      — global, REQUIRED: stuck-button
+#                                     release (missing block = wand
+#                                     refuses to start)
 #
 #   [cast]                          — cast trigger (right-button + drag
 #                                     draws a shape; the wand "casts"
@@ -50,7 +53,9 @@
 #   [cast.overlay.trail]            — trail line itself
 #   [cast.overlay.badge]            — origin badge
 #   [cast.overlay.cards]            — assist-card cosmetics + effects
-#   [cast.chomp]                  — chomp special-theme knobs
+#   [cast.overlay.no-match]         — reaction when the stroke ends
+#                                     on no rule
+#   [cast.chomp]                    — chomp special-theme knobs
 #                                     (only read under
 #                                      [cast].theme = "chomp")
 #   [cast.fire.burst]               — fire-moment particle burst

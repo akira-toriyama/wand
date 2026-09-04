@@ -321,7 +321,7 @@ as PLANNED below so the WHY of each one is on record for the next
 PR that touches this surface. Don't lean on any single layer;
 combine them so one failure mode can't cascade.
 
-1. **Button-hold timeout** — `[failsafe].mouse-hold-timeout-sec`.
+1. **Button-hold timeout** — `[failsafe].mouse-hold-timeout-seconds`.
    If any mouse button stays `down` longer than the timeout, the
    daemon force-posts a mouseUp at the current cursor position.
    Catches both wand-origin stuck states and external HID layers
@@ -562,7 +562,7 @@ The workflow:
 3. **Read the trace.** A cast that fires end-to-end logs, in
    order:
    ```
-   event-tap: down at (x,y) → target=com.google.Chrome
+   event-tap: down at (x, y) → com.google.Chrome (pid …, wid …)
    event-tap: up — samples=512, pattern=DR
    controller: recognised DR on com.google.Chrome
    controller: → rule "close tab"

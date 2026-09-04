@@ -6,7 +6,7 @@
 # a draft release is Published — this file is the manual-edit reference, not
 # what brew actually reads.
 class Wand < Formula
-  desc "macOS daemon for cursor-anchored mouse automation — gesture + launcher"
+  desc "macOS daemon for cursor-anchored mouse automation — cast + tome"
   homepage "https://github.com/akira-toriyama/wand"
   # Reference copy. The REAL sha256 lives only in the tap's Formula/wand.rb
   # (a sha cannot self-reference the tarball that contains it). Per-release
@@ -19,10 +19,11 @@ class Wand < Formula
   # Builds with the Swift toolchain from Xcode *or* the Command Line Tools;
   # a full Xcode.app is not required. swift-tools-version 6.0 needs a Swift 6
   # toolchain — older toolchains fail fast with a clear version error.
-  depends_on macos: :ventura
+  depends_on macos: :tahoe
 
   def install
-    # No external SwiftPM deps; --disable-sandbox lets swiftpm write its cache.
+    # SwiftPM resolves sill / swift-toml-edit from GitHub at build time;
+    # --disable-sandbox lets swiftpm write its cache.
     system "swift", "build", "--disable-sandbox", "-c", "release"
 
     app = prefix/"Wand.app"
@@ -74,7 +75,7 @@ class Wand < Formula
            "(\"#{sign_id}\") — TCC grants persist across upgrades."
     end
 
-    # Same binary doubles as the thin CLI client (--reload / --quit / etc).
+    # Same binary doubles as the thin CLI client (daemon --reload / --quit / etc).
     bin.install_symlink app/"Contents/MacOS/wand" => "wand"
   end
 
@@ -96,8 +97,8 @@ class Wand < Formula
       wand is a macOS daemon for cursor-anchored mouse automation
       (LSUIElement, no Dock icon). Two trigger families share one daemon:
 
-        - gesture (mouse button + drag → recognise a LURD shape → fire)
-        - launcher (middle-click → contextual NSMenu, opt-in)
+        - cast (right-button + drag → recognise a LURD shape → fire a rule)
+        - tome (middle-click → non-activating panel of rows, opt-in)
 
       Both act on the window UNDER the cursor — not the focused one —
       so actions land where you're pointing even on multi-display setups.
@@ -112,16 +113,17 @@ class Wand < Formula
            Security → Accessibility), then relaunch with `wand`.
 
       CLI (no daemon needed for these):
-        wand --validate    parse config.toml
-        wand --record      interactive recorder — draw, see the pattern
-        wand --help        all flags
+        wand config --validate   parse config.toml
+        wand config --doctor     Accessibility / config / daemon / tap check
+        wand cast --record       interactive recorder — draw, see the pattern
+        wand --help              all domains and verbs
 
       Client commands (talk to the running daemon over DNC):
-        wand --reload      re-read config.toml live
-        wand --quit        terminate the running daemon
-        wand --show-menu   external-trigger entry to the launcher menu
-                           (for an upstream trigger: a chord hotkey,
-                           or a text-selection observer)
+        wand daemon --reload     re-read config.toml live
+        wand daemon --quit       terminate the running daemon
+        wand tome --open         external-trigger entry to the tome
+                                 (for an upstream trigger: a chord hotkey,
+                                 or a text-selection observer)
 
       Auto-start on login:
         brew services start wand
@@ -147,7 +149,12 @@ class Wand < Formula
 
   test do
     assert_path_exists prefix/"Wand.app/Contents/MacOS/wand"
-    # --validate touches no event tap / AX — safe in the test sandbox.
-    system bin/"wand", "--validate"
+    # `config --validate` touches no event tap / AX — safe in the test
+    # sandbox. It needs a config with the mandatory [failsafe] block
+    # (a missing block is a fatal error by design), so seed one under
+    # the test HOME.
+    (testpath/".config/wand").mkpath
+    (testpath/".config/wand/config.toml").write "[failsafe]\n"
+    system bin/"wand", "config", "--validate"
   end
 end
