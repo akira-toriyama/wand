@@ -79,10 +79,6 @@ public final class FaviconCache {
             completion(img)
             return
         }
-        // Coalesce concurrent requests: stack the closure onto an
-        // existing in-flight entry rather than starting a duplicate
-        // fetch. The first call to `loadOrFetch` for a host kicks the
-        // download; everyone else waits for the same completion.
         if inFlight[host] != nil {
             inFlight[host]?.append(completion)
             return

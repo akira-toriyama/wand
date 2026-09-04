@@ -32,8 +32,8 @@ public enum LauncherOrder {
             if let eid = id(el), rank[eid] != nil { slots.append(i) }
         }
         guard slots.count > 1 else { return elements }
-        // Occupants sorted by override rank; offset tie-break keeps
-        // duplicate ids stable.
+        // Offset tie-break keeps duplicate ids in their original
+        // relative order (Swift's sort is not stable).
         let sorted = slots
             .enumerated()
             .sorted { a, b in

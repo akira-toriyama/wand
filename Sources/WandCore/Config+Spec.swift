@@ -4,7 +4,7 @@
 //
 //   • the UNIFORM half of the decode (`WandConfig.parse` →
 //     `configSpec.decode` populates a scratch `Decoded` value)
-//   • the JSON Schema (`wand --emit-schema`) taplo uses for editor
+//   • the JSON Schema (`wand config --emit-schema`) taplo uses for editor
 //     completion + validation
 //
 // so a plain scalar/table key can never be in the parser but missing
@@ -420,7 +420,7 @@ public extension WandConfig {
                           doc: "Border stroke width (px). Clamped 1..10."),
             ]),
 
-            // ── Schema-only below (wand decodes these bespoke) ──
+            // Schema-only below — wand decodes these bespoke.
 
             .init("cast.cursor.rule", kind: .arrayOfTables,
                   doc: "Cursor-anchored gesture rule (fires only when the "
@@ -513,7 +513,7 @@ public extension WandConfig {
         ]
     }
 
-    /// The `config.toml` JSON Schema (Draft-07). Drives `wand
+    /// The `config.toml` JSON Schema (Draft-07). Drives `wand config
     /// --emit-schema` and the sidecar install — generated from the one
     /// `configSpec`, so it can never drift from the decode.
     ///
@@ -554,7 +554,6 @@ public extension WandConfig {
     }
 }
 
-//
 // Each builder reproduces the EXACT read the old `parse` did for that
 // key (same `Toml.Value` accessor, same clamp bounds + log, same enum /
 // theme resolution), so `configSpec.decode` is byte-identical to the
@@ -745,8 +744,6 @@ private extension ConfigSchema.Field where Root == WandConfig.Decoded {
               domain: wandThemeDomain,
               def: .string(wandDefaultThemeName), doc: doc)
     }
-
-    // MARK: Schema-only (no decode here — wand handles these bespoke)
 
     /// Schema-only scalar (a `[[array-of-tables]]` row field, or a key
     /// `parse` reads bespoke). No-op `apply`.

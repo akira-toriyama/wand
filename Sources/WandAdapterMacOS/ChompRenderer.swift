@@ -1,24 +1,9 @@
 // Chomp trail renderer. Stateless — `TrailView` packages every
 // piece of state the renderer needs into `State` and calls into
-// the static `draw(state:color:outline:)` entry point. Pulling
-// the chomp/ghost code into its own file keeps GestureOverlay.swift
-// focused on the shared trail / HUD plumbing instead of one theme's
-// ~450-line implementation.
-//
-// File structure mirrors the rendering pipeline used by `draw`:
-//   1. snappedPoints       — shared centerline sequence (origin →
-//                             corners → axis-snapped cursor) consumed
-//                             by every layer below so corridor /
-//                             pellets / face anchor stay locked.
-//   2. corridor + walls    — `buildCenterline` + CG outline stroking
-//                             paints the black road and both neon
-//                             walls in one geometry pass.
-//   3. face anchor + pellets — `walkPolyline` walks the same
-//                                snapped sequence at fixed
-//                                intervals.
-//   4. face / ghost sprite  — pixel-grid rasterisation; ghost on
-//                              no-match swaps the wedge for the
-//                              chunky 14×14 arcade-ghost silhouette.
+// the static `draw(state:color:outline:)` entry point. The
+// chomp/ghost code sits in its own file so GestureOverlay.swift
+// carries only the shared trail / HUD plumbing, not one theme's
+// implementation.
 
 import AppKit
 import WandCore
@@ -107,15 +92,15 @@ enum ChompRenderer {
     /// (≈ 24×26pt at scale=1 vs face's 32pt) so it reads as the
     /// arcade bonus tile, not a giant pellet.
     private static let cherryCellMultiplier: CGFloat = 0.5
-    /// 12×13 pixel sprite, traced cell-by-cell from
-    /// `/Users/tommy/Desktop/x/222.png` at 8 px / cell. Two
-    /// cherries with a brown stem reaching up to the right; each
-    /// cherry has a 2-cell stepped `W` highlight on its upper-
-    /// left (so the light source reads as upper-left). The `.`
-    /// gap in the middle is the dark wedge between the two
-    /// cherries — on the click-through overlay it falls through
-    /// to whatever's underneath, exactly like the source image's
-    /// black background showed.
+    /// 12×13 pixel sprite, traced cell-by-cell from the arcade
+    /// cherry reference image at 8 px / cell. Two cherries with a
+    /// brown stem reaching up to the right; each cherry has a
+    /// 2-cell stepped `W` highlight on its upper-left (so the light
+    /// source reads as upper-left). The `.` gap in the middle is
+    /// the dark wedge between the two cherries — on the
+    /// click-through overlay it falls through to whatever's
+    /// underneath, exactly like the source image's black background
+    /// showed.
     ///
     /// Rendered without rotation — like Chomp's pellets and
     /// the cherry's reference sprite, the cherry orientation
@@ -139,12 +124,11 @@ enum ChompRenderer {
         "......RRRR..",
         "......KKKK..",
     ]
-    /// Cherry sprite palette. Sampled directly from
-    /// `/Users/tommy/Desktop/x/222.png`: red ≈ 248,0,7;
-    /// brown ≈ 217,125,64; outline pure black; highlight
-    /// near-white. The brown is the same single tone used for
-    /// the stem AND the stem's "shading-into-body" overlap
-    /// cells (the source sprite is flat-shaded — no second
+    /// Cherry sprite palette, sampled from the same reference
+    /// image: red ≈ 248,0,7; brown ≈ 217,125,64; outline pure
+    /// black; highlight near-white. The brown is the same single
+    /// tone used for the stem AND the stem's "shading-into-body"
+    /// overlap cells (the source sprite is flat-shaded — no second
     /// brown tone).
     private static let cherryRed = NSColor(srgbRed: 0.97,
                                             green: 0.0,
@@ -289,7 +273,6 @@ enum ChompRenderer {
             let centerCGPath = toCGPath(
                 buildCenterline(points: snappedPts))
 
-            // Walls (thicker, drawn first).
             ctx.addPath(centerCGPath)
             ctx.setStrokeColor(
                 outline.withAlphaComponent(0.95).cgColor)
@@ -298,9 +281,6 @@ enum ChompRenderer {
             ctx.setLineJoin(.round)
             ctx.strokePath()
 
-            // Road (thinner, drawn on top — covers the inner band
-            // of the wall stroke so only the `wallThickness`-wide
-            // outer band remains visible as neon).
             ctx.addPath(centerCGPath)
             ctx.setStrokeColor(
                 NSColor.black.withAlphaComponent(0.95).cgColor)
@@ -353,12 +333,10 @@ enum ChompRenderer {
         }
         let currentFaceArc = faceAnchor?.arc ?? 0
 
-        // 3) Pellets across the full snapped polyline. Regular
-        // pellets are the historical filled circle; on-track pellets
-        // get swapped for a cherry emoji at ~8% probability per
-        // position. Cherry selection is hashed off the pellet's
-        // rounded position so a given pellet stays a cherry (or
-        // doesn't) across redraws of the same stroke.
+        // 3) Pellets across the full snapped polyline. Cherry
+        // selection is hashed off the pellet's rounded position so a
+        // given pellet stays a cherry (or doesn't) across redraws of
+        // the same stroke.
         //
         // Cherries the face has already walked past are not drawn
         // (= "eaten") — the arcade beat where Chomp's mouth lands
@@ -475,13 +453,11 @@ enum ChompRenderer {
     }
 
     /// Chomp centerline = straight polyline through `pts`. No
-    /// per-corner smoothing — `copy(strokingWithWidth:lineCap:.round
-    /// ,lineJoin:.round,...)` in `draw(...)` then turns each 90°
-    /// vertex into a rounded outer arc + sharp inner point, which
-    /// is exactly the arcade-maze elbow we want. Kept as its own
-    /// function (rather than inlined) so that future fillet /
-    /// chamfer experiments can plug in here without disturbing the
-    /// `draw(...)` pipeline.
+    /// per-corner smoothing: `draw`'s two `.round` lineCap /
+    /// lineJoin stroke passes turn each 90° vertex into a rounded
+    /// outer arc + sharp inner point, which is exactly the
+    /// arcade-maze elbow we want — the sharp inner point is then
+    /// eroded by the `innerCornerPoints` fillets.
     private static func buildCenterline(points pts: [CGPoint])
         -> NSBezierPath {
         let path = NSBezierPath()
@@ -683,8 +659,7 @@ enum ChompRenderer {
                 let cx = (CGFloat(ix) + 0.5) * cell
                 let cy = (CGFloat(iy) + 0.5) * cell
                 if cx * cx + cy * cy > r2 { continue }
-                // Mouth opens along local +x — drop cells whose
-                // angle from the centre falls inside ±mouthHalf.
+                // Mouth opens along local +x.
                 if abs(atan2(cy, cx)) < mouthHalfRad { continue }
                 let rect = NSRect(
                     x: CGFloat(ix) * cell,
@@ -695,11 +670,12 @@ enum ChompRenderer {
         }
     }
 
-    /// 14×14 ghost body sprite, traced from `/Users/tommy/Desktop/b/1.gif`
-    /// frame A at 7 px / cell with the eye whites stripped — both
-    /// eye whites AND pupils are drawn procedurally on top so the
-    /// whole eye (white + blue) snaps through 4 cardinal
-    /// directions per `2.gif`, not just the pupil. `R` cells fill
+    /// 14×14 ghost body sprite, traced from the arcade ghost walk
+    /// reference (frame A) at 7 px / cell with the eye whites
+    /// stripped — both eye whites AND pupils are drawn
+    /// procedurally on top so the whole eye (white + blue) snaps
+    /// through the 4 cardinal directions of the eye-direction
+    /// reference, not just the pupil. `R` cells fill
     /// with the passed-in body colour; `.` cells are transparent.
     /// The last 2 rows are leg pose A's skirt; on the alternate
     /// frame the renderer swaps them for `ghostSkirtAlt` to give
@@ -720,7 +696,8 @@ enum ChompRenderer {
         "RR.RRR..RRR.RR",
         "R...RR..RR...R",
     ]
-    /// Alternate skirt pose (last 2 rows of `1.gif` frame B). The
+    /// Alternate skirt pose (last 2 rows of the walk reference's
+    /// frame B). The
     /// renderer swaps `ghostSprite`'s last 2 rows with these when
     /// `legFrame == 1`, so over time the humps shift by half a
     /// hump-width and the silhouette reads as walking.
@@ -732,12 +709,13 @@ enum ChompRenderer {
     /// Drawn as a solid 4×4 rectangle (no rounded corners) so that
     /// when the eye shifts up/down, the corner cells of a rounded
     /// shape don't expose the red body underneath as
-    /// "red dots in the white" — the source `2.gif` has the same
-    /// rounding artefact, but on the trail overlay it reads
-    /// worse, so we square the corners. Pupil keeps its 2×2.
+    /// "red dots in the white" — the eye-direction reference has
+    /// the same rounding artefact, but on the trail overlay it
+    /// reads worse, so we square the corners. Pupil keeps its 2×2.
     private static let ghostEyeWhiteCols: CGFloat = 4
     private static let ghostEyeWhiteRows: CGFloat = 4
-    /// Pupil colour (arcade ghost blue). Sampled from `1.gif`.
+    /// Pupil colour (arcade ghost blue). Sampled from the ghost
+    /// reference sprite.
     private static let ghostPupilColor = NSColor(srgbRed: 0.0,
                                                   green: 0.0,
                                                   blue: 0.93,
@@ -752,12 +730,12 @@ enum ChompRenderer {
     private static let ghostLeftEyeCenter = CGPoint(x: 3.5, y: 5)
     private static let ghostRightEyeCenter = CGPoint(x: 9.5, y: 5)
 
-    /// Draw the no-match ghost — pixel sprite traced from
-    /// `1.gif`, with the skirt's last 2 rows alternating at
+    /// Draw the no-match ghost — pixel sprite traced from the walk
+    /// reference, with the skirt's last 2 rows alternating at
     /// `ghostSkirtHz` between frame A and frame B (`ghostSkirtAlt`)
     /// to give the classic arcade leg shuffle. Body sits upright
     /// (arcade ghosts don't rotate); only the pupils track
-    /// `tangent`, snapped to 4 cardinals to match `2.gif`'s
+    /// `tangent`, snapped to 4 cardinals to match the reference's
     /// discrete eye-direction frames.
     ///
     /// The whole sprite picks up a `panic-jitter` offset
@@ -814,9 +792,9 @@ enum ChompRenderer {
 
         // Direction snap — eye whites AND pupils both ride the
         // dominant `tangent` axis, snapped to 4 cardinals to
-        // mirror `2.gif` frames 1-4. With zero tangent the eyes
-        // default to a rightward look (matching the 1.gif idle
-        // pose) so they never sit dead-centre.
+        // mirror the reference's 4 eye-direction frames. With zero
+        // tangent the eyes default to a rightward look (the
+        // reference's idle pose) so they never sit dead-centre.
         let absX = abs(tangent.x), absY = abs(tangent.y)
         var dirX: CGFloat
         var dirY: CGFloat

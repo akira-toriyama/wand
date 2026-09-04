@@ -40,7 +40,7 @@ public final class MacOSLauncherSource: LauncherSource, @unchecked Sendable {
     }
 
     /// Cheap probe — install a listen-only tap and tear it down. Used
-    /// by `wand --doctor` to confirm the launcher tap path works
+    /// by `wand config --doctor` to confirm the launcher tap path works
     /// without touching the real handler.
     public static func canInstallTap(trigger: Trigger) -> Bool {
         let mask = trigger.button.downUpMask
@@ -100,7 +100,7 @@ public final class MacOSLauncherSource: LauncherSource, @unchecked Sendable {
         // No-op: trigger is immutable post-init (changing it needs a
         // fresh tapCreate, which is a daemon restart). The Controller
         // logs the mismatch on reload and surfaces it as
-        // `pending-restart` in `--status`.
+        // `pending-restart` in `daemon --show`.
     }
 
     private func handle(type: CGEventType,

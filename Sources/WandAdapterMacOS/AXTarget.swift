@@ -186,7 +186,8 @@ public enum AXTarget {
     }
 
 
-    /// Current trust state, without prompting — for `wand --doctor`.
+    /// Current trust state, without prompting — for
+    /// `wand config --doctor`.
     public static func isTrusted() -> Bool { AXIsProcessTrusted() }
 
     /// Focused-window title of the app owning `pid`. Empty string

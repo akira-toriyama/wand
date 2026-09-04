@@ -45,7 +45,6 @@ public struct TrailSample {
 
 public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
 
-    // Configuration -----------------------------------------------------
     // `trigger` is baked into the running tap (event mask) and only
     // changes at restart. The four timing knobs below are mutable so
     // `updateConfig` can swap them live on the next sample.
@@ -59,13 +58,12 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
     private var cancelReversals: Int
     /// Window (ms) those reversals must fall within; `0` = any speed.
     private var cancelWindowMs: Int
-    /// `--record` mode: never fire actions, deliver *every* stroke
-    /// (including too-short ones) to the handler so the recorder can
-    /// log them, and still replay short clicks so the user keeps a
-    /// working right-button while the recorder is open.
+    /// `cast --record` mode: never fire actions, deliver *every*
+    /// stroke (including too-short ones) to the handler so the
+    /// recorder can log them, and still replay short clicks so the
+    /// user keeps a working right-button while the recorder is open.
     private let isRecording: Bool
 
-    // Tap state ---------------------------------------------------------
     private var tap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
     private var handler: (@Sendable (WandEvent) -> Void)?
@@ -77,7 +75,6 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
     public var onSample: ((TrailSample) -> Void)?
     public var onStrokeEnd: (() -> Void)?
 
-    // Per-stroke capture state -----------------------------------------
     private var capturing = false
     private var samples: [Sample] = []
     private var currentTarget: Target?
@@ -109,9 +106,10 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
     private static let replaySentinel: Int64 = 0x5354_524B_E115
 
     /// Probe whether a session event tap can be installed right now —
-    /// the definitive Accessibility check for `wand --doctor`. Creates
-    /// a listen-only tap, never adds it to a run loop, and tears it down
-    /// immediately (safe alongside a running daemon — taps coexist).
+    /// the definitive Accessibility check for `wand config --doctor`.
+    /// Creates a listen-only tap, never adds it to a run loop, and
+    /// tears it down immediately (safe alongside a running daemon —
+    /// taps coexist).
     public static func canInstallTap() -> Bool {
         let mask: CGEventMask = 1 << CGEventType.mouseMoved.rawValue
         guard let tap = CGEvent.tapCreate(
@@ -135,15 +133,13 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
         self.isRecording = isRecording
     }
 
-    /// Has the current segment (time since the last turn) exceeded
-    /// `maxSegmentMs`? Each direction change resets the clock, so the
-    /// budget is per-segment rather than for the whole stroke.
+    /// Each direction change resets the clock, so the budget is
+    /// per-segment rather than for the whole stroke.
     private var strokeExpired: Bool {
         maxSegmentMs > 0
             && (CACurrentMediaTime() - lastTurn) * 1000 > Double(maxSegmentMs)
     }
 
-    /// Reset the segment clock when a new direction appears.
     private func noteTurn(dirCount: Int) {
         if dirCount > lastDirCount {
             lastDirCount = dirCount
@@ -203,7 +199,7 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
         Log.line("event-tap: stop")
     }
 
-    /// Hot-apply the four `[recognition]` timing knobs without
+    /// Hot-apply the four `[cast.recognition]` timing knobs without
     /// reinstalling the event tap. The recogniser reads these values
     /// per-sample, so the swap takes effect on the very next gesture.
     /// `trigger` is intentionally not swappable here — the event mask
@@ -286,7 +282,6 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
                              : Unmanaged.passUnretained(event)
         }
 
-        // Pass through events we ourselves synthesized.
         if event.getIntegerValueField(.eventSourceUserData)
             == Self.replaySentinel {
             return Unmanaged.passUnretained(event)
@@ -396,11 +391,9 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
         return nil
     }
 
-    /// Feed the overlay one trail point plus the gesture-so-far, advance
-    /// the per-segment expiry clock on each turn, and latch a cancel
-    /// once the shape scribbles back and forth. The live pattern drives
-    /// all three, so the recognise pass runs whenever any of the overlay,
-    /// `maxSegmentMs`, or `cancelReversals` needs it — skipped otherwise.
+    /// The live pattern drives the overlay, `maxSegmentMs`, and
+    /// `cancelReversals` alike, so the recognise pass runs whenever
+    /// any of the three needs it — and is skipped entirely otherwise.
     private func emitTrailSample(_ cg: CGPoint) {
         guard onSample != nil || maxSegmentMs > 0 || cancelReversals > 0
         else { return }

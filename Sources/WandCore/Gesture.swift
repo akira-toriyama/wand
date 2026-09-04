@@ -255,7 +255,7 @@ public struct GestureOverlayNoMatchSpec: Sendable, Equatable {
 /// `[cast.overlay]` — the whole HUD (trail + badge + cards) plus
 /// shared toggles. `enabled = false` keeps the overlay window from
 /// being created at all (the daemon must restart to flip back on —
-/// surfaced as pending-restart in `--status`).
+/// surfaced as pending-restart in `daemon --show`).
 public struct GestureOverlaySpec: Sendable, Equatable {
     public let enabled: Bool
     /// Frosted blur (`NSVisualEffectView`) under the HUD cards +

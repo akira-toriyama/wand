@@ -13,6 +13,6 @@ import Foundation
 let controlNotificationName = "com.wand.app.control"
 
 /// The running daemon rewrites this file on start / reload / each
-/// recognised gesture; `wand --status` reads it. A plain file
+/// recognised gesture; `wand daemon --show` reads it. A plain file
 /// sidesteps needing a request/response IPC channel (DNC is one-way).
 let statusPath = "/tmp/wand.status"

@@ -1,16 +1,8 @@
 // Trail-end "burst" — omnidirectional particle explosion at the
 // cursor position when a gesture rule fires. Lives in its own tiny
 // click-through NSWindow (sibling of DecalManager) so the effect
-// works regardless of `[gesture.overlay].enabled` — the burst is a
-// fire-moment effect, not a trail decoration, and v5 splits it out
-// of the overlay accordingly.
-//
-// Lifecycle:
-//   - `emit(at:color:kind:intensity:)` creates a transient window,
-//     adds a CAEmitterLayer, kills the birth rate after a brief
-//     flash, and releases the window after the particles fade.
-//   - `clearAll()` tears down every active burst window (used by
-//     `--quit` / daemon teardown).
+// works regardless of `[cast.overlay].enabled` — the burst is a
+// fire-moment effect, not a trail decoration.
 //
 // Multi-display: each burst's window is created on the screen that
 // contains the fire point, sized to a small square big enough for
@@ -126,10 +118,10 @@ public final class BurstManager {
         live.removeAll()
     }
 
-    /// Same emitter geometry the overlay used in v4 — palette cycles
-    /// across the gesture accent + adjacent hues, particles fly out
-    /// in every direction with a slight downward acceleration so
-    /// they drift rather than holding their initial radius.
+    /// Palette cycles across the gesture accent + adjacent hues;
+    /// particles fly out in every direction with a slight downward
+    /// acceleration so they drift rather than holding their initial
+    /// radius.
     private static func makeOmniBurstEmitter(
         at point: CGPoint,
         color: NSColor,

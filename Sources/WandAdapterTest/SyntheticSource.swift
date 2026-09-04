@@ -3,8 +3,8 @@
 // Lets a unit test feed a hand-built `[Sample]` (plus a fake Target)
 // into the same recognition + matching path the real adapter uses,
 // without needing a CGEventTap or AX permission. Also useful as the
-// driver behind `wand --record`'s "play back the saved fixture and
-// show what would be recognised" mode.
+// driver behind `wand cast --record`'s "play back the saved fixture
+// and show what would be recognised" mode.
 
 import CoreGraphics
 import Foundation

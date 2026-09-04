@@ -1,6 +1,6 @@
 // WandConfig.parse — clamps, defaults, rule shape, overlay parsing.
-// TOML parser primitives live in TOMLTests; this file targets the
-// `parse(_:)` orchestrator and its per-key clamp/drop semantics.
+// Targets the `parse(_:)` orchestrator and its per-key clamp/drop
+// semantics; TOML tokenizing itself belongs to swift-toml-edit.
 
 import XCTest
 @testable import WandCore
@@ -177,7 +177,7 @@ final class ConfigTests: XCTestCase {
     }
 
     func testUnknownAXVerbDropsRule() {
-        // Typo'd verb drops at parse time (visible to --validate)
+        // Typo'd verb drops at parse time (visible to `config --validate`)
         // rather than loading and silently no-op'ing at dispatch.
         let toml = """
         [[cast.cursor.rule]]

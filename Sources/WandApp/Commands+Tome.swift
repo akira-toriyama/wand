@@ -49,7 +49,8 @@ extension WandApp {
             ).utf8))
             exit(2)
         }
-        // --at X Y — two numeric values (CLIKit consumed them, signs OK).
+        // CLIKit already consumed both values, so a negative Cocoa
+        // coord arrived as a value instead of an unknown flag.
         let at = inv.values("--at")
         guard at.count == 2, let x = Double(at[0]), let y = Double(at[1]) else {
             FileHandle.standardError.write(Data((

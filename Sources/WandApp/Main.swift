@@ -132,7 +132,7 @@ enum WandApp {
         }
     }
 
-    // MARK: domain dispatch (CLIKit tokenizes; wand keeps verb policy — D4)
+    // CLIKit tokenizes; wand keeps the verb policy (D4).
 
     /// Parse `argv` against `spec`, mapping any usage error to a loud
     /// exit 2. (CLIKit's tokenizer is pure; wand owns the exit.)
@@ -227,9 +227,4 @@ enum WandApp {
         }
     }
 
-
-    /// Exit fatally when `[failsafe]` is missing — same policy for
-    /// both `--validate` and `runServer()` so they don't drift.
-    /// See CLAUDE.md "Safety invariants" for the WHY of the
-    /// mandatory-block rule.
 }

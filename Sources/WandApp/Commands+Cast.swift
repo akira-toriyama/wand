@@ -10,7 +10,7 @@ import WandAdapterMacOS
 
 extension WandApp {
 
-    /// `--test PATTERN [bundle-id]`: resolve which rule a pattern would
+    /// `cast --test PATTERN [bundle-id]`: resolve which rule a pattern would
     /// fire. With a bundle id, report the single firing rule (honouring
     /// app filters + excludes); without one, list every rule that uses
     /// the pattern. Reads config; touches no event tap.

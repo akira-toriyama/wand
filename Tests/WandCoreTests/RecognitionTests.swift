@@ -114,7 +114,7 @@ final class RecognitionTests: XCTestCase {
                        [.up])
     }
 
-    // MARK: - reversals (drives scribble-to-cancel)
+    // `reversals` drives the scribble-to-cancel detector.
 
     func testReversalsCountsOppositePairs() {
         XCTAssertEqual(Recognition.reversals("LR"), 1)
@@ -153,8 +153,8 @@ final class RecognitionTests: XCTestCase {
         XCTAssertNotNil(Recognition.patternIssue("LL"))
         XCTAssertNotNil(Recognition.patternIssue("DRR"))
         XCTAssertNotNil(Recognition.patternIssue("DLLU"))
-        // The message names the offending pair so --validate output is
-        // actionable.
+        // The message names the offending pair so `config --validate`
+        // output is actionable.
         XCTAssertTrue(
             Recognition.patternIssue("DRR")?.contains("RR") == true)
     }

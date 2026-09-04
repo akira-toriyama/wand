@@ -63,7 +63,7 @@ extension WandApp {
         // Launcher trigger — only allocated when opted in at startup.
         // Like the gesture tap, its button is baked into the event
         // mask, so toggling enabled / changing button needs a restart
-        // (surfaced as pending-restart in `--status`).
+        // (surfaced as pending-restart in `daemon --show`).
         let launcher: LauncherSource? = cfg.launcher.enabled
             ? MacOSLauncherSource(trigger: cfg.launcher.trigger)
             : nil
@@ -90,7 +90,7 @@ extension WandApp {
         // Gesture-trail overlay (passive observer of the sample
         // stream). Held for the process lifetime via `app.run()`.
         // Declared `outside` the `if` so the live-reload hook below
-        // can hot-apply `[overlay]` changes without a restart.
+        // can hot-apply `[cast.overlay]` changes without a restart.
         var overlay: GestureOverlay?
         if cfg.overlay.enabled {
             overlay = GestureOverlay(cfg)
@@ -180,9 +180,9 @@ extension WandApp {
                      + "width=\(cfg.overlay.trail.width))")
         }
 
-        // Push `[overlay]` changes to the live overlay so edits take
+        // Push `[cast.overlay]` changes to the live overlay so edits take
         // effect without a restart. `applyConfig` covers every
-        // overlay knob; `[trigger]` and the `[recognition]` timing
+        // overlay knob; the `[cast]` trigger keys and the `[cast.recognition]` timing
         // knobs still need a restart (Controller.reload logs them).
         // The favicon prewarm rides on the same callback so the
         // moment a user adds `icon = "favicon:..."` to their config
@@ -281,11 +281,11 @@ extension WandApp {
         }
         _ = decalManager   // hold a reference for the process lifetime
         _ = burstManager   // ditto — fire-moment effects need both alive
-        _ = arcadeScoreManager   // arcade-score popup manager
+        _ = arcadeScoreManager
 
         controller.start()
 
-        // Live-reload on config edits (no `--reload` needed). Held for
+        // Live-reload on config edits (no `daemon --reload` needed). Held for
         // the process lifetime via `app.run()`.
         let watcher = ConfigWatcher(path: WandConfig.path) {
             Log.line("config: file changed — reloading")

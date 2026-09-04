@@ -9,13 +9,6 @@
 // window-per-decal lets multiple stack visually (a Splatoon-y
 // "paint on top of paint" effect when the user fires repeatedly).
 //
-// Lifecycle:
-//   - `emit(at:color:kind:durationSec:size:)` creates a new window
-//     + view, schedules an alpha fade in the last third of the
-//     duration, and releases on completion.
-//   - `clearAll()` immediately removes every active decal (used by
-//     `--quit` / daemon teardown to avoid orphaned windows).
-//
 // Multi-display: each decal's NSWindow is created on the screen
 // containing the fire point — no union frame needed (the overlay
 // already covers that case for the trail, but a decal is local so
@@ -192,7 +185,6 @@ private final class DecalView: NSView {
         let unitCount = 2 + Int(rng.next() % 2)   // 2..3
 
         for i in 0..<unitCount {
-            // Position + size per unit.
             let unitCentre: CGPoint
             let unitR: CGFloat
             if i == 0 {
@@ -217,7 +209,6 @@ private final class DecalView: NSView {
                     * (0.07 + CGFloat(rng.nextUnit()) * 0.06)
             }
 
-            // Per-unit colour: from palette if set, else fixed.
             let unitColor: NSColor
             if !palette.isEmpty {
                 let idx = Int(rng.next() % UInt64(palette.count))
@@ -226,7 +217,6 @@ private final class DecalView: NSView {
                 unitColor = color
             }
 
-            // Layer 0 — ink ring underlayer (darker rim).
             let ring = NSColor.black
                 .blended(withFraction: 0.45, of: unitColor)?
                 .withAlphaComponent(0.78) ?? unitColor
@@ -235,13 +225,11 @@ private final class DecalView: NSView {
                              baseRadius: unitR * 1.08,
                              rng: &rng).fill()
 
-            // Layer 1 — main body with tendrils.
             unitColor.withAlphaComponent(0.96).setFill()
             tendrilBlobPath(at: unitCentre,
                              baseRadius: unitR,
                              rng: &rng).fill()
 
-            // Layer 2 — 3..6 detached droplet specks near this unit.
             let speckCount = 3 + Int(rng.next() % 4)
             unitColor.withAlphaComponent(0.88).setFill()
             for _ in 0..<speckCount {
@@ -329,7 +317,6 @@ private final class DecalView: NSView {
                                     jitter: CGFloat,
                                     points: Int,
                                     rng: inout SplitMix64) -> NSBezierPath {
-        // Vertex positions — same jittered-circle layout as before.
         var verts: [CGPoint] = []
         verts.reserveCapacity(points)
         for i in 0..<points {

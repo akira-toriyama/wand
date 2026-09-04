@@ -10,9 +10,6 @@
 import Foundation
 import Palette   // LinePet (shared pet vocabulary)
 
-/// One row of the tome menu. Same target / app-filter / action
-/// semantics as `Rule`, minus the cast pattern, plus presentation
-/// hints (`group`, `separatorBefore`).
 /// Template for the rows a `dynamic` item expands to at menu-open
 /// time. Each field can carry the `{line}` placeholder; the adapter
 /// substitutes it with each stdout line from the dynamic shell
@@ -41,6 +38,9 @@ public struct LauncherTemplate: Sendable, Equatable {
     }
 }
 
+/// One row of the tome menu. Same target / app-filter / action
+/// semantics as `Rule`, minus the cast pattern, plus presentation
+/// hints (`group`, `separatorBefore`).
 public struct LauncherItem: Sendable, Equatable {
     public let name: String
     /// Path of parent submenus (top-down). Empty = top level. Adapter
