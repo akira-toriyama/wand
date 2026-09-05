@@ -89,7 +89,7 @@ public struct Rule: Sendable, Equatable {
     public let pattern: String
     public let apps: [String]
     /// Optional icon shown to the left of `name` in the assist card.
-    /// Same syntax as `LauncherItem.icon` — `SF:<name>`, an emoji /
+    /// Same syntax as `TomeItem.icon` — `SF:<name>`, an emoji /
     /// text glyph, an absolute / tilde / config-relative file path, or
     /// `app:<bundle-id>`. Empty = no icon (the card collapses its icon
     /// column). Unresolvable specs log once and fall through to no icon.
@@ -244,7 +244,7 @@ public enum TrailEndKind: String, Sendable, Hashable, CaseIterable {
 /// `[tome].theme` but are independent of it, so users can mix-and-match
 /// (e.g. `[tome].theme = "rainbow"` + `[tome.decoration.border].effect =
 /// "neon"`).
-public enum LauncherBorder: String, Sendable, Hashable, CaseIterable {
+public enum TomeBorder: String, Sendable, Hashable, CaseIterable {
     case off
     case rainbow
     case terminal
@@ -255,19 +255,19 @@ public enum LauncherBorder: String, Sendable, Hashable, CaseIterable {
     case chomp = "chomp"
 }
 
-/// Launcher panel open-animation. Default `.off` (panel pops in
+/// Tome panel open-animation. Default `.off` (panel pops in
 /// instantly). `.fade` eases the panel's alpha 0 → 1; `.pop` adds a
 /// brief scale-in (0.92 → 1.0) on top of the fade.
-public enum LauncherOpenAnim: String, Sendable, Hashable, CaseIterable {
+public enum TomeOpenAnim: String, Sendable, Hashable, CaseIterable {
     case off
     case fade
     case pop
 }
 
-/// Launcher panel close-animation. Default `.off` (panel disappears
+/// Tome panel close-animation. Default `.off` (panel disappears
 /// instantly). `.fade` eases alpha 1 → 0; `.pop` adds a scale-down
 /// (1.0 → 0.92) on top.
-public enum LauncherCloseAnim: String, Sendable, Hashable, CaseIterable {
+public enum TomeCloseAnim: String, Sendable, Hashable, CaseIterable {
     case off
     case fade
     case pop
@@ -306,7 +306,7 @@ public enum NoMatchBanner: String, Sendable, Hashable, CaseIterable {
 ///
 /// Colour-decoration variants belong to a separate axis applied to
 /// other surfaces (tome panel border, etc.) — they're not trail-style
-/// values. See `LauncherBorder` for the tome-side counterpart.
+/// values. See `TomeBorder` for the tome-side counterpart.
 ///
 /// Unknown values clamp to `.normal` (wand's typo-tolerant policy).
 public enum TrailStyle: String, Sendable, Hashable, CaseIterable {

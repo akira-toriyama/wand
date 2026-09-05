@@ -1,4 +1,4 @@
-// Cache `(bundleID) → (localizedName, resized NSImage)`. The launcher
+// Cache `(bundleID) → (localizedName, resized NSImage)`. The tome
 // header looks the target app's icon up on every menu popup, and
 // `NSRunningApplication.runningApplications(withBundleIdentifier:)`
 // enumerates the live process list — fine for one click, but each
@@ -46,7 +46,7 @@ final class AppIconCache {
     /// scans the running app list first; if the app isn't running it
     /// falls back to LaunchServices (`urlForApplication`) so installed
     /// but inactive apps still resolve — important for "Open Chrome"-
-    /// style launcher items that should display Chrome's icon even
+    /// style tome items that should display Chrome's icon even
     /// when Chrome isn't currently running. Subsequent hits are O(1).
     /// `iconSize` is the requested image size; the cache resizes the
     /// returned `NSImage` to it once on the miss path.

@@ -1,5 +1,5 @@
 // Shared CG-event helpers for both `MacOSMouseSource` (gesture tap)
-// and `MacOSLauncherSource` (launcher tap). Each tap installs its
+// and `MacOSTomeSource` (tome tap). Each tap installs its
 // own `CGEventTap`, but the mapping between wand's `Trigger.Button`
 // / `Modifier` model and CoreGraphics constants — event masks,
 // button numbers, mouse-event types, modifier flag bits — was
@@ -36,7 +36,7 @@ extension Trigger.Button {
     }
 
     /// Down + up bitmask without movement events. Use for taps that
-    /// only care about button transitions (the launcher); add the
+    /// only care about button transitions (the tome); add the
     /// `.mouseMoved`/`.rightMouseDragged`/`.otherMouseDragged` bits
     /// at the call site if you need them (the gesture tap does).
     var downUpMask: CGEventMask {

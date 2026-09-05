@@ -556,7 +556,7 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
 
     /// `CGMouseButton` enum used by `CGEvent(mouseEventSource:…)` —
     /// distinct from `mouseEventButtonNumber` (an Int64 field). Kept
-    /// here because synthesis is gesture-specific; the launcher tap
+    /// here because synthesis is gesture-specific; the tome tap
     /// never posts events.
     private static func cgMouseButton(for button: Trigger.Button) -> CGMouseButton {
         switch button {

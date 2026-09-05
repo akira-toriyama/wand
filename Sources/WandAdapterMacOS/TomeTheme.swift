@@ -1,16 +1,16 @@
 // Adapter-side colour resolution for the tome panel: the static
-// stroke colour per `LauncherBorder` kind and `TomeColors`, the
+// stroke colour per `TomeBorder` kind and `TomeColors`, the
 // NSColor mirror of Core's `TomeThemePalette` (Core stays AppKit-free).
 
 import AppKit
 import WandCore
 
-/// Per-kind stroke colour for non-animated `LauncherBorder` cases.
+/// Per-kind stroke colour for non-animated `TomeBorder` cases.
 /// Lives in the adapter (Core stays AppKit-free). `.off` and
 /// `.rainbow` are handled by their own code paths and never query
 /// this — they trap with a clear message if the switch is ever
 /// reached out-of-context.
-extension LauncherBorder {
+extension TomeBorder {
     @MainActor
     var staticColor: NSColor {
         switch self {
@@ -36,7 +36,7 @@ extension LauncherBorder {
             // used the wrong accessor — fall back loudly rather than
             // render a silent mystery colour.
             assertionFailure(
-                "LauncherBorder.staticColor accessed for \(self)")
+                "TomeBorder.staticColor accessed for \(self)")
             return .controlAccentColor
         }
     }

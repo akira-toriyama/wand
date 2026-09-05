@@ -70,7 +70,7 @@ final class DiskImageCache {
     /// Every `icon` spec in `config` — tome entries and cast rules —
     /// for the facades' `prewarm`. Filtering to a family is theirs.
     nonisolated static func iconSpecs(in config: WandConfig) -> [String] {
-        config.launcher.items.map(\.icon) + config.rules.map(\.icon)
+        config.tome.items.map(\.icon) + config.rules.map(\.icon)
     }
 
     private let family: Family

@@ -10,7 +10,7 @@
 // their config positions, so reordering the panel over one app never
 // scrambles the panel another app sees.
 
-public enum LauncherOrder {
+public enum TomeOrder {
 
     /// Reorder one panel level's `elements` per a saved `override`
     /// (desired ids, first = topmost). Elements whose `id` is `nil`

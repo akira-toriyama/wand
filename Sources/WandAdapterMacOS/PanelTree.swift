@@ -1,4 +1,4 @@
-// `[LauncherItem]` → panel tree. Pure data shaping for the tome panel:
+// `[TomeItem]` → panel tree. Pure data shaping for the tome panel:
 // no views, no AppKit beyond `NSImage` in `HeaderSpec`.
 
 import AppKit
@@ -10,11 +10,11 @@ struct HeaderSpec {
     let icon: NSImage?
 }
 
-/// `[LauncherItem]` → `[PanelNode]`. Folder order follows first
+/// `[TomeItem]` → `[PanelNode]`. Folder order follows first
 /// mention in config, not alphabetical — the user orders rows by
 /// writing them, so the tree must not resort.
 enum PanelTree {
-    static func build(from items: [LauncherItem]) -> [PanelNode] {
+    static func build(from items: [TomeItem]) -> [PanelNode] {
         let root = FolderBuilder(name: "")
         for item in items {
             var current = root
@@ -59,12 +59,12 @@ enum PanelTree {
     /// level of the tree. `override` maps a panel path ("" = root,
     /// folder names joined via `pathSep` when nested) to the row
     /// order the user last dragged that level into;
-    /// `LauncherOrder.apply` does the slot-merge so rows the
+    /// `TomeOrder.apply` does the slot-merge so rows the
     /// override doesn't know about keep their config positions.
     static func applyOrder(_ nodes: [PanelNode], path: String,
                            override: [String: [String]]) -> [PanelNode] {
         let level = override[path].map { order in
-            LauncherOrder.apply(nodes, id: { $0.orderID }, override: order)
+            TomeOrder.apply(nodes, id: { $0.orderID }, override: order)
         } ?? nodes
         guard !override.isEmpty else { return level }
         return level.map { node in
@@ -86,7 +86,7 @@ enum PanelTree {
         init(name: String) { self.name = name }
         enum Child {
             case folder(FolderBuilder)
-            case leaf(LauncherItem)
+            case leaf(TomeItem)
         }
         func toNodes() -> [PanelNode] {
             children.map { c in

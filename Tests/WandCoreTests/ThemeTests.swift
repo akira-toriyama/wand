@@ -74,17 +74,17 @@ final class ThemeTests: XCTestCase {
 
     func testConfigClampsCutThemeToSystem() {
         XCTAssertEqual(WandConfig.parse("[cast]\ntheme = \"nord\"").theme, "system")
-        XCTAssertEqual(WandConfig.parse("[tome]\ntheme = \"aurora\"").launcher.theme, "system")
+        XCTAssertEqual(WandConfig.parse("[tome]\ntheme = \"aurora\"").tome.theme, "system")
     }
 
     func testConfigDefaultThemeIsSystem() {
         XCTAssertEqual(WandConfig.parse("").theme, "system")
-        XCTAssertEqual(WandConfig.parse("").launcher.theme, "system")
+        XCTAssertEqual(WandConfig.parse("").tome.theme, "system")
     }
 
     func testConfigKeepsValidTheme() {
         XCTAssertEqual(WandConfig.parse("[cast]\ntheme = \"dracula\"").theme, "dracula")
-        XCTAssertEqual(WandConfig.parse("[tome]\ntheme = \"gruvbox\"").launcher.theme, "gruvbox")
+        XCTAssertEqual(WandConfig.parse("[tome]\ntheme = \"gruvbox\"").tome.theme, "gruvbox")
     }
 
     // Cast palette derives from sill roles (Q5 maximal map).

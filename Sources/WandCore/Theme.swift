@@ -1,5 +1,5 @@
 // The sill theme bridge (atelier block-6). wand's two surfaces — the
-// cast HUD (gesture trail + assist cards) and the tome launcher panel —
+// cast HUD (gesture trail + assist cards) and the tome panel —
 // each carry a String-token palette (`CastThemePalette` /
 // `TomeThemePalette`) whose values flow on to the per-key config
 // defaults and are resolved to `NSColor` at draw time by the adapter's

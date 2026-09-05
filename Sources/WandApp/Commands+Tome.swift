@@ -12,7 +12,7 @@ import WandAdapterMacOS
 extension WandApp {
 
     /// `wand tome --open --items <PATH> --at <X> <Y> [--selection <TEXT>]
-    /// [--title <TEXT>]` — external trigger entry to the launcher menu.
+    /// [--title <TEXT>]` — external trigger entry to the tome menu.
     /// Values are already tokenized by CLIKit (so `--at` accepts negative
     /// Cocoa coords). Validates locally (exit 2 on bad input), checks
     /// daemon liveness (exit 3), then posts a DNC notification with the

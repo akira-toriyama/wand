@@ -15,7 +15,7 @@ import Palette   // LinePet (shared pet vocabulary)
 /// substitutes it with each stdout line from the dynamic shell
 /// command. Kept as raw strings (not pre-parsed `Action`) so the
 /// `{line}` placeholder survives until expansion.
-public struct LauncherTemplate: Sendable, Equatable {
+public struct TomeTemplate: Sendable, Equatable {
     public enum Kind: String, Sendable, Equatable {
         case key, ax, shell, url
     }
@@ -27,7 +27,7 @@ public struct LauncherTemplate: Sendable, Equatable {
     /// Display label template — defaults to `"{line}"` when the
     /// user doesn't override.
     public let name: String
-    /// Optional icon template — same syntax as `LauncherItem.icon`,
+    /// Optional icon template — same syntax as `TomeItem.icon`,
     /// {line}-substituted.
     public let icon: String
     public init(kind: Kind, payload: String, name: String, icon: String) {
@@ -41,7 +41,7 @@ public struct LauncherTemplate: Sendable, Equatable {
 /// One row of the tome menu. Same target / app-filter / action
 /// semantics as `Rule`, minus the cast pattern, plus presentation
 /// hints (`group`, `separatorBefore`).
-public struct LauncherItem: Sendable, Equatable {
+public struct TomeItem: Sendable, Equatable {
     public let name: String
     /// Path of parent submenus (top-down). Empty = top level. Adapter
     /// builds the tree by walking items in document order: a group
@@ -84,7 +84,7 @@ public struct LauncherItem: Sendable, Equatable {
     /// identically-named items. Empty = no second line and the row
     /// keeps its single-line height. Only rendered in `.list` layout
     /// (toolbar variants are too short for a subtitle to fit).
-    /// `LauncherTemplate.{line}` substitution applies here too, so a
+    /// `TomeTemplate.{line}` substitution applies here too, so a
     /// dynamic-item template can carry `subtitle = "{line}"`.
     public let subtitle: String
     /// Optional tint color applied to **SF Symbol icons only**. Same
@@ -140,7 +140,7 @@ public struct LauncherItem: Sendable, Equatable {
     public let dynamic: String
     /// Template for children of a dynamic item. Required when
     /// `dynamic` is non-empty; otherwise unused.
-    public let template: LauncherTemplate?
+    public let template: TomeTemplate?
     public let action: Action
 
     public init(name: String, group: [String] = [],
@@ -156,7 +156,7 @@ public struct LauncherItem: Sendable, Equatable {
                 filterShell: String = "",
                 state: String = "",
                 dynamic: String = "",
-                template: LauncherTemplate? = nil,
+                template: TomeTemplate? = nil,
                 action: Action) {
         self.name = name
         self.group = group
@@ -177,7 +177,7 @@ public struct LauncherItem: Sendable, Equatable {
     }
 }
 
-/// Visual orientation of the launcher panel.
+/// Visual orientation of the tome panel.
 /// - `.list`            — vertical list of rows (icon + label). The
 ///                        default, fits up to ~30 items, supports
 ///                        submenus and dynamic items, scales
@@ -195,7 +195,7 @@ public struct LauncherItem: Sendable, Equatable {
 /// In all toolbar variants, folder / dynamic items open a child
 /// panel BELOW the hovered button, and the child panel itself uses
 /// `.list` regardless of the parent's layout.
-public enum LauncherLayout: String, Sendable, Hashable, CaseIterable {
+public enum TomeLayout: String, Sendable, Hashable, CaseIterable {
     case list
     case toolbar
     case labeledToolbar = "labeled-toolbar"
@@ -254,7 +254,7 @@ public struct TomeThemePalette: Sendable, Equatable {
 
 /// `[tome.row]` — per-row visual conventions that affect every
 /// `[[tome.cursor.item]]` uniformly.
-public struct LauncherRowSpec: Sendable, Equatable {
+public struct TomeRowSpec: Sendable, Equatable {
     /// Auto-derive a `⌘W`-style glyph badge from an item's
     /// `action-keys` and render it right-aligned on `.list` rows
     /// whose action is `.key(...)`. `false` suppresses every badge
@@ -280,27 +280,27 @@ public struct LauncherRowSpec: Sendable, Equatable {
         self.fontSize = fontSize
     }
 
-    public static let `default` = LauncherRowSpec()
+    public static let `default` = TomeRowSpec()
 }
 
 /// `[tome.animation]` — temporal panel transitions (open/close).
 /// Distinct from `[tome.decoration]` (which paints once and stays).
-public struct LauncherAnimationSpec: Sendable, Equatable {
-    public let open: LauncherOpenAnim
-    public let close: LauncherCloseAnim
+public struct TomeAnimationSpec: Sendable, Equatable {
+    public let open: TomeOpenAnim
+    public let close: TomeCloseAnim
 
-    public init(open: LauncherOpenAnim = .off,
-                close: LauncherCloseAnim = .off) {
+    public init(open: TomeOpenAnim = .off,
+                close: TomeCloseAnim = .off) {
         self.open = open
         self.close = close
     }
 
-    public static let `default` = LauncherAnimationSpec()
+    public static let `default` = TomeAnimationSpec()
 }
 
 /// `[tome.decoration]` — static panel decoration that paints once.
-public struct LauncherDecorationSpec: Sendable, Equatable {
-    public let border: LauncherBorder
+public struct TomeDecorationSpec: Sendable, Equatable {
+    public let border: TomeBorder
     /// Cycle period (ms) for animated decorations — currently only the
     /// `border = "rainbow"` outline. Clamped 500..10000. Static border
     /// kinds (`off`) ignore it.
@@ -321,7 +321,7 @@ public struct LauncherDecorationSpec: Sendable, Equatable {
     /// order around the rim.
     public let linePets: [LinePet]
 
-    public init(border: LauncherBorder = .off,
+    public init(border: TomeBorder = .off,
                 cycleMs: Int = 4000,
                 borderWidth: Int = 2,
                 shadow: Bool = false,
@@ -333,7 +333,7 @@ public struct LauncherDecorationSpec: Sendable, Equatable {
         self.linePets = linePets
     }
 
-    public static let `default` = LauncherDecorationSpec()
+    public static let `default` = TomeDecorationSpec()
 }
 
 /// The whole `[tome]` block. `trigger` lives here (not at top level)
@@ -341,24 +341,24 @@ public struct LauncherDecorationSpec: Sendable, Equatable {
 /// the tap from being installed at all. Row cosmetics, panel
 /// animations, and static decorations live in dedicated sub-blocks
 /// (`row` / `animation` / `decoration`).
-public struct LauncherSpec: Sendable, Equatable {
+public struct TomeSpec: Sendable, Equatable {
     public let enabled: Bool
     public let trigger: Trigger
-    public let layout: LauncherLayout
-    public let items: [LauncherItem]
-    public let row: LauncherRowSpec
-    public let animation: LauncherAnimationSpec
-    public let decoration: LauncherDecorationSpec
+    public let layout: TomeLayout
+    public let items: [TomeItem]
+    public let row: TomeRowSpec
+    public let animation: TomeAnimationSpec
+    public let decoration: TomeDecorationSpec
     /// `[tome].theme` — canonical theme name (sill catalog + wand
     /// engine themes); the tome palette is derived via `wandTomePalette`.
     public let theme: String
 
     public init(enabled: Bool, trigger: Trigger,
-                layout: LauncherLayout = .list,
-                items: [LauncherItem],
-                row: LauncherRowSpec = .default,
-                animation: LauncherAnimationSpec = .default,
-                decoration: LauncherDecorationSpec = .default,
+                layout: TomeLayout = .list,
+                items: [TomeItem],
+                row: TomeRowSpec = .default,
+                animation: TomeAnimationSpec = .default,
+                decoration: TomeDecorationSpec = .default,
                 theme: String = wandDefaultThemeName) {
         self.enabled = enabled
         self.trigger = trigger
@@ -370,7 +370,7 @@ public struct LauncherSpec: Sendable, Equatable {
         self.theme = theme
     }
 
-    public static let `default` = LauncherSpec(
+    public static let `default` = TomeSpec(
         enabled: false,
         trigger: Trigger(button: .middle, modifiers: []),
         layout: .list,
@@ -386,10 +386,10 @@ public struct LauncherSpec: Sendable, Equatable {
 /// --items <PATH>` input). Carries both the items and the file's
 /// optional `[tome].layout` declaration so the external-trigger
 /// path can pick the right UI without consulting the main config.
-public struct LauncherItemsFile: Sendable, Equatable {
-    public let layout: LauncherLayout
-    public let items: [LauncherItem]
-    public init(layout: LauncherLayout, items: [LauncherItem]) {
+public struct TomeItemsFile: Sendable, Equatable {
+    public let layout: TomeLayout
+    public let items: [TomeItem]
+    public init(layout: TomeLayout, items: [TomeItem]) {
         self.layout = layout
         self.items = items
     }

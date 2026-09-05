@@ -67,7 +67,7 @@ enum KeyCombo {
     ]
 
     /// Render a key-combo string into Apple's glyph display form so the
-    /// launcher panel can show `"cmd+shift+t"` as `"⌘⇧T"` next to a
+    /// tome panel can show `"cmd+shift+t"` as `"⌘⇧T"` next to a
     /// row. Returns nil when the input has no recognisable key token
     /// (modifier-only / typo) — caller skips the badge in that case.
     /// Modifier order follows Apple HIG: ctrl → opt → shift → cmd; `fn`
