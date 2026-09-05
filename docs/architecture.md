@@ -137,14 +137,129 @@ CGEventTap. Tokenizing is delegated to `CLIKit` (sill);
 `requireOneVerb` enforces the one-verb-per-domain mutex, and every
 parse error exits 2 — no silent fallback.
 
+## Tome panel
+
+`MacOSLauncherSource`
+([`Sources/WandAdapterMacOS/LauncherTap.swift`](../Sources/WandAdapterMacOS/LauncherTap.swift))
+is a second `CGEventTap` beside `MacOSMouseSource`, so the
+right-button-drag mask never has to also carry middle-click. The
+Controller holds it optionally (`nil` unless `cfg.launcher.enabled`
+at startup), so the tap isn't even allocated when the user hasn't
+opted in. When AX target resolution fails (Dock / menu bar / Desktop
+— cursor is over a non-AX surface) the tap substitutes a
+`Target(bundleID: "", pid: 0, …)` sentinel instead of suppressing the
+menu. `Matcher.appsAllow` then keeps `apps = ["*"]` items (truly
+global ones — Spotlight, lock screen, open Terminal, …) and prunes
+app-specific items; the app-icon header collapses because no
+`NSRunningApplication` resolves under the empty bundle id. This
+carves out a "menu still works on Desktop" path without breaking the
+cursor-anchored spine for app-specific items.
+
+`LauncherPanel`
+([`Sources/WandAdapterMacOS/LauncherPanel.swift`](../Sources/WandAdapterMacOS/LauncherPanel.swift))
+builds a tree of `NSPanel`s from `[LauncherItem]` filtered by the
+cursor-anchored target. The root panel is a `NonActivatingPanel`
+(subclass of `NSPanel`, `canBecomeKey = false` + `.nonactivatingPanel`
+style mask) so it never steals keyboard focus from the underlying app
+— the user keeps typing in their editor while picking a row.
+`group = [...]` paths drive nesting: `PanelTree.build` walks each
+item's group, creating folders on first reference and appending into
+them on subsequent ones. A folder row shows a `chevron.right` SF
+Symbol; hovering it spawns an adjacent child panel via
+`PanelController.openChild`. The hand-off gap between panels is zero
+so cursor traversal works straight-right; native NSMenu's
+diagonal-cursor tolerance is not reproduced — hovering a non-folder
+row in the parent closes the child.
+
+`PanelLayout.resolveItemIcon` is the per-item icon resolver: it
+recognises `SF:<name>` (`NSImage.systemSymbolName`, rendered with
+`.medium` weight + `.large` scale so whitespace-heavy glyphs read the
+same optical size as tight ones), `app:<bundle-id>`, file paths
+(absolute / tilde / config-dir-relative), or falls back to drawing
+the string as a glyph (emoji / 1-2 char text). Unresolvable specs log
+once and collapse to no-icon; never throws.
+
+**Dynamic items** (`dynamic = "..."` + `LauncherTemplate`) render as
+folder-style rows with a chevron. Hovering one runs the shell via
+`BoundedShell.run` (500 ms timeout) and pops a child panel populated
+by `PanelLayout.expandDynamic`: each non-empty stdout line becomes a
+synthetic leaf `LauncherItem` with `{line}` substituted in the
+template's name / icon / payload. Errors (timeout, spawn fail,
+non-zero exit, empty stdout) collapse to a single `(timeout)` /
+`(spawn failed)` / `(error: exit N)` / `(no items)` placeholder row so
+the user always sees something. Expansion happens at hover time, not
+at panel-open time — the shell runs only when the user actually opens
+the submenu, and re-runs on each re-open (no caching).
+
+**Checkmark / radio state** is decoded inline in
+`PanelLayout.renderItemLabel`: `"on"` / `"off"` / `"mixed"` for
+static markers, `"shell:<cmd>"` for live eval at panel-open via
+`BoundedShell.run` with a tight 100 ms budget. The resolved glyph
+(`✓` / `–`) is prefixed to the row title; there is no native
+`NSMenuItem.state` to lean on once we left NSMenu behind. An unknown
+spec logs and falls through to no-marker.
+
 ## References
 
-- [CLAUDE.md](../CLAUDE.md) — non-obvious constraints to read before
+External material that informed the decisions above, each with the
+date it was last checked against the code.
+
+### macOS / Apple
+
+- [AXUIElementCopyElementAtPosition](https://developer.apple.com/documentation/applicationservices/1462091-axuielementcopyelementatposition)
+  *(reviewed 2026-05-22)* — the single API the cursor-anchored
+  spine hinges on. Returns the deepest AX element at a screen
+  point; walk `kAXParentAttribute` up to `kAXWindowRole` to get
+  the window.
+- [Quartz Event Services (CGEventTap)](https://developer.apple.com/documentation/coregraphics/quartz_event_services)
+  *(reviewed 2026-05-22)* — the global mouse-event capture
+  mechanism. `.cgSessionEventTap` location + `tapOption.defaultTap`
+  + `eventMask` for the configured trigger button.
+- [Hardened Runtime / Code Signing](https://developer.apple.com/documentation/security/hardened_runtime)
+  *(reviewed 2026-05-22)* — the TCC-Accessibility grant is keyed to
+  the signing identity; the persistent self-signed identity
+  (`setup-signing-cert.sh`) keeps the grant stable across rebuilds.
+- [NUIKit/CGSInternal (community)](https://github.com/NUIKit/CGSInternal)
+  *(reviewed 2026-05-22)* — `_AXUIElementGetWindow` symbol used
+  to resolve the window id from an AXUIElement
+  (`AXTarget.swift`). Same usage as facet's `AXFocus.swift`.
+- [CGWindowListCopyWindowInfo](https://developer.apple.com/documentation/coregraphics/1455214-cgwindowlistcopywindowinfo)
+  *(reviewed 2026-05-23)* — `AXTarget.windowAtPointViaCG`'s fallback
+  source-of-truth. When `AXUIElementCopyElementAtPosition` returns an
+  orphan renderer element (Chrome page content), this gives the
+  on-screen window list in z-order with frame + owner pid; we then
+  re-acquire the AX peer via `kAXWindows` on the owning app.
+
+### Formats
+
+- [TOML 1.0.0 spec](https://toml.io/en/v1.0.0)
+  *(reviewed 2026-05-23)* — wand consumes full TOML 1.0 via
+  swift-toml-edit's `Toml` module, so the whole spec is available.
+  The dotted-key action style on the rule / item rows is a
+  convention, not a parser limitation.
+
+### Inspiration
+
+- [MGLAHK (pyonkichi)](https://ss1.xrea.com/pyonkichi.g1.xrea.com/mglahk.html)
+  *(reviewed 2026-05-23)* — Japanese-language mouse-gesture
+  utility; prior art for direction-string rule shape, trigger
+  button + modifier conventions, and the user-facing vocabulary
+  native Japanese users expect (the katakana loanwords for
+  gesture / action, and the direction notation). Reference for
+  design feel, not for code.
+
+### Same family
+
+- [CLAUDE.md](../CLAUDE.md) — the constraints to read before
   editing (Y-axis convention, side-table policy, TCC grant
   preservation, …)
+- [safety-roadmap.md](safety-roadmap.md) — the five failsafe
+  layers, which ship and which are planned
 - [commit-convention.md](commit-convention.md) — pointer to the
   fleet commit convention
 - [packaging/homebrew/README.md](../packaging/homebrew/README.md) —
   release flow + TCC grant persistence across `brew upgrade`
 - [facet's architecture.md](https://github.com/akira-toriyama/facet/blob/main/docs/architecture.md)
-  — same hexagonal pattern, different domain
+  — same hexagonal pattern, different domain; its CLAUDE.md
+  References list the hexagonal / Clean Architecture / DDD
+  literature that applies here too

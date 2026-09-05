@@ -1,6 +1,11 @@
 # CLAUDE.md
 
-Guidance for working in this repository.
+Guidance for working in this repository — only the constraints and
+workflows that hold **today**. The design narrative lives in
+[docs/architecture.md](docs/architecture.md), the planned failsafe
+layers in [docs/safety-roadmap.md](docs/safety-roadmap.md), the
+vocabulary in [docs/glossary.md](docs/glossary.md); don't paste
+their content back here.
 
 ## Terminology
 
@@ -31,20 +36,16 @@ trigger families coexist on one daemon, with an external entry point
 for event-driven daemons to share the same tome UI:
 
 - **cast** (right-button + drag, the original "stroke" feature):
-  draw a shape with the cursor; the recogniser turns it into a
-  `LURD` string; rules fire actions.
-- **tome** (middle-click, opt-in via `[tome].enabled`):
-  pops a **non-activating NSPanel** near the cursor that does NOT
-  take keyboard focus, so the source app stays focused; each
-  `[[tome.cursor.item]]` is one row with the same action-type
-  vocabulary. Submenus (`group = ["..."]`) open as adjacent child
-  panels on hover.
+  draw a shape; the recogniser turns it into a `LURD` string; rules
+  fire actions.
+- **tome** (middle-click, opt-in via `[tome].enabled`): a
+  **non-activating NSPanel** of `[[tome.cursor.item]]` rows near the
+  cursor, sharing cast's action vocabulary; never takes keyboard
+  focus.
 - **`wand tome --open`** (external trigger CLI): an upstream trigger
-  (a chord hotkey, or a text-selection observer) posts a
-  Distributed Notification carrying items + cursor + selection;
-  the daemon pops the same `LauncherPanel` against the frontmost
-  app. **Spine exception** — no button-down moment, see the
-  cursor-anchored section.
+  posts items + point + selection over DNC and the daemon pops the
+  same panel against the frontmost app. **Spine exception** — no
+  button-down moment.
 
 Both native triggers share the **single invariant**: actions dispatch
 to the window the cursor was over **at button-down time**, never to
@@ -114,44 +115,21 @@ ws-tabs.
 - **The tome trigger has its own seam**: `LauncherSource`
   protocol in `WandCore`, `MacOSLauncherSource` in `WandAdapterMacOS`
   ([Sources/WandAdapterMacOS/LauncherTap.swift](Sources/WandAdapterMacOS/LauncherTap.swift)).
-  It's a separate `CGEventTap` from `MacOSMouseSource` — two taps
-  coexist so the right-button-drag mask never has to also carry
-  middle-click. `Controller` holds it optionally (`nil` unless
-  `cfg.launcher.enabled` at startup), so the second tap isn't even
-  allocated when the user hasn't opted in.
-  When AX target resolution fails (Dock / menu bar / Desktop —
-  cursor is over a non-AX surface) the tap falls back to a
-  `Target(bundleID: "", pid: 0, …)` sentinel instead of suppressing
-  the menu. `Matcher.appsAllow` then keeps `apps = ["*"]` items
-  (truly global ones — Spotlight, lock screen, open Terminal,
-  etc.) and prunes app-specific items. The app-icon header
-  collapses because no `NSRunningApplication` resolves under the
-  empty bundle id. This carves out a "menu still works on
-  Desktop" path without breaking the cursor-anchored spine for
-  app-specific items.
+  It's a separate `CGEventTap` from `MacOSMouseSource` — keep the two
+  taps separate so the right-button-drag mask never has to also
+  carry middle-click. On a non-AX surface the tap substitutes the
+  `Target(bundleID: "", pid: 0, …)` sentinel rather than suppressing
+  the menu — don't turn that into a `nil` / early return; the
+  Desktop path depends on it
+  ([architecture.md → Tome panel](docs/architecture.md#tome-panel)).
 - **`LauncherPanel` lives in `WandAdapterMacOS` too**
-  ([Sources/WandAdapterMacOS/LauncherPanel.swift](Sources/WandAdapterMacOS/LauncherPanel.swift)) —
-  it builds a tree of `NSPanel`s from `[LauncherItem]` filtered by
-  the cursor-anchored target. The root panel is a
-  `NonActivatingPanel` (subclass of `NSPanel`, `canBecomeKey = false`
-  + `.nonactivatingPanel` style mask) so it never steals keyboard
-  focus from the underlying app — the user keeps typing in their
-  editor while picking a row. `group = [...]` paths drive nesting:
-  `PanelTree.build` walks each item's group, creating folders on
-  first reference and appending into them on subsequent ones. A
-  folder row shows a `chevron.right` SF Symbol; hovering it spawns
-  an adjacent child panel via `PanelController.openChild`. The
-  hand-off gap between panels is zero so cursor traversal works
-  straight-right; native NSMenu's diagonal-cursor tolerance is NOT
-  reproduced — hovering a non-folder row in the parent closes the
-  child. Don't promote this to a separate module — same reasoning
-  as `GestureOverlay`. `PanelLayout.resolveItemIcon` is the per-item
-  icon resolver — recognises `SF:<name>` (NSImage.systemSymbolName,
-  rendered with `.medium` weight + `.large` scale so whitespace-
-  heavy glyphs read the same optical size as tight ones), file
-  paths (absolute / tilde / config-dir-relative), or falls back to
-  drawing the string as a glyph (emoji / 1-2 char text).
-  Unresolvable specs log once and collapse to no-icon; never throws.
+  ([Sources/WandAdapterMacOS/LauncherPanel.swift](Sources/WandAdapterMacOS/LauncherPanel.swift)).
+  Don't promote it to a separate module — same reasoning as
+  `GestureOverlay`. The root panel must stay a `NonActivatingPanel`
+  (`canBecomeKey = false` + `.nonactivatingPanel`); native NSMenu's
+  diagonal-cursor tolerance is deliberately NOT reproduced. How the
+  tree, icons, dynamic items, and checkmark state are built is in
+  [architecture.md → Tome panel](docs/architecture.md#tome-panel).
 - **`NSTrackingArea` MUST use `.activeAlways`** in `ItemRow`. wand
   is `LSUIElement` and the panel is non-activating, so
   `.activeInActiveApp` resolves to "never" and `mouseEntered` never
@@ -159,26 +137,11 @@ ws-tabs.
   us a debugging cycle once; the regression test is: open a folder
   row by hovering it (don't click — there's no click handler on
   folder rows).
-- **Dynamic items** (`dynamic = "..."` + `LauncherTemplate`) render
-  as folder-style rows with a chevron. Hovering one runs the shell
-  via `BoundedShell.run` (500 ms timeout) and pops a child panel
-  populated by `PanelLayout.expandDynamic`: each non-empty stdout
-  line becomes a synthetic leaf `LauncherItem` with `{line}`
-  substituted in the template's name / icon / payload. Errors
-  (timeout, spawn fail, non-zero exit, empty stdout) collapse to a
-  single `(timeout)` / `(spawn failed)` / `(error: exit N)` /
-  `(no items)` placeholder row so the user always sees something.
-  Expansion happens at hover time, not at panel-open time — the
-  shell runs only when the user actually opens the submenu, and
-  re-runs on each re-open (no caching). `{line}` is untrusted —
-  same caveat as `WAND_TARGET_TITLE`.
-- **Checkmark / radio state** is decoded inline in
-  `PanelLayout.renderItemLabel`: `"on"` / `"off"` / `"mixed"` for
-  static markers, `"shell:<cmd>"` for live eval at panel-open via
-  `BoundedShell.run` with a tight 100 ms budget. The resolved glyph
-  (`✓` / `–`) is prefixed to the row title; no native
-  `NSMenuItem.state` to lean on once we left NSMenu behind. Unknown
-  spec logs and falls through to no-marker.
+- **Dynamic items expand at hover time, never at panel-open, and
+  never cache** — the shell runs only when the user actually opens
+  the submenu and re-runs on each re-open. `{line}` is untrusted —
+  same caveat as `WAND_TARGET_TITLE`. Every error shape collapses
+  to a placeholder row so the user always sees something.
 - **`BoundedShell` is the shared synchronous-with-timeout shell
   runner** ([Sources/WandAdapterMacOS/BoundedShell.swift](Sources/WandAdapterMacOS/BoundedShell.swift)).
   Used by the state resolver in `PanelLayout` and the
@@ -259,124 +222,58 @@ constraints that keep it true:
   New trigger families add one var each (`$WAND_SHELF_FILES` /
   `$WAND_SHELF_COUNT` for bolt, `$WAND_CLIPBOARD` / `$WAND_URL`
   reserved).
-- **`wand tome --open` is the documented spine exception.**
-  An upstream trigger (a chord hotkey, or a text-selection
-  observer — there is no button-down moment to anchor against)
-  posts `show-menu` over the existing DNC channel with
-  `userInfo = [items, x, y, selection]`.
-  The Controller resolves the target via
-  `NSWorkspace.frontmostApplication` instead of `AXTarget.
-  resolveAt(point:)` — text-selection-anchored, not cursor-
-  anchored. Spine guarantees above apply to cast and middle-
-  click tome (the native trigger families); `tome --open` is
-  documented as the carve-out. `$WAND_SELECTION` is the only extra
-  env var added (via `Dispatch.execute(extraEnv:)`); the
-  `WAND_TARGET_*` set is still populated, just from the
-  frontmost app instead of a cursor-anchored window. See
-  [Sources/WandApp/Controller.swift](Sources/WandApp/Controller.swift)'s
-  `handleShowMenu`.
+- **`wand tome --open` is the documented spine exception** — no
+  button-down moment exists, so `Controller.handleShowMenu`
+  ([Sources/WandApp/Controller.swift](Sources/WandApp/Controller.swift))
+  resolves the target via `NSWorkspace.frontmostApplication`. Keep
+  the carve-out there: the native trigger families (cast, middle-
+  click tome) never take that path. `$WAND_SELECTION` is the only
+  extra env var it adds; `WAND_TARGET_*` is still populated, from
+  the frontmost app.
 
 ### Safety invariants — DO NOT regress this
 
 wand grabs low-level mouse via CGEventTap. A bug, a crash, or a
 swallowed event maps directly to **"the user's PC is now
 unusable"** — the worst possible outcome for a tool whose own
-positioning is "mouse enhancement". The rules below apply to every
-current trigger family (cast, tome) and every future one
-(bolt, aura, scry, …).
-
-**The three PC-inoperable failure modes**
-
-These all contradict wand's reason for existing:
+positioning is "mouse enhancement". Three failure modes contradict
+wand's reason for existing:
 
 - left click cannot be released (stuck mid-drag)
 - right click cannot be released (stuck mid-stroke)
 - DnD cannot be released (synthetic mouseUp lost, or tap holds the
   drag stream)
 
-**`[failsafe]` is a mandatory config block**
+**`[failsafe]` is a mandatory config block.** Missing block → wand
+refuses to start, and `wand config --validate` flags it as fatal.
+This is the one deliberate inversion of the clamp-to-default rule.
+The rationale is written once, in the `[failsafe]` block comment of
+[config.toml](config.toml) — keep it there; README and this file
+only point at it.
 
-Missing block → wand refuses to start, and `wand config --validate`
-flags it as fatal. This is the one deliberate inversion of the
-clamp-to-default rule. The rationale is written once, in the
-`[failsafe]` block comment of [config.toml](config.toml) — keep it
-there; README and this file only point at it.
+**What ships today** is `FailsafeMonitor`
+([Sources/WandAdapterMacOS/FailsafeMonitor.swift](Sources/WandAdapterMacOS/FailsafeMonitor.swift)):
+the button-hold timeout (`mouse-hold-timeout-seconds`) and the
+emergency release key (`emergency-release-key`, a passive
+`NSEvent` global monitor whose release sequence is idempotent and
+logs only when it actually released something — an empty log is
+healthy). Each knob's behaviour is documented on the key in
+config.toml.
 
-**Five layers of defense**
+**Rules that hold now, regardless of roadmap:**
 
-The full target architecture. Layers 1 and 2 ship today
-(`FailsafeMonitor`); layers 3–5 are tracked follow-ups documented
-as PLANNED below so the WHY of each one is on record for the next
-PR that touches this surface. Don't lean on any single layer;
-combine them so one failure mode can't cascade.
-
-1. **Button-hold timeout** — `[failsafe].mouse-hold-timeout-seconds`.
-   If any mouse button stays `down` longer than the timeout, the
-   daemon force-posts a mouseUp at the current cursor position.
-   Catches both wand-origin stuck states and external HID layers
-   (Karabiner-Elements / Logitech Options / KVMs) that drop the
-   real up event. SHIPPED.
-2. **Emergency release key** — `[failsafe].emergency-release-key`,
-   default `"esc"`. Implemented via
-   `NSEvent.addGlobalMonitorForEvents` (passive observer — Esc
-   still flows to the underlying app, so modals / cancels keep
-   working). The release sequence is **idempotent**: releasing an
-   un-held button is a no-op, so the firehose of normal Esc
-   presses is harmless. Only logs `Log.line` when it *actually*
-   released something, so an empty log = healthy. SHIPPED.
-3. **CLI escape hatch** — `wand --release-all` over the existing
-   DNC channel. Works from a second shell / ssh / a keyboard
-   shortcut app when the mouse itself is unusable. PLANNED — not
-   yet wired; do not reference as if available.
-4. **Tap-internal invariants** (see below). The relevant tap
-   doesn't yet exist (only bolt posts synthetic mouseUp, and bolt
-   itself is PLANNED). The invariants below are the contract that
-   tap will be held to.
-5. **Tap watchdog** — `[failsafe].tap-watchdog-interval-sec`.
-   `CGEventTap` can be disabled by the OS under load; the daemon
-   periodically checks and reinstalls. `wand config --doctor` flags any
-   button held longer than the timeout and suggests
-   `--release-all`. PLANNED — neither the config key nor the
-   watchdog exists yet.
-
-**Tap-internal invariants (code level — PLANNED, lands with bolt)**
-
-These apply to any code path that posts synthetic mouse events.
-Today no such path exists; bolt (the planned shake-to-shelf
-trigger) will be the first. Codifying them here so the bolt PR
-honours them by construction.
-
-- **A synthetic `.leftMouseUp` post is the single most dangerous
-  code path.** Before posting, check `CGEventSource.buttonState`:
-  if it's already `false` (user released naturally), skip the
-  post. After posting, re-check; if still `true`, retry once.
-  Keep this the *only* place wand posts a synthetic mouseUp.
-- **The cast tap must never swallow mouseUp on any error path.**
-  A crashed daemon is recoverable (the OS auto-uninstalls the
-  tap); a tap that holds the mouseUp is not. Audit every CGReturn
-  / error branch in
-  [Sources/WandAdapterMacOS/EventTap.swift](Sources/WandAdapterMacOS/EventTap.swift)
-  to confirm mouseUp always reaches AppKit.
-- **No "synthetic-down-in-flight" state** in the daemon. wand may
-  post mouseUp synthetically; it must never post mouseDown
-  synthetically. The asymmetry is the whole point: if wand
-  crashes between a synthetic-down and the matching synthetic-up,
-  the OS has no way to recover. Crashing with no synthetic-down
-  in flight is safe because the OS uninstalls the tap and every
-  real event flows through.
-
-**Adding a new trigger family**
-
-Every new trigger (planned bolt's left-drag-shake, planned scry's
-AX observation, anything future) goes through this checklist:
-
-1. If the daemon crashes mid-trigger, can the user still use the
-   mouse normally?
-2. Does the trigger post synthetic mouse events? If yes, only
-   mouseUp, and only after a `buttonState` precondition check.
-3. Is the trigger's progress state cleared by the emergency
-   release sequence? Wire it into the release path.
-4. Does `wand config --doctor` report the trigger's health? Add a probe.
+- Nothing in wand posts a synthetic mouseDown, ever. Synthetic
+  mouseUp is allowed only behind a `CGEventSource.buttonState`
+  precondition, in one place — today that place doesn't exist.
+- The cast tap must never swallow mouseUp on any error path; a
+  crashed daemon is recoverable (the OS uninstalls the tap), a
+  held mouseUp is not.
+- Adding a trigger family (bolt, scry, anything future) goes
+  through the checklist in
+  [docs/safety-roadmap.md](docs/safety-roadmap.md), which also
+  records the three PLANNED layers (`--release-all`, tap-internal
+  invariants, tap watchdog). Never cite a PLANNED item as
+  available.
 
 ### Configuration
 
@@ -410,56 +307,32 @@ AX observation, anything future) goes through this checklist:
   let a fourth convention drift in.
 - **Prefer the nested-sub-block style** when a config feature has
   multiple knobs that share a domain — keys live inside the
-  sub-block that owns them, even if some keys repeat across
-  sub-blocks:
-
-  ```toml
-  # Preferred
-  [foo]
-  color = "red"
-  length = "short"
-
-  [bar]
-  color = "red"
-  size = "xl"
-  ```
-
-  not
-
-  ```toml
-  # Avoid — `color` at the top bleeds down into both sub-blocks
-  color = "red"
-  [foo]
-  length = "short"
-  [bar]
-  size = "xl"
-  ```
-
-  This is a *want / better*, not a *must*. The exception is a
-  setting that genuinely spans both sub-blocks and would invite
-  drift if duplicated — `[cast].intensity` (scales both
-  `[cast.overlay.cards]` and `[cast.fire.burst]`) and
-  `[exclude].apps` (applies to both cast rules and tome
-  entries) live at the higher scope on purpose; the comment at the
-  call site explains why. Default to the nested form, and justify
-  in a comment when promoting a key upward.
+  sub-block that owns them (`[foo].color` + `[bar].color`), even if
+  some keys repeat across sub-blocks, rather than one top-level key
+  bleeding into both. This is a *want / better*, not a *must*. The
+  exception is a setting that genuinely spans both sub-blocks and
+  would invite drift if duplicated — `[cast].intensity` (scales
+  both `[cast.overlay.cards]` and `[cast.fire.burst]`) and
+  `[exclude].apps` (applies to both cast rules and tome entries)
+  live at the higher scope on purpose; the comment at the call site
+  explains why. Default to the nested form, and justify in a
+  comment when promoting a key upward.
 - **The same discipline applies to the CLI** — breaking changes to
   the verb surface are OK, and the loud-reject policy is the CLI's
   counterpart of clamp-to-default. Both are spelled out under
   `### CLI surface` below.
 
-### TOML parser
+### TOML parser and action vocabulary
 
 - **TOML parsing is delegated to swift-toml-edit's `Toml` module**
-  (Sill-1 — the family's one TOML implementation). wand reads its
-  config via `Toml.parseFlat` (Config.swift), which natively supports
-  arrays-of-tables (`[[cast.cursor.rule]]` / `[[cast.focused.rule]]` /
-  `[[tome.cursor.item]]`). The former hand-rolled
-  `Sources/WandCore/TOML.swift` (`parseTOMLSubset`, extended from
-  facet's port) was removed when wand moved onto the shared lib. Rules
-  still use the dotted-key style (`action-type` + `action-keys` /
-  `action-verb` / `action-cmd` / `action-url`); the underlying lib is
-  full TOML 1.0, so there is no local "~100-line parser budget" to defend.
+  (the family's one TOML implementation); wand reads its config via
+  `Toml.parseFlat` in [Sources/WandCore/Config.swift](Sources/WandCore/Config.swift),
+  which natively supports the arrays-of-tables
+  (`[[cast.cursor.rule]]` / `[[cast.focused.rule]]` /
+  `[[tome.cursor.item]]`). Don't hand-roll a parser again. The
+  dotted-key action style (`action-type` + `action-keys` /
+  `action-verb` / `action-cmd` / `action-url`) is a convention, not
+  a parser limitation.
 - **Action vocabulary**: `key` (keystroke after `raise`), `ax`
   (verb in `Action.axVerbs` — no focus switch), `shell` (env vars
   carry the target), `url` (`NSWorkspace.shared.open` — handles
@@ -657,7 +530,9 @@ stray instances before relaunching.
 - **Commit messages**: gitmoji-driven — `<:gitmoji:>[(<scope>)][!] <subject>`,
   where the leading `:code:` IS the type (the Conventional `<type>` word is
   retired; legacy `<type>(scope):` tokens are accepted and ignored by the lint,
-  so old history still passes). `glyph rules` is the machine source of truth.
+  so old history still passes). The repo's [glyph.toml](glyph.toml) is the
+  machine source of truth; the prose rules are the fleet
+  [CONTRIBUTING.md](https://github.com/akira-toriyama/.github/blob/main/CONTRIBUTING.md).
   Install the local hook once per clone: `glyph hook install`.
 - **Docs are English-only and code-first** — follow the fleet
   [doc-consistency policy](https://github.com/akira-toriyama/.github/blob/main/docs/doc-consistency-policy.md)
@@ -668,85 +543,12 @@ stray instances before relaunching.
 
 ## References
 
-External material that informed wand's API / architecture
-decisions. Subsections ordered broad → narrow.
-
-### Architecture
-
-- See [facet's CLAUDE.md → References → Architecture](https://github.com/akira-toriyama/facet/blob/main/CLAUDE.md)
-  *(reviewed 2026-05-22)* — same hexagonal / Clean Architecture /
-  DDD literature applies here. Don't re-list it.
-
-### macOS / Apple
-
-- [AXUIElementCopyElementAtPosition](https://developer.apple.com/documentation/applicationservices/1462091-axuielementcopyelementatposition)
-  *(reviewed 2026-05-22)* — the single API the cursor-anchored
-  spine hinges on. Returns the deepest AX element at a screen
-  point; walk `kAXParentAttribute` up to `kAXWindowRole` to get
-  the window.
-- [Quartz Event Services (CGEventTap)](https://developer.apple.com/documentation/coregraphics/quartz_event_services)
-  *(reviewed 2026-05-22)* — the global mouse-event capture
-  mechanism. `.cgSessionEventTap` location + `tapOption.defaultTap`
-  + `eventMask` for the configured trigger button.
-- [Hardened Runtime / Code Signing](https://developer.apple.com/documentation/security/hardened_runtime)
-  *(reviewed 2026-05-22)* — same TCC-Accessibility grant
-  concern facet documents. Self-signed persistent identity
-  keeps the grant stable across rebuilds.
-- [NUIKit/CGSInternal (community)](https://github.com/NUIKit/CGSInternal)
-  *(reviewed 2026-05-22)* — `_AXUIElementGetWindow` symbol used
-  to resolve serverID from an AXUIElement. Same usage as facet's
-  `AXFocus.swift`.
-- [CGWindowListCopyWindowInfo](https://developer.apple.com/documentation/coregraphics/1455214-cgwindowlistcopywindowinfo)
-  *(reviewed 2026-05-23)* — `AXTarget.windowAtPointViaCG`'s fallback
-  source-of-truth. When `AXUIElementCopyElementAtPosition` returns an
-  orphan renderer element (Chrome page content), this gives the
-  on-screen window list in z-order with frame + owner pid; we then
-  re-acquire the AX peer via `kAXWindows` on the owning app.
-
-### Formats / conventions
-
-- [TOML 1.0.0 spec](https://toml.io/en/v1.0.0)
-  *(reviewed 2026-05-23)* — wand now consumes full TOML 1.0 via
-  swift-toml-edit's `Toml` module (Sill-1), so the whole spec is
-  available. The config still uses the dotted-key action style on
-  `[[cast.cursor.rule]]` / `[[cast.focused.rule]]` / `[[tome.cursor.item]]`
-  rows by convention, not by parser limitation (the retired
-  hand-rolled `parseTOMLSubset` and its ≈100-line budget no longer
-  apply — see `### TOML parser`).
-- [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/)
-  *(reviewed 2026-07-20)* — **retired ancestor**, kept for
-  provenance only. Its `<type>(<scope>)<!>: <subject>` grammar is no
-  longer what we write: the leading `:code:` is the type now (see
-  Conventions). glyph's lint accepts a legacy `<type>(scope):` token
-  and ignores it, so old history keeps passing — that is tolerance
-  for the past, not a second legal form.
-- [Gitmoji](https://gitmoji.dev/)
-  *(reviewed 2026-07-20)* — the vocabulary the leading `:code:` is
-  drawn from. Which code means what, and which bump it carries, is
-  `glyph rules` (`--md` for the table) — the machine source of truth.
-  Don't re-list it here and don't map codes back to the retired
-  `feat` / `fix` words. The prose rules are the account-wide
-  [CONTRIBUTING.md](https://github.com/akira-toriyama/.github/blob/main/CONTRIBUTING.md);
-  CI enforces them via `commit-lint.yml`.
-
-### GitHub
-
-- [GitHub Docs](https://docs.github.com/en)
-  *(reviewed 2026-05-23)* — primary reference for the bits this
-  repo actually touches: `gh` CLI, Actions workflow syntax,
-  release drafts, branch protection, fine-grained PAT scoping
-  (the recurring foot-gun behind the retired `HOMEBREW_TAP_TOKEN`,
-  since replaced by the `HOMEBREW_TAP_DEPLOY_KEY` deploy key).
-
-### Inspiration
-
-- [MGLAHK (pyonkichi)](https://ss1.xrea.com/pyonkichi.g1.xrea.com/mglahk.html)
-  *(reviewed 2026-05-23)* — Japanese-language mouse-gesture
-  utility; useful as prior art for direction-string rule shape,
-  trigger button + modifier conventions, and the user-facing
-  vocabulary native Japanese users expect (the katakana loanwords
-  for gesture / action, and the direction notation). Reference for
-  design feel, not for code.
+The external material behind the architecture (AX / CGEventTap /
+CGWindowList APIs, the TOML spec, the MGLAHK prior art) is listed
+with review dates in
+[docs/architecture.md → References](docs/architecture.md#references),
+next to the decisions it informed. Commit-convention references are
+the fleet [CONTRIBUTING.md](https://github.com/akira-toriyama/.github/blob/main/CONTRIBUTING.md).
 
 ## Shared libraries (atelier)
 
