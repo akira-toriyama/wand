@@ -161,7 +161,19 @@ ws-tabs.
   rejected at button-up; deliberate trade-off, documented at the
   call site.
 - **The cast-trail overlay lives in `WandAdapterMacOS`**, not a
-  separate View module ([Sources/WandAdapterMacOS/GestureOverlay.swift](Sources/WandAdapterMacOS/GestureOverlay.swift)).
+  separate View module. It's four files around one `TrailView`:
+  [GestureOverlay.swift](Sources/WandAdapterMacOS/GestureOverlay.swift)
+  (the `GestureOverlay` facade + `TrailView`'s state, stroke
+  tracking, draw dispatch, and HUD layout),
+  [TrailView+StyleRenderers.swift](Sources/WandAdapterMacOS/TrailView+StyleRenderers.swift)
+  (the `[cast.overlay.trail].style` presets and their shared
+  geometry), [TrailView+Particles.swift](Sources/WandAdapterMacOS/TrailView+Particles.swift)
+  (exit animations, emitters, the redraw tick), and
+  [HUDContentView.swift](Sources/WandAdapterMacOS/HUDContentView.swift)
+  (paints cards / badge / armed decoration from `TrailView`'s
+  layouts — holds no state). Stored properties stay in
+  `GestureOverlay.swift`; a new renderer or effect goes in the
+  matching extension file, never a fifth file per style.
   It's the project's only on-screen UI; it's pure AppKit/CG rendering
   fed by the event-tap sample stream, so it belongs in the macOS
   adapter rather than justifying a facet-style View layer. Core stays
