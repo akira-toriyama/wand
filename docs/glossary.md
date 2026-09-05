@@ -242,6 +242,22 @@ separate issue (the surgical writer).
   `PanelController.handleReorderDrop`
 - **Don't call it:** drag sort, reorder mode
 
+### row context menu
+The context menu, built on sill's `ThemedMenu`, that opens when a
+[[tome entry]] row is right-clicked. It has one entry today, **Delete**,
+which hides the chosen row for the rest of the session (recorded per
+panel level in `Controller.tomeHidden`). Discarded on config reload and
+on daemon restart — the same session-only footing as [[DnD sort]].
+Deleting every child of a folder hides the folder too (on the next panel
+open; the live panel keeps the chevron row in place, unresponsive to
+hover). Native middle-click tome only: absent from `tome --open` and
+from the child rows of a [[dynamic submenu]].
+- Code: `WandCore/TomeHidden` (the pure filter core),
+  `PanelTree.applyHidden` / `PanelController.showDeleteMenu` /
+  `PanelController.handleDelete` (adapter side), `Controller.tomeHidden`
+  (session state)
+- **Don't call it:** right-click menu (in code / docs), NSMenu
+
 ### excludes
 The global blocklist that **fully disables cast and tome inside specific
 apps**. An array of bundle-id globs, short-circuiting at the top of trigger

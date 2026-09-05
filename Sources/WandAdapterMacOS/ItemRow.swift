@@ -613,6 +613,23 @@ final class ItemRow: NSView {
         registerForDraggedTypes([Self.reorderType])
     }
 
+    /// Set by `PanelController` on deletable rows only (wand#128 —
+    /// `.list` layout, native tome, nodeID rows). `nil` keeps
+    /// NSView's default rightMouseDown behaviour.
+    private var contextMenuHandler: ((ItemRow, NSEvent) -> Void)?
+
+    func enableContextMenu(_ handler: @escaping (ItemRow, NSEvent) -> Void) {
+        contextMenuHandler = handler
+    }
+
+    override func rightMouseDown(with event: NSEvent) {
+        guard let contextMenuHandler, nodeID != nil else {
+            super.rightMouseDown(with: event)
+            return
+        }
+        contextMenuHandler(self, event)
+    }
+
     override func mouseDown(with event: NSEvent) {
         guard reorderDrop != nil else {
             // Non-reorderable rows keep NSView's default next-

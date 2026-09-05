@@ -13,6 +13,9 @@
 //     NSMenu diagonal-cursor tolerance is NOT reproduced — hovering
 //     a non-folder row inside the parent closes the child.
 //   - State markers (✓ / –) prefix the row title.
+//   - Right-click on a row opens a themed context menu (sill
+//     ThemedMenu) with Delete — session-only, discarded on config
+//     reload / restart. Native middle-click tome only.
 //
 // Spec contract:
 //   - `present(...)` returns **immediately** (unlike `NSMenu.popUp`,
@@ -49,8 +52,11 @@ public enum TomePanel {
                                 shadow: Bool = false,
                                 linePets: [LinePet] = [],
                                 palette: TomeThemePalette = TomeThemePalette(),
+                                themeName: String = "system",
                                 orderOverride: [String: [String]] = [:],
                                 onReorder: ((String, [String]) -> Void)? = nil,
+                                hiddenOverride: [String: Set<String>] = [:],
+                                onDelete: ((String, String) -> Void)? = nil,
                                 onSelect: @escaping (TomeItem, Target) -> Void) {
         current?.dismiss()
         guard !items.isEmpty else {
@@ -58,8 +64,21 @@ public enum TomePanel {
                      + "panel suppressed")
             return
         }
-        let nodes = PanelTree.applyOrder(PanelTree.build(from: items),
-                                          path: "", override: orderOverride)
+        // Hidden filter first (deleted rows drop, emptied folders
+        // prune), then the DnD order re-applies to what's left.
+        // `counterTomeShown` was already bumped by the caller;
+        // the rare "every visible item was session-deleted" case
+        // below skews it by one — accepted, the counter reads as
+        // "panel requested with visible items".
+        let built = PanelTree.applyHidden(PanelTree.build(from: items),
+                                           path: "", hidden: hiddenOverride)
+        guard !built.isEmpty else {
+            Log.line("tome-panel: all items session-deleted for "
+                     + "\(target.bundleID) — panel suppressed")
+            return
+        }
+        let nodes = PanelTree.applyOrder(built, path: "",
+                                          override: orderOverride)
         let colors = TomeColors.resolve(palette)
         // Header (app icon + name) only makes sense on the vertical
         // list — in toolbar mode the panel is a single horizontal row
@@ -89,6 +108,9 @@ public enum TomePanel {
             isRoot: true,
             panelPath: "",
             onReorder: onReorder,
+            themeName: themeName,
+            onDelete: onDelete,
+            hidden: hiddenOverride,
             openAnim: openAnim,
             closeAnim: closeAnim,
             border: border,
