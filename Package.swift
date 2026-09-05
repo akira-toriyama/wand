@@ -151,5 +151,11 @@ let package = Package(
         .testTarget(
             name: "WandIntegrationTests",
             dependencies: ["WandCore", "WandAdapterTest"]),
+        // Pins the adapter's pure-math pieces (ChompGeometry today). The
+        // module links AppKit, so this target only runs where XCTest does
+        // (Xcode / CI) — same constraint as the other two.
+        .testTarget(
+            name: "WandAdapterMacOSTests",
+            dependencies: ["WandAdapterMacOS", "WandCore"]),
     ]
 )
