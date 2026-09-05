@@ -70,7 +70,7 @@ public final class MacOSMouseSource: MouseSource, @unchecked Sendable {
 
     /// Overlay hooks; both run on the main-thread tap callback. Not
     /// `@Sendable` (unlike the protocol's `handler`) so the closures
-    /// can capture the non-Sendable `GestureOverlay` — safe because
+    /// can capture the non-Sendable `CastOverlay` — safe because
     /// everything here is main-bound.
     public var onSample: ((TrailSample) -> Void)?
     public var onStrokeEnd: (() -> Void)?

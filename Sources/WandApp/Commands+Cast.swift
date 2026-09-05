@@ -68,15 +68,15 @@ extension WandApp {
     /// (the already-drawn prefix is stripped), and `fires` marks the
     /// rule the current shape triggers now. Capped so a permissive
     /// prefix can't grow a wall.
-    static func assistHint(pattern: String, candidates: [Rule]) -> GestureHint {
+    static func assistHint(pattern: String, candidates: [Rule]) -> CastHint {
         let rows = candidates.prefix(6).map { r in
-            GestureHint.Row(
+            CastHint.Row(
                 suffix: arrows(String(r.pattern.dropFirst(pattern.count))),
                 name: r.name,
                 icon: r.icon,
                 fires: r.pattern == pattern)
         }
-        return GestureHint(shape: arrows(pattern), rows: Array(rows))
+        return CastHint(shape: arrows(pattern), rows: Array(rows))
     }
 
     /// Interactive recorder. Installs an event tap in "recording"

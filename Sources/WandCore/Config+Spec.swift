@@ -214,7 +214,7 @@ public extension WandConfig {
             ]),
 
             .init("cast.overlay",
-                  doc: "Gesture-trail HUD toggle + blur + colour-cycle "
+                  doc: "Cast-trail HUD toggle + blur + colour-cycle "
                      + "period (trail / badge / cards live in sub-blocks).",
                   fields: [
                 .bool("enabled", \.overlayEnabled, default: true,

@@ -87,13 +87,13 @@ extension WandApp {
         let burstManager = BurstManager()
         let arcadeScoreManager = ArcadeScoreManager()
 
-        // Gesture-trail overlay (passive observer of the sample
+        // Cast-trail overlay (passive observer of the sample
         // stream). Held for the process lifetime via `app.run()`.
         // Declared `outside` the `if` so the live-reload hook below
         // can hot-apply `[cast.overlay]` changes without a restart.
-        var overlay: GestureOverlay?
+        var overlay: CastOverlay?
         if cfg.overlay.enabled {
-            overlay = GestureOverlay(cfg)
+            overlay = CastOverlay(cfg)
             overlay?.show()
             // Chomp cherry pickup — `+N` arcade-score popup floats
             // up from the cherry's screen position when the face
@@ -131,13 +131,13 @@ extension WandApp {
                 // the documented bridge.
                 guard let live = controller?.config else { return }
                 var valid = false
-                var hint: GestureHint? = nil      // nil only before any direction
+                var hint: CastHint? = nil      // nil only before any direction
                 if s.pattern.isEmpty {
                     valid = !s.expired            // neutral start
                 } else if s.expired || s.cancelled
                     || Matcher.isExcluded(bundleID: s.bundleID,
                                           by: live.excludeApps) {
-                    hint = GestureHint(shape: arrows(s.pattern), rows: [])
+                    hint = CastHint(shape: arrows(s.pattern), rows: [])
                 } else {
                     // `valid` = the current shape is still a prefix
                     // of at least one reachable rule — i.e. NOT off

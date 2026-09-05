@@ -42,7 +42,7 @@ public enum ChompSize: String, Sendable, Hashable, CaseIterable {
 /// `[cast.chomp]` — the chomp theme's scale knob. Only read when
 /// `[cast].theme = "chomp"`; the parser warns and ignores when the
 /// user sets this block under a different theme. Kept as a struct (not
-/// folded into `GestureOverlayTrailSpec`) so the "applies under one
+/// folded into `CastOverlayTrailSpec`) so the "applies under one
 /// specific theme" scope is visible from the type alone.
 public struct ChompSpec: Sendable, Equatable {
     public let size: ChompSize

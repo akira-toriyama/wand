@@ -24,7 +24,7 @@ headers may appear only in the parser's migration-warning paths, never
 as canonical examples.
 
 Swift type names (`LauncherSpec`, `LauncherPanel`, `LauncherSource`,
-`GestureOverlay`, `cfg.launcher`, …) intentionally retain the pre-
+`cfg.launcher`, …) intentionally retain the pre-
 rename names — the TOML / user-facing rename to `cast` / `tome`
 covered config keys and strings only; an internal-type rename is a
 tracked follow-up.
@@ -125,7 +125,7 @@ ws-tabs.
 - **`LauncherPanel` lives in `WandAdapterMacOS` too**
   ([Sources/WandAdapterMacOS/LauncherPanel.swift](Sources/WandAdapterMacOS/LauncherPanel.swift)).
   Don't promote it to a separate module — same reasoning as
-  `GestureOverlay`. The root panel must stay a `NonActivatingPanel`
+  `CastOverlay`. The root panel must stay a `NonActivatingPanel`
   (`canBecomeKey = false` + `.nonactivatingPanel`); native NSMenu's
   diagonal-cursor tolerance is deliberately NOT reproduced. How the
   tree, icons, dynamic items, and checkmark state are built is in
@@ -162,8 +162,8 @@ ws-tabs.
   call site.
 - **The cast-trail overlay lives in `WandAdapterMacOS`**, not a
   separate View module. It's four files around one `TrailView`:
-  [GestureOverlay.swift](Sources/WandAdapterMacOS/GestureOverlay.swift)
-  (the `GestureOverlay` facade + `TrailView`'s state, stroke
+  [CastOverlay.swift](Sources/WandAdapterMacOS/CastOverlay.swift)
+  (the `CastOverlay` facade + `TrailView`'s state, stroke
   tracking, draw dispatch, and HUD layout),
   [TrailView+StyleRenderers.swift](Sources/WandAdapterMacOS/TrailView+StyleRenderers.swift)
   (the `[cast.overlay.trail].style` presets and their shared
@@ -172,7 +172,7 @@ ws-tabs.
   [HUDContentView.swift](Sources/WandAdapterMacOS/HUDContentView.swift)
   (paints cards / badge / armed decoration from `TrailView`'s
   layouts — holds no state). Stored properties stay in
-  `GestureOverlay.swift`; a new renderer or effect goes in the
+  `CastOverlay.swift`; a new renderer or effect goes in the
   matching extension file, never a fifth file per style.
   It's the project's only on-screen UI; it's pure AppKit/CG rendering
   fed by the event-tap sample stream, so it belongs in the macOS

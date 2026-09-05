@@ -42,7 +42,7 @@ public struct WandConfig: Sendable {
     /// the codebase doesn't need to know `chomp` is a special case.
     public var chomp: ChompSpec?
     /// `[cast.recognition]` — sample → direction tuning.
-    public var recognition: GestureRecognitionSpec
+    public var recognition: CastRecognitionSpec
     /// `[exclude].apps` — global bundle-id exclusion list. Applies
     /// to both gesture rules and launcher items.
     public var excludeApps: [String]
@@ -51,9 +51,9 @@ public struct WandConfig: Sendable {
     /// context (`RuleContext.cursor` / `.focused`).
     public var rules: [Rule]
     /// `[cast.overlay]` and sub-blocks — trail + badge + cards.
-    public var overlay: GestureOverlaySpec
+    public var overlay: CastOverlaySpec
     /// `[cast.fire]` and sub-blocks — burst + decal.
-    public var fire: GestureFireSpec
+    public var fire: CastFireSpec
     /// `[tome]` and sub-blocks — trigger + items + row /
     /// animation / decoration cosmetics.
     public var launcher: LauncherSpec
@@ -186,7 +186,7 @@ public struct WandConfig: Sendable {
         let palette = wandCastPalette(theme)
 
         // [cast.recognition] — sample → direction tuning.
-        let recognition = GestureRecognitionSpec(
+        let recognition = CastRecognitionSpec(
             minStrokePx: d.minStrokePx,
             maxSegmentMs: d.maxSegmentMs,
             cancelReversals: d.cancelReversals,
@@ -276,7 +276,7 @@ public struct WandConfig: Sendable {
             chomp != nil ? .normal : parsedTrailStyle
         let trailStraightenOnTurn =
             chomp != nil ? true : parsedTrailStraightenOnTurn
-        let trail = GestureOverlayTrailSpec(
+        let trail = CastOverlayTrailSpec(
             color: trailColor,
             colorNoMatch: trailColorNoMatch,
             colorOutline: trailColorOutline,
@@ -286,13 +286,13 @@ public struct WandConfig: Sendable {
             straightenOnTurn: trailStraightenOnTurn)
 
         // [cast.overlay.badge]
-        let badge = GestureOverlayBadgeSpec(
+        let badge = CastOverlayBadgeSpec(
             enabled: d.badgeEnabled,
             size: d.badgeSize,
             animEnabled: d.badgeAnimEnabled)
 
         // [cast.overlay.cards]
-        let cards = GestureOverlayCardsSpec(
+        let cards = CastOverlayCardsSpec(
             fire: d.cardsFire, cancel: d.cardsCancel,
             armed: d.cardsArmed,
             linePets: d.cardsLinePets,
@@ -300,9 +300,9 @@ public struct WandConfig: Sendable {
             firesAppIcon: d.cardsFiresAppIcon)
 
         // [cast.overlay.no-match]
-        let noMatch = GestureOverlayNoMatchSpec(kind: d.noMatchKind)
+        let noMatch = CastOverlayNoMatchSpec(kind: d.noMatchKind)
 
-        let overlay = GestureOverlaySpec(
+        let overlay = CastOverlaySpec(
             enabled: overlayEnabled,
             blurEnabled: overlayBlurEnabled,
             colorCycleMs: overlayColorCycleMs,
@@ -314,16 +314,16 @@ public struct WandConfig: Sendable {
         // (the spec stored the raw value).
         let burstColor = d.burstColorRaw.isEmpty
             ? palette.burstColor : d.burstColorRaw
-        let burst = GestureFireBurstSpec(kind: d.burstKind,
+        let burst = CastFireBurstSpec(kind: d.burstKind,
                                           color: burstColor)
 
         // [cast.fire.decal]
-        let decal = GestureFireDecalSpec(
+        let decal = CastFireDecalSpec(
             kind: d.decalKind,
             durationMs: d.decalDurationMs,
             size: d.decalSize)
 
-        let fire = GestureFireSpec(burst: burst, decal: decal)
+        let fire = CastFireSpec(burst: burst, decal: decal)
 
         // [tome.*] — middle-click (or other configured button) menu.
         // Tap not installed when `enabled = false` (default). The plain
@@ -401,11 +401,11 @@ public struct WandConfig: Sendable {
         // event. Declaration-order wins (gesture > launcher > future
         // families); the loser is forced enabled = false. A different
         // button OR a non-empty modifier difference resolves it.
-        let gestureTrigger = Trigger(button: button, modifiers: mods)
+        let castTrigger = Trigger(button: button, modifiers: mods)
         let launcherTrigger = Trigger(button: launcherButton,
                                        modifiers: launcherMods)
         var effectiveLauncherEnabled = launcherEnabled
-        if launcherEnabled && launcherTrigger == gestureTrigger {
+        if launcherEnabled && launcherTrigger == castTrigger {
             Log.line("config: [tome].button = \"\(launcherButton.rawValue)\""
                 + " + modifiers=\(modifierList(launcherMods)) collides"
                 + " with [cast] — [tome] disabled for this"
@@ -459,7 +459,7 @@ public struct WandConfig: Sendable {
         let failsafeBlockPresent = doc.tables["failsafe"] != nil
 
         return WandConfig(
-            trigger: gestureTrigger,
+            trigger: castTrigger,
             intensity: intensity,
             theme: theme,
             chomp: chomp,

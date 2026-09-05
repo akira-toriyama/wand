@@ -76,7 +76,7 @@ public struct CastThemePalette: Sendable, Equatable {
 /// `[cast.recognition]` — knobs that tune how raw mouse samples turn
 /// into a direction string. Independent of any visual output; purely
 /// a recognition-quality axis.
-public struct GestureRecognitionSpec: Sendable, Equatable {
+public struct CastRecognitionSpec: Sendable, Equatable {
     /// Minimum displacement (px) before a new direction is emitted.
     /// Smaller = catches small flicks, bigger = tolerant of jitter.
     /// Clamped 4..200.
@@ -105,11 +105,11 @@ public struct GestureRecognitionSpec: Sendable, Equatable {
         self.cancelWindowMs = cancelWindowMs
     }
 
-    public static let `default` = GestureRecognitionSpec()
+    public static let `default` = CastRecognitionSpec()
 }
 
 /// `[cast.overlay.trail]` — the line itself.
-public struct GestureOverlayTrailSpec: Sendable, Equatable {
+public struct CastOverlayTrailSpec: Sendable, Equatable {
     /// While the in-progress shape matches a rule (or is too short to
     /// match anything yet).
     public let color: String
@@ -161,12 +161,12 @@ public struct GestureOverlayTrailSpec: Sendable, Equatable {
         self.straightenOnTurn = straightenOnTurn
     }
 
-    public static let `default` = GestureOverlayTrailSpec()
+    public static let `default` = CastOverlayTrailSpec()
 }
 
 /// `[cast.overlay.badge]` — origin badge that shows the target app's
 /// icon at the gesture's start point.
-public struct GestureOverlayBadgeSpec: Sendable, Equatable {
+public struct CastOverlayBadgeSpec: Sendable, Equatable {
     public let enabled: Bool
     /// Badge size in points. Clamped 32..96.
     public let size: Int
@@ -181,13 +181,13 @@ public struct GestureOverlayBadgeSpec: Sendable, Equatable {
         self.animEnabled = animEnabled
     }
 
-    public static let `default` = GestureOverlayBadgeSpec()
+    public static let `default` = CastOverlayBadgeSpec()
 }
 
 /// `[cast.overlay.cards]` — assist-card exit animations. These animate
 /// cards inside the overlay, so they require `[cast.overlay].enabled
 /// = true`. Default `.off` (cards just vanish).
-public struct GestureOverlayCardsSpec: Sendable, Equatable {
+public struct CastOverlayCardsSpec: Sendable, Equatable {
     /// Animation when the firing card actually fires at button-up.
     public let fire: Effect
     /// Animation when a card becomes unreachable mid-gesture.
@@ -235,28 +235,28 @@ public struct GestureOverlayCardsSpec: Sendable, Equatable {
         self.firesAppIcon = firesAppIcon
     }
 
-    public static let `default` = GestureOverlayCardsSpec()
+    public static let `default` = CastOverlayCardsSpec()
 }
 
 /// `[cast.overlay.no-match]` — banner shown at the cursor while the
 /// in-progress gesture is currently off every reachable rule. Default
 /// `kind = .off`. Decoupled from `[cast].theme` so the GAME OVER cue
 /// can pair with any theme.
-public struct GestureOverlayNoMatchSpec: Sendable, Equatable {
+public struct CastOverlayNoMatchSpec: Sendable, Equatable {
     public let kind: NoMatchBanner
 
     public init(kind: NoMatchBanner = .off) {
         self.kind = kind
     }
 
-    public static let `default` = GestureOverlayNoMatchSpec()
+    public static let `default` = CastOverlayNoMatchSpec()
 }
 
 /// `[cast.overlay]` — the whole HUD (trail + badge + cards) plus
 /// shared toggles. `enabled = false` keeps the overlay window from
 /// being created at all (the daemon must restart to flip back on —
 /// surfaced as pending-restart in `daemon --show`).
-public struct GestureOverlaySpec: Sendable, Equatable {
+public struct CastOverlaySpec: Sendable, Equatable {
     public let enabled: Bool
     /// Frosted blur (`NSVisualEffectView`) under the HUD cards +
     /// badge. `false` falls back to a solid dark fill.
@@ -271,18 +271,18 @@ public struct GestureOverlaySpec: Sendable, Equatable {
     /// surface scope. Ignored by static and `splatoon` modes (the
     /// latter is per-stroke fixed).
     public let colorCycleMs: Int
-    public let trail: GestureOverlayTrailSpec
-    public let badge: GestureOverlayBadgeSpec
-    public let cards: GestureOverlayCardsSpec
-    public let noMatch: GestureOverlayNoMatchSpec
+    public let trail: CastOverlayTrailSpec
+    public let badge: CastOverlayBadgeSpec
+    public let cards: CastOverlayCardsSpec
+    public let noMatch: CastOverlayNoMatchSpec
 
     public init(enabled: Bool = true,
                 blurEnabled: Bool = true,
                 colorCycleMs: Int = 2000,
-                trail: GestureOverlayTrailSpec = .default,
-                badge: GestureOverlayBadgeSpec = .default,
-                cards: GestureOverlayCardsSpec = .default,
-                noMatch: GestureOverlayNoMatchSpec = .default) {
+                trail: CastOverlayTrailSpec = .default,
+                badge: CastOverlayBadgeSpec = .default,
+                cards: CastOverlayCardsSpec = .default,
+                noMatch: CastOverlayNoMatchSpec = .default) {
         self.enabled = enabled
         self.blurEnabled = blurEnabled
         self.colorCycleMs = colorCycleMs
@@ -292,13 +292,13 @@ public struct GestureOverlaySpec: Sendable, Equatable {
         self.noMatch = noMatch
     }
 
-    public static let `default` = GestureOverlaySpec()
+    public static let `default` = CastOverlaySpec()
 }
 
 /// `[cast.fire.burst]` — omnidirectional particle explosion at the
 /// cursor when a rule fires. Lives in its own click-through window so
 /// the burst fires even when `[cast.overlay].enabled = false`.
-public struct GestureFireBurstSpec: Sendable, Equatable {
+public struct CastFireBurstSpec: Sendable, Equatable {
     public let kind: TrailEndKind
     /// Burst particle colour:
     ///   `""` / `"trail"`  — inherit `[cast.overlay.trail].color`.
@@ -312,13 +312,13 @@ public struct GestureFireBurstSpec: Sendable, Equatable {
         self.color = color
     }
 
-    public static let `default` = GestureFireBurstSpec()
+    public static let `default` = CastFireBurstSpec()
 }
 
 /// `[cast.fire.decal]` — post-fire ink decal at the cursor.
 /// Independent of overlay; sits above every app in its own click-
 /// through window.
-public struct GestureFireDecalSpec: Sendable, Equatable {
+public struct CastFireDecalSpec: Sendable, Equatable {
     public let kind: DecalKind
     /// How long the decal stays visible. Clamped 0..10000;
     /// `0` collapses to `.off` regardless of `kind`.
@@ -334,22 +334,22 @@ public struct GestureFireDecalSpec: Sendable, Equatable {
         self.size = size
     }
 
-    public static let `default` = GestureFireDecalSpec()
+    public static let `default` = CastFireDecalSpec()
 }
 
 /// `[cast.fire]` — fire-moment cursor-anchored effects. Both
 /// sub-blocks render in their own click-through windows and are
 /// triggered from `Controller.onGestureFire` regardless of the
 /// overlay's enabled state.
-public struct GestureFireSpec: Sendable, Equatable {
-    public let burst: GestureFireBurstSpec
-    public let decal: GestureFireDecalSpec
+public struct CastFireSpec: Sendable, Equatable {
+    public let burst: CastFireBurstSpec
+    public let decal: CastFireDecalSpec
 
-    public init(burst: GestureFireBurstSpec = .default,
-                decal: GestureFireDecalSpec = .default) {
+    public init(burst: CastFireBurstSpec = .default,
+                decal: CastFireDecalSpec = .default) {
         self.burst = burst
         self.decal = decal
     }
 
-    public static let `default` = GestureFireSpec()
+    public static let `default` = CastFireSpec()
 }

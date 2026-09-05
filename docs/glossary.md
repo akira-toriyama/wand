@@ -175,7 +175,7 @@ The two-color pair switching the [[assist card]] frame color and the
 the `assist card`s on screen, only the currently-matched candidate is
 highlighted in the match color — the rest stay in the normal color.
 - Config: `[cast.overlay]`
-- Code: `WandAdapterMacOS/GestureOverlay`
+- Code: `WandAdapterMacOS/CastOverlay`
 - **Don't call it:** active color, hit color, highlight color, success
   color, fail color
 

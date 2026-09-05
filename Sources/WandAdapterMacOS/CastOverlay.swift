@@ -5,7 +5,7 @@
 // plain `CGPoint`). Threading: `addPoint` / `clear` fire on the
 // event-tap main-thread callback, which is where AppKit wants them.
 //
-// This file owns the `GestureOverlay` facade and `TrailView`'s
+// This file owns the `CastOverlay` facade and `TrailView`'s
 // stored state, stroke tracking, draw dispatch, and HUD layout. The
 // rest of `TrailView` is split by responsibility into sibling files:
 // `TrailView+StyleRenderers.swift` (trail style presets),
@@ -25,7 +25,7 @@ import WandCore
 /// `suffix` is only the *remaining* arrows (the drawn prefix is
 /// stripped — you already see it), and `fires` marks the rule the
 /// current shape triggers right now (its suffix is empty).
-public struct GestureHint: Sendable {
+public struct CastHint: Sendable {
     public struct Row: Sendable {
         public let suffix: String
         public let name: String
@@ -49,7 +49,7 @@ public struct GestureHint: Sendable {
 }
 
 @MainActor
-public final class GestureOverlay {
+public final class CastOverlay {
 
     private let window: NSWindow
     private let view: TrailView
@@ -94,7 +94,7 @@ public final class GestureOverlay {
     /// shape fires a rule, the no-match color otherwise. `hint` (the
     /// shape-so-far + reachable rules) is drawn near the cursor.
     /// Coalesced redraws keep this cheap at the per-mouse-move rate.
-    public func addPoint(_ cg: CGPoint, valid: Bool, hint: GestureHint?) {
+    public func addPoint(_ cg: CGPoint, valid: Bool, hint: CastHint?) {
         view.append(cg, valid: valid, hint: hint)
     }
 
@@ -248,7 +248,7 @@ final class TrailView: NSView {
     /// Named preset that swaps the trail's whole personality (width,
     /// glow, dash, per-segment color). Resolved from
     /// `[cast.overlay.trail].style` and reflected live via
-    /// `GestureOverlay.applyConfig(_:)`. Colour is never part of a
+    /// `CastOverlay.applyConfig(_:)`. Colour is never part of a
     /// style — it flows from `[cast.overlay.trail].color` (see
     /// `TrailStyle`).
     var trailStyle: TrailStyle = .normal
@@ -271,7 +271,7 @@ final class TrailView: NSView {
     /// coords from a global point.
     var originOffset: CGPoint = .zero
     /// User-visible knobs from `[cast.overlay]`. All hot-reloadable via
-    /// `GestureOverlay.applyConfig(_:)` — colours and toggles update
+    /// `CastOverlay.applyConfig(_:)` — colours and toggles update
     /// without restart; `setBlurEnabled` even adds/removes the
     /// `NSVisualEffectView` subview in place.
     var blurEnabled: Bool
@@ -279,7 +279,7 @@ final class TrailView: NSView {
     var badgeSize: CGFloat = 56
     var animEnabled: Bool = true
     /// Exit-animation kinds from `[cast.overlay.cards]`. Typed values
-    /// come straight from `WandConfig` — `GestureOverlay.applyConfig`
+    /// come straight from `WandConfig` — `CastOverlay.applyConfig`
     /// assigns them on init + hot-reload.
     var effectCancel: Effect = .off
     var effectFire: Effect = .off
@@ -433,7 +433,7 @@ final class TrailView: NSView {
     /// Reset to 0 at stroke end.
     fileprivate var prevFaceArcLength: CGFloat = 0
     /// App-layer hook called once per cherry the face eats, with
-    /// the cherry's Cocoa-global position (Y-up). `GestureOverlay`
+    /// the cherry's Cocoa-global position (Y-up). `CastOverlay`
     /// exposes this via its own `onCherryEaten` property so the
     /// daemon's `ArcadeScoreManager` can fire a "+N" popup at the
     /// exact cherry location.
@@ -447,7 +447,7 @@ final class TrailView: NSView {
     /// → no rule will fire on release" message stays visible. `nil`
     /// when no GAME OVER is currently shown.
     fileprivate var gameOverStartedAt: TimeInterval?
-    fileprivate var hint: GestureHint?      // shape + reachable rules
+    fileprivate var hint: CastHint?      // shape + reachable rules
     /// Icon of the target app the gesture is acting on, drawn as a
     /// small badge at `origin`. Tells the user "you're operating
     /// on Chrome (the cursor-anchored window), even though VSCode has
@@ -524,7 +524,7 @@ final class TrailView: NSView {
     /// Seconds the post-fire snapped trail stays visible (hold +
     /// fade). Sourced from `[cast.overlay.trail].final-hold-ms`; `0`
     /// disables the hold and falls back to immediate clear.
-    /// Reflected live via `GestureOverlay.applyConfig(_:)`.
+    /// Reflected live via `CastOverlay.applyConfig(_:)`.
     fileprivate var finalHoldDuration: TimeInterval = 0.40
 
     //
@@ -622,7 +622,7 @@ final class TrailView: NSView {
     override func hitTest(_ point: NSPoint) -> NSView? { nil }   // click-through
 
     /// Convert a CG global point (Y-down) to view-local (Y-up) coords.
-    func append(_ cg: CGPoint, valid: Bool, hint: GestureHint?) {
+    func append(_ cg: CGPoint, valid: Bool, hint: CastHint?) {
         // A new stroke is starting while the previous fire is still
         // holding its snapped polyline — collapse the hold instantly
         // so the new gesture's trail doesn't overlay the old one.
@@ -1272,8 +1272,8 @@ final class TrailView: NSView {
                                         cyclePeriod: colorCyclePeriod)
 
         if let hint, let cursor = cursor {
-            var byDir: [Character: [GestureHint.Row]] = [:]
-            var fires: [GestureHint.Row] = []
+            var byDir: [Character: [CastHint.Row]] = [:]
+            var fires: [CastHint.Row] = []
             for row in hint.rows {
                 if let first = row.suffix.first {
                     byDir[first, default: []].append(row)
@@ -1510,7 +1510,7 @@ final class TrailView: NSView {
     /// firing card just leads with its rule icon (or name, if
     /// iconless). Candidate cards always pass `nil`; only the firing
     /// card surfaces the cursor-anchored target's identity.
-    fileprivate func cardText(_ rows: [GestureHint.Row],
+    fileprivate func cardText(_ rows: [CastHint.Row],
                                textMode: TrailColorMode,
                                leadingAppIcon: NSImage? = nil) -> NSAttributedString {
         // Suffix renders in two styles. The FIRST arrow (`nextArrow*`)
