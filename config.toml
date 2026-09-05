@@ -567,10 +567,9 @@ size = 60
 # `[[tome.cursor.item]]` is one row with the same action-type
 # vocabulary as `[[cast.cursor.rule]]`.
 #
-# The cursor-anchored target is captured at button-down, exactly
-# like the cast path, so the chosen item dispatches against the
-# window you middle-clicked on — not whatever happens to have focus
-# by the time you choose.
+# Items dispatch against the window you middle-clicked on — the
+# same cursor-anchored target as cast (see "IMPORTANT —
+# cursor-anchored matching" above the rule tables below).
 #
 # Two changes that need a daemon restart (the tap is baked into the
 # event mask at install): `enabled = false ↔ true` and `button`.
@@ -606,13 +605,11 @@ layout = "list"
 #                animated spectrum outline
 #   "cobalt2" / "shades-of-purple" / "tokyo-hack" / "github-dark" /
 #   "dracula" / "catppuccin-mocha" / "gruvbox" / "github-light"
-#              — a CURATED SELECTION of the shared sill catalog (hover
-#                <- primary, rows <- foreground, panel <- background).
-#                "github-light" is a LIGHT theme. sill ships ~30 and keeps
-#                adding, so the authoritative list is the enum in
-#                config.schema.json (`wand config --emit-schema`), which
-#                your editor completes from and `wand config --validate`
-#                enforces.
+#              — the same CURATED SELECTION of the shared sill catalog
+#                as `[cast].theme` (hover <- primary, rows <- foreground,
+#                panel <- background; "github-light" is LIGHT). See the
+#                note under `[cast].theme` for why the list is partial
+#                and where the authoritative enum lives.
 #
 # wand-only dynamic engine themes (no sill palette):
 #   "neon"     — electric cyan hover on white rows, blue-black backdrop
