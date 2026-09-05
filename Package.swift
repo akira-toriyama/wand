@@ -48,9 +48,12 @@ let package = Package(
         // the pure `Palette` module (ThemeSpec → wand's String-token
         // CastThemePalette / TomeThemePalette bridge + EffectIntensity);
         // WandAdapterMacOS additionally takes `Effects` for the shared
-        // neon flash data + `drawLinePets`. Like perch, wand does NOT link
-        // PaletteKit (it has its own NSColorParse and never uses `pal` /
-        // `resolve`). sill 0.6.0 moves the pure `LinePet` vocabulary into
+        // neon flash data + `drawLinePets`, plus `PaletteKit` + `ThemeKitUI`
+        // for ONE widget: the row context menu is sill's `ThemedMenu`
+        // (wand#128), fed a `ResolvedPalette` derived from the same
+        // `TomeColors` the rows are painted with. Everything else keeps
+        // wand's own NSColorParse. sill 0.6.0 moves the pure `LinePet`
+        // vocabulary into
         // `Palette` (so a no-AppKit Core can validate it) and adds
         // `drawLinePets(…chaseGap:)` — both consumed by wand's line-pets
         // dedup. WandCore also takes the `Toml` module — the family's ONE
@@ -64,9 +67,9 @@ let package = Package(
         //
         // Floor 0.9.0 = the `ConfigSchema` module — one declarative `Spec`
         // describes wand's whole config.toml surface and emits the JSON
-        // Schema taplo uses for completion/validation (`wand --emit-schema`).
-        // 0.9.0 is an additive superset of 0.7.x; the existing
-        // Palette / Toml / Effects usage is unaffected.
+        // Schema taplo uses for completion/validation
+        // (`wand config --emit-schema`). 0.9.0 is an additive superset of
+        // 0.7.x; the existing Palette / Toml / Effects usage is unaffected.
         // Floor 0.11.0 = the release that removed sill's in-tree `Toml`
         // (moved to swift-toml-edit, below). It also carries the `CLIKit`
         // module — the family's shared yabai-style argv tokenizer (Phase 3):
@@ -75,10 +78,10 @@ let package = Package(
         // `--verb=value` form. Palette / ConfigSchema / Effects usage is
         // unaffected.
         // Floor 5.0.0. The 1.29.0→5.x jump crosses four sill majors, but wand
-        // links `Palette` / `Effects` / `CLIKit` / `ConfigSchema` — never
-        // ThemeKitUI — and every one of those majors reshaped the SwiftUI
-        // widget layer. Measured: `swift build` is clean with zero source
-        // changes. What the jump DOES bring is catalog churn: sill retired
+        // linked `Palette` / `Effects` / `CLIKit` / `ConfigSchema` at the
+        // time — not yet ThemeKitUI — and every one of those majors
+        // reshaped the SwiftUI widget layer. Measured: `swift build` was
+        // clean with zero source changes. What the jump DOES bring is catalog churn: sill retired
         // `catppuccin-latte` and added biolume / midas / spectre, so the
         // theme-name test and the emitted schema move with this bump.
         // Floor 6.0.0. The breaking piece wand feels is `paletteFor` going
@@ -112,8 +115,9 @@ let package = Package(
                 .product(name: "Toml", package: "swift-toml-edit"),
                 // ConfigSchema: one declarative `Spec` describes wand's whole
                 // config.toml surface and emits the JSON Schema for taplo
-                // completion (`wand --emit-schema`) — generated from the same
-                // parser source, so editor schema and parser never drift.
+                // completion (`wand config --emit-schema`) — generated from
+                // the same parser source, so editor schema and parser never
+                // drift.
                 .product(name: "ConfigSchema", package: "sill"),
             ]),
         .target(
@@ -122,6 +126,8 @@ let package = Package(
                 "WandCore",
                 .product(name: "Palette", package: "sill"),
                 .product(name: "Effects", package: "sill"),
+                .product(name: "PaletteKit", package: "sill"),
+                .product(name: "ThemeKitUI", package: "sill"),
             ]),
         .target(name: "WandAdapterTest", dependencies: ["WandCore"]),
         .executableTarget(

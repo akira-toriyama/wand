@@ -78,6 +78,27 @@ enum PanelTree {
         }
     }
 
+    /// Apply the session's context-menu deletes (wand#128) to every
+    /// level of the tree, BEFORE `applyOrder`. `hidden` maps a panel
+    /// path to the node ids the user deleted at that level. Folders
+    /// whose children all end up hidden are pruned — an empty child
+    /// panel must never appear.
+    static func applyHidden(_ nodes: [PanelNode], path: String,
+                             hidden: [String: Set<String>]) -> [PanelNode] {
+        guard !hidden.isEmpty else { return nodes }
+        let level = TomeHidden.apply(nodes, id: { $0.orderID },
+                                     hidden: hidden[path] ?? [])
+        return level.compactMap { node in
+            guard case .folder(let name, let children) = node else {
+                return node
+            }
+            let kids = applyHidden(children,
+                                    path: childPath(path, name),
+                                    hidden: hidden)
+            return kids.isEmpty ? nil : .folder(name: name, children: kids)
+        }
+    }
+
     /// Mutable intermediate. Class so siblings share folder references.
     private final class FolderBuilder {
         let name: String
