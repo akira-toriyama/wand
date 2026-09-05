@@ -93,12 +93,39 @@ fallback for surfaces AX cannot resolve — desktop / Dock / menu bar).
   (frontmost fallback)
 - **Don't call it:** gesture, binding, mapping, shortcut
 
-### wand pattern
-The direction string a `cast rule` matches against. The alphabet is only
-`L U R D`; consecutive same directions are impossible (the recognizer
-collapses same-direction movement into one segment).
+### pattern
+The direction string a `cast rule` matches against — the `pattern` key of
+a `[[cast.cursor.rule]]`. The alphabet is only `L U R D`; consecutive same
+directions are impossible (the recognizer collapses same-direction movement
+into one segment).
+- Config: `[[cast.cursor.rule]].pattern`
 - Examples: `DR`, `URD`, `L`
-- **Don't call it:** shape, sequence, path, motion
+- **Don't call it:** shape, sequence, path, motion, gesture string
+
+### intensity
+The cast-wide multiplier (`subtle` / `normal` / `bold` / `wild`) applied to
+every visual effect a firing cast produces — the [[assist card]] exit
+animations and the [[fire burst]]. The [[fire decal]] has its own size /
+duration and is not scaled. Lives at `[cast]` level on purpose because it
+spans two sub-blocks.
+- Config: `[cast].intensity`
+- **Don't call it:** scale, strength, effect level
+
+### armed cue
+The continuous cue on the [[assist card]] that would fire if the button
+were released right now, shown while the stroke is still in progress
+(`pulse` / `glow` / `shake` / `sparkle` / `marching`; `off` disables).
+Distinct from `fire`, which is one-shot at button-up.
+- Config: `[cast.overlay.cards].armed`
+- **Don't call it:** highlight, active state, pre-fire animation
+
+### no-match banner
+The banner shown at the cursor once the in-progress gesture has fallen off
+every reachable rule. `kind = "game-over"` draws the arcade-style
+"GAME OVER" overlay; `off` disables. Independent of `[cast].theme`
+(chomp's red wall-flash is a separate, theme-specific cue).
+- Config: `[cast.overlay.no-match]`
+- **Don't call it:** GAME OVER screen, fail banner, error overlay
 
 ### fire burst
 The click-through effect radiating particles at the cursor position the

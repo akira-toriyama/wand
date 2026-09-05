@@ -175,17 +175,12 @@ action-type = "shell"
 action-cmd = 'open "https://translate.google.com/?sl=auto&tl=en&text=$(printf %s "$WAND_SELECTION" | sed "s/ /%20/g")"'
 ```
 
-Every wand env var is `WAND_`-prefixed, and a context that doesn't
-exist is left **unset** — never set to an empty string — so a
-command can branch on presence:
-`[ -n "${WAND_SELECTION:-}" ] && …`. `$WAND_SELECTION` is unset
-when nothing is selected or the focused app doesn't expose AX
-selection.
-
-Quote `$WAND_SELECTION` in shell commands — the content is
-whatever the user happened to highlight (URLs, code, shell
-metacharacters), and is **untrusted** in the same sense
-`WAND_TARGET_TITLE` is.
+`$WAND_SELECTION` is left **unset** (not `""`) when nothing is
+selected or the app exposes no AX selection, so a command can branch
+on presence: `[ -n "${WAND_SELECTION:-}" ] && …`. Quote it — the
+content is whatever the user highlighted. The full list of `WAND_*`
+variables and the rules they follow is the comment above the rule
+tables in [`config.toml`](config.toml).
 
 ### Conditional filters (`filter-title` / `filter-shell`)
 
@@ -249,12 +244,10 @@ design. The `curl` line above drops the template at
 silently to defaults — a typo can never break the daemon. Validate
 explicitly with `wand config --validate`.
 
-> **`[failsafe]` is mandatory.** It defines the safety nets that
-> catch a stuck click / drag (button-hold timeout, Esc emergency
-> release). The bundled template ships it; **don't delete the
-> block** — `wand config --validate` and daemon startup both refuse to
-> run without it. See the `[failsafe]` block in
-> [`config.toml`](config.toml) for the knobs.
+> **`[failsafe]` is mandatory** — the daemon and `wand config
+> --validate` both refuse to run without it. The bundled template
+> ships it; the block comment in [`config.toml`](config.toml)
+> explains the knobs and why this block cannot default silently.
 
 A rule looks like this:
 
@@ -372,6 +365,8 @@ intensity = "wild"      # subtle | normal | bold | wild
 yabai-style `wand <domain> --<verb> [VALUE …]`. Four domains —
 **daemon** (lifecycle), **cast** (stroke recognition), **tome** (menu
 rows), **config** (settings). Bare `wand` runs the agent.
+`wand --help` is the authoritative reference for every verb, its
+arguments, and its exit codes; the block below is the short form.
 
 ```sh
 wand                    # run as agent (CGEventTap loop)
@@ -404,72 +399,28 @@ wand config --emit-schema   # print the config.toml JSON Schema (Draft-07)
 wand --help, -h
 ```
 
-Each domain takes exactly **one** verb. Combining verbs (e.g.
-`wand daemon --reload --quit`) or using a flag outside its domain
-(e.g. `--items` without `tome`) exits `2` — no silent fallback; an
-unknown flag prints a `did you mean …?` hint.
-
-The daemon **auto-reloads `config.toml` on save** — `daemon --reload` is
-the manual trigger. `daemon --reload` / `daemon --show` / `daemon --quit`
-/ `tome --open` need a running daemon (exit 3 with a helpful message if
-none). `cast --record` is the reverse — it refuses if the daemon *is*
-running, because both would fight over the same CGEventTap.
-
-**Two transitions need a daemon restart** — everything else hot-reloads:
-- `[cast]` (button / modifiers) — baked into the running tap's
-  event mask at `tapCreate` time
-- `[cast.overlay].enabled = false → true` — when the daemon started with
-  overlay disabled, the window was never created; flipping it on
-  later has nothing to attach to
-
-Both surface in `wand daemon --show` as a `pending-restart:` line, and
-in `/tmp/wand.log` at reload time.
-
-## Contributing
-
-Commit messages are **gitmoji-driven**; CI lints
-each PR against [CONTRIBUTING.md](https://github.com/akira-toriyama/.github/blob/main/CONTRIBUTING.md).
-Install the local hook once per clone with `glyph hook install`.
-
-## Build from source
-
-```sh
-swift build                       # compile (CommandLineTools is enough)
-swift test                        # needs Xcode for XCTest
-.build/debug/wand --help        # smoke test
-```
-
-For a local `Wand.app` with persistent Accessibility grant:
-
-```sh
-./setup-signing-cert.sh           # once — creates stable self-signed cert
-./run.sh                          # ./package.sh + open Wand.app
-./run.sh --dev                    # → Wand-dev.app (com.wand.wand.dev)
-                                  #   for parallel testing alongside a
-                                  #   Homebrew install without TCC collision
-./stop.sh                         # kill everything wand
-```
+Each domain takes exactly **one** verb; anything else (two verbs, a
+flag outside its domain, an unknown flag) exits `2` with a
+`did you mean …?` hint. The daemon **auto-reloads `config.toml` on
+save**; `daemon --reload` is the manual trigger. The few settings
+that need a restart instead are called out in their own
+[`config.toml`](config.toml) comments and show up in
+`wand daemon --show` as a `pending-restart:` line.
 
 ## Troubleshooting
 
 **`event-tap: tapCreate failed — is Accessibility granted?`** in
 `/tmp/wand.log`. macOS dropped (or never had) the Accessibility
-grant for this binary. Two ways out:
+grant for this binary — typically right after `brew upgrade`. Two
+ways out:
 - **Quick**: re-grant in System Settings → Privacy & Security →
   Accessibility (toggle the `wand` entry off and on, or
   `+` the binary if missing). Re-launch.
-- **Sticky**: run `./setup-signing-cert.sh` once. It creates a stable
-  self-signed cert in the login keychain; `package.sh` / `run.sh`
-  pick it up and sign every rebuild with the same identity, so the
-  TCC grant survives. Each subsequent `swift build` would otherwise
-  ad-hoc-sign with a new identity and look like a "new app" to TCC.
-
-**`security find-identity -v -p codesigning` returns 0** but
-`./run.sh` still signs the bundle. That's expected — `find-identity
--v` filters for codesigning-trusted identities, and a self-signed
-cert isn't trusted as a CA. The cert is still in the keychain and
-`codesign --sign "<name>"` finds it by Common Name. Confirm with
-`security find-certificate -c "wand Local Signing"`.
+- **Sticky**: `wand daemon --resign` re-signs the installed
+  `Wand.app` with the persistent identity and restarts the daemon,
+  so the grant survives the next upgrade. It exits `3` when that
+  identity doesn't exist yet — see
+  [packaging/homebrew/](packaging/homebrew/) for creating it.
 
 **Cast doesn't fire on a Chrome page's content area.** The AX
 walk-to-window fails through Chrome's renderer process; wand falls

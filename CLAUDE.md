@@ -48,11 +48,9 @@ for event-driven daemons to share the same tome UI:
 
 Both native triggers share the **single invariant**: actions dispatch
 to the window the cursor was over **at button-down time**, never to
-whichever has focus by the time the action runs. On multi-display
-Macs the focused window is often on a different display from where
-you're pointing, so a cast / tome click aimed at e.g. a
-Chrome tab on display 2 fires against *that* tab — not whatever
-happened to have focus on display 1.
+whichever has focus by the time the action runs. The why and the
+per-action mechanics are in
+[docs/architecture.md](docs/architecture.md#the-cursor-anchored-spine).
 
 Names:
 - repo + binary + bundle + brand: `wand`, `com.wand.wand`,
@@ -80,6 +78,10 @@ swift build                  # compile (CommandLineTools works)
 swift test                   # tests — needs Xcode (XCTest); fails on CLT
 .build/debug/wand --help   # smoke test
 .build/debug/wand config --validate
+./setup-signing-cert.sh      # once — persistent self-signed cert so the TCC grant survives rebuilds
+./run.sh                     # ./package.sh + open Wand.app (sets WAND_DEBUG)
+./run.sh --dev               # → Wand-dev.app / com.wand.wand.dev, co-exists with a brew install
+./stop.sh                    # kill everything wand
 ```
 
 Same XCTest constraint as facet — CommandLineTools alone can't
@@ -227,45 +229,36 @@ ws-tabs.
 
 ### The cursor-anchored spine — DO NOT regress this
 
-The whole point of wand is that **actions dispatch to the
-cursor-anchored target window**, not to the focused window.
-Everything below depends on this contract:
+The design narrative — why button-down, how each action type
+reaches the target — is written once, in
+[docs/architecture.md → The cursor-anchored spine](docs/architecture.md#the-cursor-anchored-spine).
+Don't re-explain it here or in README; this section only lists the
+constraints that keep it true:
 
-- The target is captured at **button-down time**, NOT at
-  button-up time and NOT at action-dispatch time. By the time
-  the user finishes drawing, the focused window may be entirely
-  different — that's a feature, not a bug.
-- `AXTarget.resolveAt(point:)` is the single resolution point.
-  Walking up `kAXParentAttribute` until `kAXWindowRole` gives
-  the window; `AXUIElementGetPid` then `NSRunningApplication`
-  gives the bundle id.
+- The target is captured at **button-down time**, NOT at button-up
+  and NOT at dispatch. `AXTarget.resolveAt(point:)` is the single
+  resolution point — don't add a second one.
 - **`Target` is a value type** in
   [Sources/WandCore/Models.swift](Sources/WandCore/Models.swift).
   Don't put `AXUIElement` inside it — Core must stay free of
-  Application Services types. If the dispatcher needs the live
-  AX handle (for `.ax(...)` actions), the adapter keeps a
-  side-table keyed by pid + serverID and looks it up at dispatch
-  time. The serialised `Target` is what flows through Core.
-- `.key(...)` actions raise the target first (via
-  `NSRunningApplication.activate`), THEN post the keystroke.
-  Posting before raising would land the key on whoever has focus
-  — exactly the failure mode the cursor-anchored design exists
-  to avoid.
-- `.ax(...)` actions skip raising and call
-  `AXUIElementPerformAction` directly. Less disruption, no
-  focus stolen. Prefer `ax` for close/minimize/zoom.
-- `.shell(...)` actions get the target identity via env vars
-  (`WAND_TARGET_BUNDLE_ID`, `WAND_TARGET_PID`,
-  `WAND_TARGET_TITLE`, `WAND_TARGET_FRAME`) — the user's
-  command can decide what to do with that information.
-- **Env-var contract (wand#137)**: every context env var is
-  `WAND_`-prefixed (`Dispatch.execute(extraEnv:)` drops
-  non-conforming keys loudly), and an absent context leaves the
-  var **unset** — never an empty string — so recipes can branch
-  on `[ -n "${WAND_SELECTION:-}" ]`. New trigger families add
-  one var each (`$WAND_SHELF_FILES` / `$WAND_SHELF_COUNT` for
-  bolt, `$WAND_CLIPBOARD` / `$WAND_URL` reserved); values are
-  untrusted — same quoting caveat as `WAND_TARGET_TITLE`.
+  Application Services types. The adapter keeps the live AX handle
+  in a side-table keyed by `(pid, windowID)` and looks it up at
+  dispatch time; the serialised `Target` is what flows through Core.
+- `.key(...)` must raise the **specific window**
+  (`Dispatch.raiseSpecificWindow`) before posting the keystroke.
+  Raising only the app, or posting first, lands the key on
+  whichever window last had focus — the failure mode the spine
+  exists to avoid, recreated inside dispatch.
+- `.ax(...)` skips raising entirely. Prefer it for close / minimize /
+  zoom.
+- **Env-var contract (wand#137)**: the contract is defined in
+  [docs/glossary.md → env-var contract](docs/glossary.md#env-var-contract)
+  and the variable list users read is the comment above the rule
+  tables in [config.toml](config.toml). `Dispatch.execute(extraEnv:)`
+  enforces the `WAND_` prefix (drops non-conforming keys loudly).
+  New trigger families add one var each (`$WAND_SHELF_FILES` /
+  `$WAND_SHELF_COUNT` for bolt, `$WAND_CLIPBOARD` / `$WAND_URL`
+  reserved).
 - **`wand tome --open` is the documented spine exception.**
   An upstream trigger (a chord hotkey, or a text-selection
   observer — there is no button-down moment to anchor against)
@@ -303,15 +296,11 @@ These all contradict wand's reason for existing:
 
 **`[failsafe]` is a mandatory config block**
 
-Same top-level scope as `[exclude]`, but with the opposite
-TOML-handling policy: while every other key clamps to a default
-when missing / invalid, **`[failsafe]` block missing → wand
-refuses to start**. Deliberate deviation from the
-clamp-to-default convention. The bundled `config.toml` always
-ships `[failsafe]`; `wand config --validate` flags the missing block as
-fatal. Rationale: safety must not silently degrade — if a user
-removes the block, they get a loud error, not a quietly unsafe
-daemon.
+Missing block → wand refuses to start, and `wand config --validate`
+flags it as fatal. This is the one deliberate inversion of the
+clamp-to-default rule. The rationale is written once, in the
+`[failsafe]` block comment of [config.toml](config.toml) — keep it
+there; README and this file only point at it.
 
 **Five layers of defense**
 
@@ -413,17 +402,12 @@ AX observation, anything future) goes through this checklist:
   key shapes with shims or migration warnings — rename in place,
   drop the old form, and update the bundled `config.toml` in the
   same PR.
-- **Value-convention discipline.** Three shapes carry distinct
-  meaning and shouldn't mix:
-  - Enum fields whose "disabled / no animation" state is one option
-    use `"off"` (`kind`, `border`, `open`, `close`, `fire`,
-    `cancel`, `armed`). Don't introduce a parallel `"none"`.
-  - String fields whose empty value means "inherit theme / default"
-    use `""` (the colour fields under `[cast.overlay.trail]` /
-    `[cast.fire.burst]`).
-  - Arrays use `[]` for the empty case.
-  Pick the right shape when adding a new field rather than letting
-  a fourth convention drift in.
+- **Value-convention discipline.** The three value shapes (`"off"`
+  for a disabled enum, `""` for an inherit-from-theme string, `[]`
+  for an empty array) are defined once, under "Value conventions"
+  in the header of [config.toml](config.toml). Pick the matching
+  shape when adding a field; don't introduce a parallel `"none"` or
+  let a fourth convention drift in.
 - **Prefer the nested-sub-block style** when a config feature has
   multiple knobs that share a domain — keys live inside the
   sub-block that owns them, even if some keys repeat across
@@ -459,21 +443,10 @@ AX observation, anything future) goes through this checklist:
   entries) live at the higher scope on purpose; the comment at the
   call site explains why. Default to the nested form, and justify
   in a comment when promoting a key upward.
-- **The same discipline applies to the CLI.** wand is a domain-verb
-  CLI (`wand <domain> --<verb> [VALUE …]`; bare `wand` = server).
-  Breaking changes to the verb surface are OK (rename + update
-  `--help` / README in the same PR — there is no third-party tooling
-  depending on it). The loud-reject policy holds end-to-end: an
-  unknown domain, an unknown flag, a bad arity, zero verbs for a
-  domain, or two incompatible verbs all exit `2`. **No silent
-  fallback, no silent drop** (PR #98 set this baseline). Tokenizing
-  is delegated to `CLIKit` (sill): each domain declares a
-  `CLIKit.Spec(arity:)` and `parseOrDie` maps any parse error to a
-  loud exit `2`; wand keeps the policy on top via `requireOneVerb`
-  (exactly one verb per domain). To add a verb, register it in two
-  places in [Main.swift](Sources/WandApp/Main.swift): the domain's
-  `CLIKit.Spec(arity:)` (pick `.flag` / `.value` / `.values(n)` /
-  `.requiredThenOptional(n)`) and the domain's `requireOneVerb` list.
+- **The same discipline applies to the CLI** — breaking changes to
+  the verb surface are OK, and the loud-reject policy is the CLI's
+  counterpart of clamp-to-default. Both are spelled out under
+  `### CLI surface` below.
 
 ### TOML parser
 
@@ -503,12 +476,12 @@ AX observation, anything future) goes through this checklist:
 
 ### Recognition algorithm
 
-- **Dominant-axis quantisation**:
-  [Sources/WandCore/Recognition.swift](Sources/WandCore/Recognition.swift)
-  walks samples, emits a Direction when the larger of |dx|, |dy|
-  exceeds `minStrokePx`, then resets the anchor. Consecutive
-  duplicate directions are coalesced — continuing left is one
-  `L`, not many.
+The algorithm itself (dominant-axis quantisation, the `L U R D`
+alphabet, coalescing) is described once in
+[docs/architecture.md → Recognition](docs/architecture.md#recognition);
+the code is [Sources/WandCore/Recognition.swift](Sources/WandCore/Recognition.swift).
+Constraints:
+
 - **Y axis grows UP**. `dy > 0` ⇒ `.up`. Don't flip this; the
   test fixture (`testStraightDownThenRight`) pins the convention.
   Adapter samples come from `CGEvent.location` (CG global coords,
@@ -586,8 +559,8 @@ The workflow:
    capture+recognition half without side effects. (Refuses if the
    daemon is already running — they'd fight over the tap.)
 6. **Check config** with `wand config --validate` (exit 0 + rule count +
-   warning count, or exit 2). Parser warnings (clamps / collisions
-   / typos) mirror to stderr in addition to
+   warning count; 1 on a schema violation; 2 if unparseable). Parser
+   warnings (clamps / collisions / typos) mirror to stderr in addition to
    `/tmp/wand.log` so the user sees them without tailing the log.
 
 **Known external interference to suspect first:** virtual-HID
@@ -609,14 +582,15 @@ stray instances before relaunching.
 ### Bundle / signing
 
 - **Bundle id is `com.wand.wand`** (set in
-  [Info.plist](Info.plist)). TCC keys the Accessibility grant
-  to the code-signing identity, so ad-hoc signing loses the
-  grant on every rebuild. [setup-signing-cert.sh](setup-signing-cert.sh)
-  creates a persistent self-signed cert so the grant survives
-  rebuilds; [package.sh](package.sh) assembles `Wand.app` and
-  signs it with that identity (`--dev` →
-  `Wand-dev.app` / `com.wand.wand.dev` to co-exist with a
-  Homebrew install without TCC collision). Same pattern as facet.
+  [Info.plist](Info.plist)). Why the Accessibility grant is keyed
+  to the signing identity, and how the persistent self-signed cert
+  keeps it across rebuilds and `brew upgrade`, is explained once in
+  the header of [setup-signing-cert.sh](setup-signing-cert.sh)
+  (including why the cert never shows in
+  `find-identity -v -p codesigning`). [package.sh](package.sh)'s
+  header explains the `--dev` flavour (`Wand-dev.app` /
+  `com.wand.wand.dev`, a separate TCC entry beside a Homebrew
+  install). Point at those headers instead of restating them.
 - **`LSUIElement = true`** — no Dock icon, no menubar item. The
   daemon is intentionally invisible.
 
@@ -624,20 +598,26 @@ stray instances before relaunching.
 
 - **Domain-verb surface (yabai-style).** wand is invoked
   `wand <domain> --<verb> [VALUE …]`; bare `wand` is server mode.
-  Domains and verbs: `daemon --reload | --quit | --show | --resign`;
-  `cast --test PATTERN [APP] | --record`; `tome --open | --validate`
-  (modifiers `--items <PATH>` / `--at <X> <Y>` / `--selection <TEXT>`
-  / `--title <TEXT>`); `config --validate | --doctor | --emit-schema`.
+  The verb list, per-verb semantics, and exit codes are written once,
+  in `printHelp()` ([Sources/WandApp/Main.swift](Sources/WandApp/Main.swift)).
+  README's CLI section and docs/architecture.md point at
+  `wand --help` rather than copying it — keep it that way. Breaking
+  changes to the verb surface are OK (rename + update `--help` /
+  README in the same PR — no third-party tooling depends on it).
   Verbose logging is the `WAND_DEBUG` env var, not a flag — there is
-  no `--debug` (passing it exits `2`). `CLIKit` (sill) owns
-  tokenization: it parses each domain's argv against a per-domain
-  `CLIKit.Spec(arity:)` (so `--at -100 50` negatives are consumed as
-  values), and any unknown flag / arity error maps to a loud exit `2`
-  via `parseOrDie`. wand layers the policy on top: `requireOneVerb`
-  enforces exactly one verb per domain (zero verbs or two
-  incompatible verbs both exit `2`), and an unknown domain exits via
-  `CLIKit.die`. No three-pass processor / `valueArities` /
-  `modifierFlags` allow-list exists any more.
+  no `--debug` (passing it exits `2`).
+- **Loud-reject policy (PR #98 set the baseline)**: an unknown
+  domain, an unknown flag, a bad arity, zero verbs for a domain, or
+  two incompatible verbs all exit `2` — no silent fallback, no
+  silent drop. `CLIKit` (sill) owns tokenization: each domain
+  declares a `CLIKit.Spec(arity:)` (so `--at -100 50` negatives are
+  consumed as values) and `parseOrDie` maps any parse error to exit
+  `2`; `requireOneVerb` enforces exactly one verb per domain, and an
+  unknown domain exits via `CLIKit.die`. To add a verb, register it
+  in two places in [Main.swift](Sources/WandApp/Main.swift): the
+  domain's `CLIKit.Spec(arity:)` (pick `.flag` / `.value` /
+  `.values(n)` / `.requiredThenOptional(n)`) and the domain's
+  `requireOneVerb` list.
 - **`wand config --doctor`** reports Accessibility (`AXTarget.isTrusted()`),
   config, daemon liveness, and a live tap probe
   (`MacOSMouseSource.canInstallTap()` — a listen-only tap created and

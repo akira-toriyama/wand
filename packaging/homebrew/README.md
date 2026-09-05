@@ -43,8 +43,8 @@ with the same stable identity, so the Accessibility grant stays put.
 The script can fail inside the Homebrew install sandbox (locked login
 keychain, openssl wrappers, etc.). In that case the install falls back
 to ad-hoc signing and emits a LOUD warning (per
-[`wand.rb`](stroke.rb)'s `opoo` branch) with a copy-pasteable recovery
-path: run the script outside the sandbox, then `brew reinstall stroke`.
+[`wand.rb`](wand.rb)'s `opoo` branch) with a copy-pasteable recovery
+path: run the script outside the sandbox, then `brew reinstall wand`.
 Same hybrid pattern facet and ws-tabs use.
 
 ## Bumping by hand (escape hatch)
@@ -55,7 +55,7 @@ match what the workflow does:
 ```sh
 TAG=v1.2.3
 curl -fsSL -o /tmp/src.tgz \
-  "https://github.com/akira-toriyama/stroke/archive/refs/tags/${TAG}.tar.gz"
+  "https://github.com/akira-toriyama/wand/archive/refs/tags/${TAG}.tar.gz"
 SHA="$(sha256sum /tmp/src.tgz | awk '{print $1}')"
 
 cd /path/to/akira-toriyama/homebrew-tap
@@ -64,6 +64,6 @@ sed -i -E "s|sha256 \"[0-9a-f]{64}\"|sha256 \"${SHA}\"|g"                       
 # Drop a leftover `revision N` line on any version bump (a fresh tag
 # naturally resets revision).
 sed -i -E '/^  revision [0-9]+$/d' Formula/wand.rb
-git commit -am "homebrew: bump stroke to ${TAG}"
+git commit -am "homebrew: bump wand to ${TAG}"
 git push
 ```
