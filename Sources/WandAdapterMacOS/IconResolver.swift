@@ -91,7 +91,7 @@ enum IconResolver {
             // Without this the icon would render fully transparent
             // inside the card — phantom whitespace where a glyph
             // should be.
-            if let img = IconSetCache.shared.cached(spec: spec) {
+            if let img = IconSetCache.shared.cached(spec) {
                 img.size = NSSize(width: pt, height: pt)
                 if let tintColor = tintColor {
                     return tintedRaster(img, pointSize: pt,
@@ -123,7 +123,7 @@ enum IconResolver {
             // the same `paletteColors` trick the `SF:` branch uses
             // to stay visible in a card.
             if let host = FaviconCache.host(from: spec),
-               let img = FaviconCache.shared.cached(host: host) {
+               let img = FaviconCache.shared.cached(host) {
                 img.size = NSSize(width: pt, height: pt)
                 return img
             }
