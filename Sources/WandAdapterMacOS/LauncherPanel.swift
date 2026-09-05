@@ -1611,13 +1611,13 @@ private final class ItemRow: NSView {
         let pt = IconResolver.pt(forFontSize: Int(self.fontSize))
         if iconSpec.hasPrefix("favicon:"),
            let host = FaviconCache.host(from: iconSpec) {
-            FaviconCache.shared.loadOrFetch(host: host) { [weak self] img in
+            FaviconCache.shared.loadOrFetch(host) { [weak self] img in
                 guard let self = self, let img = img else { return }
                 img.size = NSSize(width: pt, height: pt)
                 self.iconView.image = img
             }
         } else if IconSetCache.matches(iconSpec) {
-            IconSetCache.shared.loadOrFetch(spec: iconSpec) { [weak self] img in
+            IconSetCache.shared.loadOrFetch(iconSpec) { [weak self] img in
                 guard let self = self, let img = img else { return }
                 img.size = NSSize(width: pt, height: pt)
                 self.iconView.image = img
