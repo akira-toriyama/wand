@@ -13,13 +13,13 @@ import WandAdapterMacOS
 public final class Controller: @unchecked Sendable {
 
     private let source: MouseSource
-    /// Optional launcher tap — created at init only when
-    /// `cfg.launcher.enabled` was true at startup, so the second
+    /// Optional tome tap — created at init only when
+    /// `cfg.tome.enabled` was true at startup, so the second
     /// CGEventTap isn't even allocated when the user hasn't opted in.
-    /// Like the `[cast]` trigger keys, the launcher's button / modifiers are baked
+    /// Like the `[cast]` trigger keys, the tome's button / modifiers are baked
     /// into the tap at install; flipping them needs a daemon restart
     /// (surfaced in `daemon --show` as pending-restart).
-    private let launcher: LauncherSource?
+    private let tome: TomeSource?
     /// Mutated by `reload()` on the main thread. The stroke handler
     /// reads `self.config` per-event (not captured locals) so a
     /// reload takes effect on the very next stroke without
@@ -43,9 +43,9 @@ public final class Controller: @unchecked Sendable {
     /// `shown` only increments when the menu actually appears (items
     /// remain after filtering). A middle-click on the Dock / desktop
     /// where no items qualify is a no-op, not a "shown" event.
-    private var counterLauncherShown = 0
-    private var counterLauncherDispatched = 0
-    /// Same semantics as `Launcher*` but for the external `tome --open`
+    private var counterTomeShown = 0
+    private var counterTomeDispatched = 0
+    /// Same semantics as `Tome*` but for the external `tome --open`
     /// entry point (event-driven daemons posting via IPC).
     private var counterShowMenuShown = 0
     private var counterShowMenuDispatched = 0
@@ -80,30 +80,30 @@ public final class Controller: @unchecked Sendable {
     public var onGestureFire: (@Sendable (CGPoint) -> Void)?
 
     public init(source: MouseSource,
-                launcher: LauncherSource? = nil,
+                tome: TomeSource? = nil,
                 config: WandConfig) {
         self.source = source
-        self.launcher = launcher
+        self.tome = tome
         self.config = config
         self.startupConfig = config
     }
 
     public func start() {
-        let launcherBit = launcher == nil ? "" :
-            ", tome=\(config.launcher.trigger.button.rawValue)"
-            + " (\(config.launcher.items.count) item(s))"
+        let tomeBit = tome == nil ? "" :
+            ", tome=\(config.tome.trigger.button.rawValue)"
+            + " (\(config.tome.items.count) item(s))"
         Log.line("controller: start — \(config.rules.count) rule(s), "
                  + "minStrokePx=\(config.recognition.minStrokePx), "
                  + "trigger=\(config.trigger.button.rawValue)"
-                 + launcherBit)
+                 + tomeBit)
         source.start { [weak self] event in
             self?.handle(event)
         }
-        launcher?.start { [weak self] event in
-            // Launcher fires on the event-tap main thread; menu popup
+        tome?.start { [weak self] event in
+            // Tome fires on the event-tap main thread; menu popup
             // and dispatch both need the main actor.
             MainActor.assumeIsolated {
-                self?.handleLauncher(event)
+                self?.handleTome(event)
             }
         }
         installCLIControl()
@@ -112,7 +112,7 @@ public final class Controller: @unchecked Sendable {
 
     public func stop() {
         source.stop()
-        launcher?.stop()
+        tome?.stop()
     }
 
 
@@ -182,24 +182,24 @@ public final class Controller: @unchecked Sendable {
     }
 
     @MainActor
-    private func handleLauncher(_ event: LauncherEvent) {
+    private func handleTome(_ event: TomeEvent) {
         let cfg = config
         // Filter once: pass the result to `present` so the menu
-        // builder doesn't repeat the work. `counterLauncherShown`
+        // builder doesn't repeat the work. `counterTomeShown`
         // increments only when the menu actually has items to show
         // — a click on the Dock / desktop is a "trigger" but not a
         // "shown" event, so the counter stays honest.
         let evalShell = shellEvaluator(for: event.target)
         let visibleItems = Matcher.itemsFor(
-            target: event.target, items: cfg.launcher.items,
+            target: event.target, items: cfg.tome.items,
             excludes: cfg.excludeApps, evalShell: evalShell)
         Log.line("controller: tome fired on \(event.target.bundleID) "
-                 + "— \(visibleItems.count)/\(cfg.launcher.items.count) item(s) "
+                 + "— \(visibleItems.count)/\(cfg.tome.items.count) item(s) "
                  + "visible")
         record("tome on \(event.target.bundleID) "
                + "(\(visibleItems.count) item(s))")
         guard !visibleItems.isEmpty else { writeStatus(); return }
-        counterLauncherShown += 1
+        counterTomeShown += 1
         writeStatus()
         // Capture the focused element's selected text at button-down
         // time, so shell actions can read it via `$WAND_SELECTION` —
@@ -214,22 +214,22 @@ public final class Controller: @unchecked Sendable {
                      + "\(sel.count) char(s)")
         }
         let env: [String: String] = selection.map { ["WAND_SELECTION": $0] } ?? [:]
-        LauncherPanel.present(
+        TomePanel.present(
             filteredItems: visibleItems,
             target: event.target,
             cocoaPoint: ScreenCoords.cocoaPoint(fromCG: event.point),
-            layout: cfg.launcher.layout,
-            shortcutBadge: cfg.launcher.row.shortcutBadge,
-            iconChip: cfg.launcher.row.iconChip,
-            fontSize: cfg.launcher.row.fontSize,
-            openAnim: cfg.launcher.animation.open,
-            closeAnim: cfg.launcher.animation.close,
-            border: cfg.launcher.decoration.border,
-            borderCycleMs: cfg.launcher.decoration.cycleMs,
-            borderWidth: cfg.launcher.decoration.borderWidth,
-            shadow: cfg.launcher.decoration.shadow,
-            linePets: cfg.launcher.decoration.linePets,
-            palette: wandTomePalette(cfg.launcher.theme),
+            layout: cfg.tome.layout,
+            shortcutBadge: cfg.tome.row.shortcutBadge,
+            iconChip: cfg.tome.row.iconChip,
+            fontSize: cfg.tome.row.fontSize,
+            openAnim: cfg.tome.animation.open,
+            closeAnim: cfg.tome.animation.close,
+            border: cfg.tome.decoration.border,
+            borderCycleMs: cfg.tome.decoration.cycleMs,
+            borderWidth: cfg.tome.decoration.borderWidth,
+            shadow: cfg.tome.decoration.shadow,
+            linePets: cfg.tome.decoration.linePets,
+            palette: wandTomePalette(cfg.tome.theme),
             orderOverride: tomeOrder,
             onReorder: { [weak self] path, order in
                 self?.tomeOrder[path] = order
@@ -247,7 +247,7 @@ public final class Controller: @unchecked Sendable {
                          + "(\(order.count) row(s), session-only)")
             }
         ) { [weak self] item, target in
-            self?.counterLauncherDispatched += 1
+            self?.counterTomeDispatched += 1
             Log.line("controller: → tome entry \"\(item.name)\"")
             self?.writeStatus()
             Dispatch.execute(item.action, on: target, extraEnv: env)
@@ -261,7 +261,7 @@ public final class Controller: @unchecked Sendable {
     /// point, and an optional selection text. We resolve the target
     /// via `NSWorkspace.frontmostApplication` (the **cursor-anchored
     /// spine is intentionally bypassed here** — external triggers
-    /// don't have a button-down moment), build a `LauncherMenu` from
+    /// don't have a button-down moment), build the tome panel (`TomePanel.present`) from
     /// the parsed items, and pop it up. `$WAND_SELECTION` is exported
     /// to any shell action chosen from the resulting menu.
     @MainActor
@@ -313,25 +313,25 @@ public final class Controller: @unchecked Sendable {
         counterShowMenuShown += 1
         writeStatus()
         // Capture selection in the closure so Dispatch can export it
-        // as an env var — keeps the LauncherMenu signature trigger-
+        // as an env var — keeps the `TomePanel.present` signature trigger-
         // agnostic (no `selection` field on items or menu state).
         let env: [String: String] = selection.map { ["WAND_SELECTION": $0] } ?? [:]
-        LauncherPanel.present(
+        TomePanel.present(
             filteredItems: visible,
             target: target,
             cocoaPoint: cocoaPoint,
             layout: parsed.layout,
-            shortcutBadge: cfg.launcher.row.shortcutBadge,
-            iconChip: cfg.launcher.row.iconChip,
-            fontSize: cfg.launcher.row.fontSize,
-            openAnim: cfg.launcher.animation.open,
-            closeAnim: cfg.launcher.animation.close,
-            border: cfg.launcher.decoration.border,
-            borderCycleMs: cfg.launcher.decoration.cycleMs,
-            borderWidth: cfg.launcher.decoration.borderWidth,
-            shadow: cfg.launcher.decoration.shadow,
-            linePets: cfg.launcher.decoration.linePets,
-            palette: wandTomePalette(cfg.launcher.theme)
+            shortcutBadge: cfg.tome.row.shortcutBadge,
+            iconChip: cfg.tome.row.iconChip,
+            fontSize: cfg.tome.row.fontSize,
+            openAnim: cfg.tome.animation.open,
+            closeAnim: cfg.tome.animation.close,
+            border: cfg.tome.decoration.border,
+            borderCycleMs: cfg.tome.decoration.cycleMs,
+            borderWidth: cfg.tome.decoration.borderWidth,
+            shadow: cfg.tome.decoration.shadow,
+            linePets: cfg.tome.decoration.linePets,
+            palette: wandTomePalette(cfg.tome.theme)
         ) { [weak self] item, target in
             self?.counterShowMenuDispatched += 1
             Log.line("controller: → show-menu item \"\(item.name)\"")
@@ -403,13 +403,13 @@ public final class Controller: @unchecked Sendable {
                      + "startup so no overlay window exists; flipping to "
                      + "true now needs a full daemon restart")
         }
-        if new.launcher.enabled != startupConfig.launcher.enabled {
+        if new.tome.enabled != startupConfig.tome.enabled {
             Log.line("controller: reload — [tome].enabled toggled "
-                     + "(\(startupConfig.launcher.enabled) → "
-                     + "\(new.launcher.enabled)); the tap is installed at "
+                     + "(\(startupConfig.tome.enabled) → "
+                     + "\(new.tome.enabled)); the tap is installed at "
                      + "startup, restart required to apply")
         }
-        if new.launcher.trigger != startupConfig.launcher.trigger {
+        if new.tome.trigger != startupConfig.tome.trigger {
             Log.line("controller: reload — [tome].trigger changed; "
                      + "the event mask is baked into the running tap, "
                      + "restart required to apply")
@@ -450,21 +450,21 @@ public final class Controller: @unchecked Sendable {
         if config.overlay.enabled && !startupConfig.overlay.enabled {
             pending.append("[cast.overlay].enabled = false→true")
         }
-        if config.launcher.enabled != startupConfig.launcher.enabled {
+        if config.tome.enabled != startupConfig.tome.enabled {
             pending.append("[tome].enabled "
-                + "\(startupConfig.launcher.enabled)→\(config.launcher.enabled)")
+                + "\(startupConfig.tome.enabled)→\(config.tome.enabled)")
         }
-        if config.launcher.trigger != startupConfig.launcher.trigger {
+        if config.tome.trigger != startupConfig.tome.trigger {
             pending.append("[tome] button/modifiers")
         }
         let pendingLine = pending.isEmpty
             ? ""
             : "\npending-restart: \(pending.joined(separator: ", "))"
-        let tomeLine = config.launcher.enabled
-            ? "\ntome=on (button=\(config.launcher.trigger.button.rawValue), "
-              + "items=\(config.launcher.items.count), "
-              + "shown=\(counterLauncherShown), "
-              + "dispatched=\(counterLauncherDispatched))"
+        let tomeLine = config.tome.enabled
+            ? "\ntome=on (button=\(config.tome.trigger.button.rawValue), "
+              + "items=\(config.tome.items.count), "
+              + "shown=\(counterTomeShown), "
+              + "dispatched=\(counterTomeDispatched))"
             : "\ntome=off"
         // `show-menu` line surfaces only after the external trigger
         // has fired at least once — keeps `daemon --show` quiet for users

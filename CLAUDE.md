@@ -23,12 +23,6 @@ The retired flag CLI and the dropped `[[cast.rule]]` / `[[tome.item]]`
 headers may appear only in the parser's migration-warning paths, never
 as canonical examples.
 
-Swift type names (`LauncherSpec`, `LauncherPanel`, `LauncherSource`,
-`cfg.launcher`, …) intentionally retain the pre-
-rename names — the TOML / user-facing rename to `cast` / `tome`
-covered config keys and strings only; an internal-type rename is a
-tracked follow-up.
-
 ## What this is
 
 `wand` — macOS daemon for **cursor-anchored mouse automation**. Two
@@ -112,9 +106,9 @@ ws-tabs.
   `MouseSource`. Real vs synthetic is picked at app startup.
   Adding a new mouse-input strategy means a new `MouseSource`
   conformer in an Adapter module — never a `#if` in Core.
-- **The tome trigger has its own seam**: `LauncherSource`
-  protocol in `WandCore`, `MacOSLauncherSource` in `WandAdapterMacOS`
-  ([Sources/WandAdapterMacOS/LauncherTap.swift](Sources/WandAdapterMacOS/LauncherTap.swift)).
+- **The tome trigger has its own seam**: `TomeSource`
+  protocol in `WandCore`, `MacOSTomeSource` in `WandAdapterMacOS`
+  ([Sources/WandAdapterMacOS/TomeTap.swift](Sources/WandAdapterMacOS/TomeTap.swift)).
   It's a separate `CGEventTap` from `MacOSMouseSource` — keep the two
   taps separate so the right-button-drag mask never has to also
   carry middle-click. On a non-AX surface the tap substitutes the
@@ -122,8 +116,8 @@ ws-tabs.
   the menu — don't turn that into a `nil` / early return; the
   Desktop path depends on it
   ([architecture.md → Tome panel](docs/architecture.md#tome-panel)).
-- **`LauncherPanel` lives in `WandAdapterMacOS` too**
-  ([Sources/WandAdapterMacOS/LauncherPanel.swift](Sources/WandAdapterMacOS/LauncherPanel.swift)).
+- **`TomePanel` lives in `WandAdapterMacOS` too**
+  ([Sources/WandAdapterMacOS/TomePanel.swift](Sources/WandAdapterMacOS/TomePanel.swift)).
   Don't promote it to a separate module — same reasoning as
   `CastOverlay`. The root panel must stay a `NonActivatingPanel`
   (`canBecomeKey = false` + `.nonactivatingPanel`); native NSMenu's

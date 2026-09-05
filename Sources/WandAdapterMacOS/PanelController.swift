@@ -21,9 +21,9 @@ final class PanelController {
     /// The layout of THIS panel. Root may be `.list` or `.toolbar`;
     /// non-root (children) are always `.list`. Used by `openChild`
     /// to pick the spawn direction.
-    let layout: LauncherLayout
+    let layout: TomeLayout
     private let target: Target
-    private let onSelect: (LauncherItem, Target) -> Void
+    private let onSelect: (TomeItem, Target) -> Void
     private let isRoot: Bool
     /// Tree position for the session DnD sort override (wand#127):
     /// "" = root, folder names joined via `PanelTree.pathSep` when
@@ -37,16 +37,16 @@ final class PanelController {
     /// Open-time animation applied in `show()`. Inherited by child
     /// panels when they're spawned (so the whole cascade feels
     /// consistent). `.off` keeps the historical instant pop.
-    private let openAnim: LauncherOpenAnim
+    private let openAnim: TomeOpenAnim
     /// Symmetric close-time animation applied in `tearDown()`. Same
     /// inheritance rule as `openAnim` — child panels pick up the
     /// root's value so the cascade unwinds visually together.
-    private let closeAnim: LauncherCloseAnim
+    private let closeAnim: TomeCloseAnim
     /// Decorative panel border (rainbow / future palette variants).
     /// Drawn in `show()` as a CAShapeLayer above `contentView`'s
     /// blur, with a hue-rotating CAKeyframeAnimation. Child panels
     /// inherit the root's value.
-    private let border: LauncherBorder
+    private let border: TomeBorder
     /// Cycle period (ms) for any animated `border` kind — feeds the
     /// CAKeyframeAnimation `duration` in `installBorderDecoration`.
     /// Static border kinds ignore this value. Child panels inherit
@@ -96,15 +96,15 @@ final class PanelController {
     let colors: TomeColors
 
     init(content: NSView, rows: [ItemRow], frame: NSRect,
-         layout: LauncherLayout = .list,
+         layout: TomeLayout = .list,
          target: Target,
-         onSelect: @escaping (LauncherItem, Target) -> Void,
+         onSelect: @escaping (TomeItem, Target) -> Void,
          isRoot: Bool,
          panelPath: String = "",
          onReorder: ((String, [String]) -> Void)? = nil,
-         openAnim: LauncherOpenAnim = .off,
-         closeAnim: LauncherCloseAnim = .off,
-         border: LauncherBorder = .off,
+         openAnim: TomeOpenAnim = .off,
+         closeAnim: TomeCloseAnim = .off,
+         border: TomeBorder = .off,
          borderCycleMs: Int = 4000,
          borderWidth: Int = 2,
          shadow: Bool = false,
@@ -391,7 +391,7 @@ final class PanelController {
         let order = stack.arrangedSubviews.compactMap {
             ($0 as? ItemRow)?.nodeID
         }
-        Log.line("launcher-panel: DnD sort \"\(source.titleForLog)\" "
+        Log.line("tome-panel: DnD sort \"\(source.titleForLog)\" "
                  + "at \"\(PanelTree.displayPath(panelPath))\" — "
                  + "\(order.count) row(s) reordered (session-only)")
         onReorder?(panelPath, order)
@@ -426,7 +426,7 @@ final class PanelController {
     private func openChild(for row: ItemRow, children: [PanelNode],
                             label: String, childPath: String? = nil) {
         guard let win = row.window else {
-            Log.line("launcher-panel: openChild: row has no window — skip")
+            Log.line("tome-panel: openChild: row has no window — skip")
             return
         }
         let rowInWin = row.convert(row.bounds, to: nil)
@@ -468,7 +468,7 @@ final class PanelController {
         child = c
         childAnchor = row
         c.show()
-        Log.line("launcher-panel: opened submenu \"\(label)\" "
+        Log.line("tome-panel: opened submenu \"\(label)\" "
                  + "(\(children.count) items)")
     }
 

@@ -14,9 +14,9 @@ public enum ScreenCoords {
 
     /// CG global (Y-down) → Cocoa global (Y-up). Used by every adapter
     /// that takes a `CGEvent.location` and needs to talk to AppKit
-    /// (overlay window, launcher panel). Also re-used by the App
+    /// (overlay window, tome panel). Also re-used by the App
     /// layer when threading native-trigger CG coords into
-    /// `LauncherPanel` (now Cocoa-only). Lives in one place so the
+    /// `TomePanel` (now Cocoa-only). Lives in one place so the
     /// CLAUDE.md-flagged Y-axis trap has a single definition.
     public static func cocoaPoint(fromCG cg: CGPoint) -> CGPoint {
         CGPoint(x: cg.x, y: primaryHeight(fallback: cg.y) - cg.y)

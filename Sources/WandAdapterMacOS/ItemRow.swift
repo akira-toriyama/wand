@@ -94,18 +94,18 @@ final class TomePetsView: NSView {
 enum RowKind {
     case header
     /// Inline section header — a labelled band drawn above a run of
-    /// items whose `LauncherItem.header` shares a value. Distinct from
+    /// items whose `TomeItem.header` shares a value. Distinct from
     /// `.header` (which is the app-icon banner pinned at the top of
     /// the root panel). Non-interactive, smaller height, only used in
     /// `.list` layout.
     case sectionHeader(String)
     case placeholder
-    case leaf(LauncherItem)
+    case leaf(TomeItem)
     case folder(name: String, children: [PanelNode])
-    case dynamic(LauncherItem)
+    case dynamic(TomeItem)
 }
 
-/// One clickable launcher row. Custom NSView whose layout depends on
+/// One clickable tome row. Custom NSView whose layout depends on
 /// `layout`:
 ///
 /// - `.list` — fixed-height horizontal strip: icon left, label
@@ -125,7 +125,7 @@ enum RowKind {
 final class ItemRow: NSView {
 
     let kind: RowKind
-    let layout: LauncherLayout
+    let layout: TomeLayout
     /// Session DnD sort identity (`PanelNode.orderID`, threaded in at
     /// build time so rows and nodes can't drift apart). `nil` for
     /// header / section-header / placeholder rows — they never drag.
@@ -223,7 +223,7 @@ final class ItemRow: NSView {
     var titleForLog: String { rawLabel }
 
     init(kind: RowKind, label: String, icon: NSImage?,
-         layout: LauncherLayout, shortcut: String = "",
+         layout: TomeLayout, shortcut: String = "",
          subtitle: String = "", iconAnim: String = "",
          iconSpec: String = "",
          fontSize: Int = 13,
@@ -571,7 +571,7 @@ final class ItemRow: NSView {
             iconView.addSymbolEffect(.pulse, options: .nonRepeating,
                                       animated: true)
         default:
-            Log.line("launcher-panel: unknown icon-anim \"\(iconAnim)\" "
+            Log.line("tome-panel: unknown icon-anim \"\(iconAnim)\" "
                      + "(supported: bounce, pulse) — skipped")
         }
     }

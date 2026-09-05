@@ -289,14 +289,14 @@ final class ConfigTests: XCTestCase {
         action-cmd = "osascript -e 'tell application \\"Finder\\" to delete (selection as alias list)'"
         """
         let cfg = WandConfig.parse(toml)
-        XCTAssertEqual(cfg.launcher.items.count, 1)
-        if case .shell(let c) = cfg.launcher.items.first?.action {
+        XCTAssertEqual(cfg.tome.items.count, 1)
+        if case .shell(let c) = cfg.tome.items.first?.action {
             XCTAssertEqual(
                 c,
                 "osascript -e 'tell application \"Finder\" to delete (selection as alias list)'")
         } else {
             XCTFail("expected .shell, got "
-                + String(describing: cfg.launcher.items.first?.action))
+                + String(describing: cfg.tome.items.first?.action))
         }
     }
 
@@ -390,8 +390,8 @@ final class ConfigTests: XCTestCase {
         action-keys = "cmd+n"
         """
         let cfg = WandConfig.parse(toml)
-        XCTAssertEqual(cfg.launcher.items.count, 1)
-        XCTAssertEqual(cfg.launcher.items[0].name, "New")
+        XCTAssertEqual(cfg.tome.items.count, 1)
+        XCTAssertEqual(cfg.tome.items[0].name, "New")
     }
 
     func testParseItemsRespectsCursorNamespace() {

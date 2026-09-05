@@ -1,6 +1,6 @@
 // String → NSColor parser shared by every adapter surface that takes
 // a colour from config. Originally lived as a `private static` on
-// `CastOverlay`; promoted out so the launcher panel (#59 tint)
+// `CastOverlay`; promoted out so the tome panel (#59 tint)
 // and the theme system (#62) can reuse the same name + hex grammar
 // without copy-paste.
 //

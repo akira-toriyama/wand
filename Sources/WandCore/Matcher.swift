@@ -81,16 +81,16 @@ public enum Matcher {
         return excludes.contains { glob($0.lowercased(), bid) }
     }
 
-    /// Launcher counterpart of `match` — filters items by both the
+    /// Tome counterpart of `match` — filters items by both the
     /// global `excludeApps` and each item's own `apps` + filter-title
     /// + filter-shell, keeping document order so the menu builder
     /// can place items as written. Returns empty if the target is
     /// excluded entirely.
     public static func itemsFor(target: Target,
-                                items: [LauncherItem],
+                                items: [TomeItem],
                                 excludes: [String],
                                 evalShell: ShellFilterEval = defaultShellFilterEval)
-        -> [LauncherItem] {
+        -> [TomeItem] {
         if isExcluded(bundleID: target.bundleID, by: excludes) { return [] }
         return items.filter {
             passesFilter(apps: $0.apps,

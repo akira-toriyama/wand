@@ -208,7 +208,7 @@ public enum AXTarget {
     /// Text selected in the system-focused element, or nil if none
     /// (or AX not granted, or focused element doesn't expose
     /// selected-text). Cheap synchronous AX lookup — safe to call
-    /// from the launcher hot path (button-down callback).
+    /// from the tome hot path (button-down callback).
     ///
     /// The selection lives on the *focused* element, which is often
     /// in a window different from the cursor-anchored target — e.g.

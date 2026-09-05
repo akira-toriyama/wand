@@ -28,7 +28,7 @@ enum PanelLayout {
     /// callback wiring, so the rows have to survive the build.
     static func buildContent(nodes: [PanelNode],
                               header: HeaderSpec?,
-                              layout: LauncherLayout,
+                              layout: TomeLayout,
                               shortcutBadge: Bool = true,
                               iconChip: Bool = true,
                               fontSize: Int = 13,
@@ -232,7 +232,7 @@ enum PanelLayout {
     /// to the opposite side if the preferred side would clip.
     static func placeChild(rowFrameOnScreen rowFrame: NSRect,
                             parentPanelFrame parent: NSRect,
-                            parentLayout: LauncherLayout,
+                            parentLayout: TomeLayout,
                             contentSize size: NSSize) -> NSRect {
         let visible = visibleFrame(for: NSPoint(x: rowFrame.midX,
                                                   y: rowFrame.midY))
@@ -282,9 +282,9 @@ enum PanelLayout {
         return screen?.visibleFrame ?? .zero
     }
 
-    private static func makeItemRow(_ item: LauncherItem,
+    private static func makeItemRow(_ item: TomeItem,
                                      nodeID: String?,
-                                     layout: LauncherLayout,
+                                     layout: TomeLayout,
                                      shortcutBadge: Bool,
                                      iconChip: Bool,
                                      fontSize: Int,
@@ -336,7 +336,7 @@ enum PanelLayout {
     /// the item's `name` as a text glyph. Same trick the existing
     /// `resolveItemIcon` uses for emoji / short-text icon specs.
     private static func resolveItemIconWithFallback(
-        item: LauncherItem, layout: LauncherLayout, iconChip: Bool,
+        item: TomeItem, layout: TomeLayout, iconChip: Bool,
         fontSize: Int
     ) -> NSImage? {
         if !item.icon.isEmpty {
@@ -363,7 +363,7 @@ enum PanelLayout {
     private static func makeFolderRow(name: String,
                                        children: [PanelNode],
                                        nodeID: String?,
-                                       layout: LauncherLayout,
+                                       layout: TomeLayout,
                                        fontSize: Int,
                                        sink rows: inout [ItemRow]) -> NSView {
         let r = ItemRow(kind: .folder(name: name, children: children),
@@ -374,7 +374,7 @@ enum PanelLayout {
     }
 
     private static func makePlaceholderRow(label: String,
-                                            layout: LauncherLayout,
+                                            layout: TomeLayout,
                                             fontSize: Int,
                                             sink rows: inout [ItemRow]) -> NSView {
         let r = ItemRow(kind: .placeholder, label: label, icon: nil,
@@ -384,11 +384,11 @@ enum PanelLayout {
     }
 
     /// Inline section-header band drawn above a run of items sharing a
-    /// `LauncherItem.header` value. Non-interactive (no hover / click)
+    /// `TomeItem.header` value. Non-interactive (no hover / click)
     /// — pure visual separation between groups of related items in
     /// the same panel. Only emitted in `.list` layout.
     private static func makeSectionHeaderRow(name: String,
-                                              layout: LauncherLayout,
+                                              layout: TomeLayout,
                                               fontSize: Int,
                                               sink rows: inout [ItemRow]) -> NSView {
         // Section headers keep their compact small-caps style at the
@@ -406,12 +406,12 @@ enum PanelLayout {
 
     /// Run `item.dynamic` under `/bin/sh -c`, kill it after 500 ms,
     /// and convert each non-empty stdout line into a synthetic leaf
-    /// `LauncherItem` via `item.template`. Errors (timeout, spawn
+    /// `TomeItem` via `item.template`. Errors (timeout, spawn
     /// fail, non-zero exit, empty stdout) become a single
     /// `.placeholder` node so the user always sees something. Called
     /// at hover time, not present time, so the cost is paid only when
     /// the user actually opens the dynamic submenu.
-    static func expandDynamic(_ item: LauncherItem) -> [PanelNode] {
+    static func expandDynamic(_ item: TomeItem) -> [PanelNode] {
         guard !item.dynamic.isEmpty, let template = item.template else {
             return [.placeholder(label: "(invalid dynamic)")]
         }
@@ -435,16 +435,16 @@ enum PanelLayout {
         }
     }
 
-    /// Build one synthetic leaf `LauncherItem` from a template + a
+    /// Build one synthetic leaf `TomeItem` from a template + a
     /// stdout line. `{line}` placeholders in the template's name,
     /// icon and payload are substituted. Inherits `apps` from the
     /// parent dynamic item so app-filter behaviour matches.
     /// `{line}` content is untrusted — same caveat as
     /// `WAND_TARGET_TITLE`; template authors must quote it when it
     /// reaches a shell command.
-    private static func synthesizeChild(template: LauncherTemplate,
+    private static func synthesizeChild(template: TomeTemplate,
                                          line: String,
-                                         parent: LauncherItem) -> LauncherItem {
+                                         parent: TomeItem) -> TomeItem {
         let name = template.name.replacingOccurrences(of: "{line}", with: line)
         let icon = template.icon.replacingOccurrences(of: "{line}", with: line)
         let payload = template.payload.replacingOccurrences(of: "{line}",
@@ -456,7 +456,7 @@ enum PanelLayout {
         case .shell: action = .shell(payload)
         case .url:   action = .url(payload)
         }
-        return LauncherItem(
+        return TomeItem(
             name: name,
             group: [],
             separatorBefore: false,
@@ -476,8 +476,8 @@ enum PanelLayout {
     /// is useful even in the tooltip path — "✓ Dark Mode" tells the
     /// user the option is currently active without taking up
     /// on-screen space.
-    private static func renderItemLabel(_ item: LauncherItem,
-                                         layout: LauncherLayout) -> String {
+    private static func renderItemLabel(_ item: TomeItem,
+                                         layout: TomeLayout) -> String {
         var parts: [String] = []
         switch item.state {
         case "on":    parts.append("✓")
@@ -499,7 +499,7 @@ enum PanelLayout {
     /// The toolbar branch is unreachable today — `separator-before` is
     /// skipped in toolbar layouts — and is kept only for a future
     /// toolbar section divider.
-    private static func makeSeparator(layout: LauncherLayout) -> NSView {
+    private static func makeSeparator(layout: TomeLayout) -> NSView {
         let wrap = NSView()
         wrap.translatesAutoresizingMaskIntoConstraints = false
         let line = NSBox()

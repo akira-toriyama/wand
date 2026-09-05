@@ -1,4 +1,4 @@
-// The launcher UI surface. A non-activating NSPanel that does NOT
+// The tome UI surface. A non-activating NSPanel that does NOT
 // take keyboard focus from the underlying app — the user keeps typing
 // in their editor while picking an item with the mouse. Used for
 // both the native middle-click trigger and the
@@ -28,22 +28,22 @@ import Foundation
 import WandCore
 
 @MainActor
-public enum LauncherPanel {
+public enum TomePanel {
 
     /// Strong reference holder for the currently-visible root panel —
     /// nothing else retains the tree once `present` returns.
     private static var current: PanelController?
 
-    public static func present(filteredItems items: [LauncherItem],
+    public static func present(filteredItems items: [TomeItem],
                                 target: Target,
                                 cocoaPoint: NSPoint,
-                                layout: LauncherLayout = .list,
+                                layout: TomeLayout = .list,
                                 shortcutBadge: Bool = true,
                                 iconChip: Bool = true,
                                 fontSize: Int = 13,
-                                openAnim: LauncherOpenAnim = .off,
-                                closeAnim: LauncherCloseAnim = .off,
-                                border: LauncherBorder = .off,
+                                openAnim: TomeOpenAnim = .off,
+                                closeAnim: TomeCloseAnim = .off,
+                                border: TomeBorder = .off,
                                 borderCycleMs: Int = 4000,
                                 borderWidth: Int = 2,
                                 shadow: Bool = false,
@@ -51,10 +51,10 @@ public enum LauncherPanel {
                                 palette: TomeThemePalette = TomeThemePalette(),
                                 orderOverride: [String: [String]] = [:],
                                 onReorder: ((String, [String]) -> Void)? = nil,
-                                onSelect: @escaping (LauncherItem, Target) -> Void) {
+                                onSelect: @escaping (TomeItem, Target) -> Void) {
         current?.dismiss()
         guard !items.isEmpty else {
-            Log.line("launcher-panel: no items for \(target.bundleID) — "
+            Log.line("tome-panel: no items for \(target.bundleID) — "
                      + "panel suppressed")
             return
         }
@@ -104,7 +104,7 @@ public enum LauncherPanel {
     }
 }
 
-/// One node in the panel tree. Built from the flat `[LauncherItem]`
+/// One node in the panel tree. Built from the flat `[TomeItem]`
 /// list by `PanelTree.build`. `separatorBefore` is carried on
 /// `.item` only — folder nodes don't need it because each item that
 /// opens a new section keeps its own flag.
@@ -114,14 +114,14 @@ public enum LauncherPanel {
 /// nothing). It's NOT in the tree at build time; only injected into
 /// expansion results at hover time.
 indirect enum PanelNode {
-    case item(LauncherItem)
+    case item(TomeItem)
     case folder(name: String, children: [PanelNode])
     case placeholder(label: String)
 
     /// Stable-within-a-session identity for the DnD sort override
     /// (wand#127). Keyed on the display name — two same-named items
     /// at one level share an id and keep their relative order (see
-    /// `LauncherOrder.apply`). `nil` = the node never participates
+    /// `TomeOrder.apply`). `nil` = the node never participates
     /// in reordering. The id is threaded into each `ItemRow` at
     /// build time so rows and nodes can't drift apart.
     var orderID: String? {

@@ -139,11 +139,11 @@ parse error exits 2 — no silent fallback.
 
 ## Tome panel
 
-`MacOSLauncherSource`
-([`Sources/WandAdapterMacOS/LauncherTap.swift`](../Sources/WandAdapterMacOS/LauncherTap.swift))
+`MacOSTomeSource`
+([`Sources/WandAdapterMacOS/TomeTap.swift`](../Sources/WandAdapterMacOS/TomeTap.swift))
 is a second `CGEventTap` beside `MacOSMouseSource`, so the
 right-button-drag mask never has to also carry middle-click. The
-Controller holds it optionally (`nil` unless `cfg.launcher.enabled`
+Controller holds it optionally (`nil` unless `cfg.tome.enabled`
 at startup), so the tap isn't even allocated when the user hasn't
 opted in. When AX target resolution fails (Dock / menu bar / Desktop
 — cursor is over a non-AX surface) the tap substitutes a
@@ -155,9 +155,9 @@ app-specific items; the app-icon header collapses because no
 carves out a "menu still works on Desktop" path without breaking the
 cursor-anchored spine for app-specific items.
 
-`LauncherPanel`
-([`Sources/WandAdapterMacOS/LauncherPanel.swift`](../Sources/WandAdapterMacOS/LauncherPanel.swift))
-builds a tree of `NSPanel`s from `[LauncherItem]` filtered by the
+`TomePanel`
+([`Sources/WandAdapterMacOS/TomePanel.swift`](../Sources/WandAdapterMacOS/TomePanel.swift))
+builds a tree of `NSPanel`s from `[TomeItem]` filtered by the
 cursor-anchored target. The root panel is a `NonActivatingPanel`
 (subclass of `NSPanel`, `canBecomeKey = false` + `.nonactivatingPanel`
 style mask) so it never steals keyboard focus from the underlying app
@@ -179,11 +179,11 @@ same optical size as tight ones), `app:<bundle-id>`, file paths
 the string as a glyph (emoji / 1-2 char text). Unresolvable specs log
 once and collapse to no-icon; never throws.
 
-**Dynamic items** (`dynamic = "..."` + `LauncherTemplate`) render as
+**Dynamic items** (`dynamic = "..."` + `TomeTemplate`) render as
 folder-style rows with a chevron. Hovering one runs the shell via
 `BoundedShell.run` (500 ms timeout) and pops a child panel populated
 by `PanelLayout.expandDynamic`: each non-empty stdout line becomes a
-synthetic leaf `LauncherItem` with `{line}` substituted in the
+synthetic leaf `TomeItem` with `{line}` substituted in the
 template's name / icon / payload. Errors (timeout, spawn fail,
 non-zero exit, empty stdout) collapse to a single `(timeout)` /
 `(spawn failed)` / `(error: exit N)` / `(no items)` placeholder row so

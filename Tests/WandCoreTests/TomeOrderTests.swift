@@ -1,16 +1,16 @@
 import XCTest
 @testable import WandCore
 
-/// Session-only DnD sort (wand#127): `LauncherOrder.apply` is the
+/// Session-only DnD sort (wand#127): `TomeOrder.apply` is the
 /// pure slot-merge that reorders one panel level's elements per a
 /// saved override. Only elements whose id appears in the override
 /// move — and they move only within the slots they already occupy —
 /// so a panel filtered down to a subset (per-app `apps` globs) never
 /// scrambles rows the user didn't drag.
-final class LauncherOrderTests: XCTestCase {
+final class TomeOrderTests: XCTestCase {
 
     private func apply(_ ids: [String], _ override: [String]) -> [String] {
-        LauncherOrder.apply(ids, id: { $0 }, override: override)
+        TomeOrder.apply(ids, id: { $0 }, override: override)
     }
 
     func testFullOverrideReordersCompletely() {
@@ -44,7 +44,7 @@ final class LauncherOrderTests: XCTestCase {
     func testNilIdElementsNeverMove() {
         // Placeholder-style elements expose no id; they keep their
         // positions and don't participate in the permutation.
-        let out = LauncherOrder.apply(
+        let out = TomeOrder.apply(
             [("a", true), ("sep", false), ("b", true)],
             id: { $0.1 ? $0.0 : nil },
             override: ["b", "a"])

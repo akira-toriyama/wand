@@ -44,7 +44,7 @@ public struct WandConfig: Sendable {
     /// `[cast.recognition]` — sample → direction tuning.
     public var recognition: CastRecognitionSpec
     /// `[exclude].apps` — global bundle-id exclusion list. Applies
-    /// to both gesture rules and launcher items.
+    /// to both gesture rules and tome items.
     public var excludeApps: [String]
     /// `[[cast.cursor.rule]]` + `[[cast.focused.rule]]` — gesture
     /// pattern → action mappings, tagged with their activation
@@ -56,7 +56,7 @@ public struct WandConfig: Sendable {
     public var fire: CastFireSpec
     /// `[tome]` and sub-blocks — trigger + items + row /
     /// animation / decoration cosmetics.
-    public var launcher: LauncherSpec
+    public var tome: TomeSpec
     /// `[failsafe]` — mandatory safety-net block. See CLAUDE.md
     /// "Safety invariants" for the WHY of the missing-block policy.
     public var failsafe: FailsafeConfig
@@ -74,7 +74,7 @@ public struct WandConfig: Sendable {
         rules: [],
         overlay: .default,
         fire: .default,
-        launcher: .default,
+        tome: .default,
         failsafe: .default,
         failsafeBlockPresent: true
     )
@@ -111,16 +111,16 @@ public struct WandConfig: Sendable {
     /// The legacy `[[tome.item]]` header logs + drops; the user must
     /// rename to `[[tome.cursor.item]]` (the namespace explicit form
     /// that pairs symmetrically with `[[cast.cursor.rule]]`).
-    public static func parseItems(_ text: String) -> LauncherItemsFile {
+    public static func parseItems(_ text: String) -> TomeItemsFile {
         let doc = Toml.parseFlat(text)
         let lr = doc.tables["tome"] ?? [:]
-        let layout: LauncherLayout = parseEnum(
+        let layout: TomeLayout = parseEnum(
             lr, key: "layout", section: "tome", default: .list)
         warnLegacyTomeItem(doc, scope: "--items file")
-        let items: [LauncherItem] = (doc.arrays["tome.cursor.item"] ?? []).enumerated()
+        let items: [TomeItem] = (doc.arrays["tome.cursor.item"] ?? []).enumerated()
             .compactMap { idx, row in parseItem(row, idx: idx) }
         warnToolbarOnlyFields(items: items, layout: layout)
-        return LauncherItemsFile(layout: layout, items: items)
+        return TomeItemsFile(layout: layout, items: items)
     }
 
     /// Structural validation against the SAME `configSpec` that drives decode
@@ -329,102 +329,102 @@ public struct WandConfig: Sendable {
         // Tap not installed when `enabled = false` (default). The plain
         // scalar/table keys come from the spec decode; the items
         // array-of-tables + trigger collision stay bespoke below.
-        let launcherEnabled = d.launcherEnabled
-        let launcherButton = d.launcherButton
-        let launcherMods = d.launcherModifiers
-        let launcherLayout = d.launcherLayout
-        let launcherTheme = d.launcherTheme
+        let tomeEnabled = d.tomeEnabled
+        let tomeButton = d.tomeButton
+        let tomeMods = d.tomeModifiers
+        let tomeLayout = d.tomeLayout
+        let tomeTheme = d.tomeTheme
 
         // [tome.row] — per-row visual cosmetics.
-        let launcherRow = LauncherRowSpec(
+        let tomeRow = TomeRowSpec(
             shortcutBadge: d.rowShortcutBadge,
             iconChip: d.rowIconChip,
             fontSize: d.rowFontSize)
 
         // [tome.animation]
-        let launcherAnimOpen = d.animOpen
-        let launcherAnimClose = d.animClose
-        let launcherAnimation = LauncherAnimationSpec(
-            open: launcherAnimOpen, close: launcherAnimClose)
+        let tomeAnimOpen = d.animOpen
+        let tomeAnimClose = d.animClose
+        let tomeAnimation = TomeAnimationSpec(
+            open: tomeAnimOpen, close: tomeAnimClose)
 
         // [tome.decoration] + [tome.decoration.border] — panel statics +
         // the border rim (the family block shape shared with facet/halo
         // [border] and perch [overlay.border]).
-        let launcherDecorBorder = d.decorBorder
-        let launcherDecoration = LauncherDecorationSpec(
-            border: launcherDecorBorder,
+        let tomeDecorBorder = d.decorBorder
+        let tomeDecoration = TomeDecorationSpec(
+            border: tomeDecorBorder,
             cycleMs: d.decorCycleMs,
             borderWidth: d.decorBorderWidth,
             shadow: d.decorShadow,
             linePets: d.decorLinePets)
 
-        // Warn when the user opted out of the launcher but still
+        // Warn when the user opted out of tome but still
         // configured non-default panel cosmetics — those only fire
         // when a panel actually opens, so they're dead config until
         // `[tome].enabled = true`. Default values stay silent;
-        // the log lists exactly what's dead. Skipped when launcher
+        // the log lists exactly what's dead. Skipped when tome
         // is enabled — the collision check below handles demotion.
-        if !launcherEnabled {
+        if !tomeEnabled {
             var nonDefault: [String] = []
-            if launcherAnimOpen != .off {
-                nonDefault.append("[tome.animation].open = \"\(launcherAnimOpen.rawValue)\"")
+            if tomeAnimOpen != .off {
+                nonDefault.append("[tome.animation].open = \"\(tomeAnimOpen.rawValue)\"")
             }
-            if launcherAnimClose != .off {
-                nonDefault.append("[tome.animation].close = \"\(launcherAnimClose.rawValue)\"")
+            if tomeAnimClose != .off {
+                nonDefault.append("[tome.animation].close = \"\(tomeAnimClose.rawValue)\"")
             }
-            if launcherDecorBorder != .off {
-                nonDefault.append("[tome.decoration.border].effect = \"\(launcherDecorBorder.rawValue)\"")
+            if tomeDecorBorder != .off {
+                nonDefault.append("[tome.decoration.border].effect = \"\(tomeDecorBorder.rawValue)\"")
             }
             if !nonDefault.isEmpty {
                 Log.line("config: \(nonDefault.joined(separator: ", "))"
                     + " is set but [tome].enabled = false — these"
-                    + " knobs only fire when a launcher panel actually"
+                    + " knobs only fire when a tome panel actually"
                     + " opens. Either set [tome].enabled = true,"
                     + " or remove the offending lines.")
             }
         }
 
-        // [[tome.cursor.item]] — launcher rows. Same drop-on-typo
+        // [[tome.cursor.item]] — tome rows. Same drop-on-typo
         // policy as [[cast.cursor.rule]]: bad rows surface in the log
         // with their position. Legacy `[[tome.item]]` header is
         // detected and warned out via `warnLegacyTomeItem` so users
         // notice the breaking rename instead of silently losing every
         // menu row.
         warnLegacyTomeItem(doc, scope: "config")
-        let items: [LauncherItem] = (doc.arrays["tome.cursor.item"] ?? []).enumerated()
+        let items: [TomeItem] = (doc.arrays["tome.cursor.item"] ?? []).enumerated()
             .compactMap { idx, row in parseItem(row, idx: idx) }
-        warnToolbarOnlyFields(items: items, layout: launcherLayout)
+        warnToolbarOnlyFields(items: items, layout: tomeLayout)
 
         // Trigger collision detection.
         // Two trigger families sharing the same (button, modifiers)
         // would have their CGEventTaps fight over the same down
-        // event. Declaration-order wins (gesture > launcher > future
+        // event. Declaration-order wins (gesture > tome > future
         // families); the loser is forced enabled = false. A different
         // button OR a non-empty modifier difference resolves it.
         let castTrigger = Trigger(button: button, modifiers: mods)
-        let launcherTrigger = Trigger(button: launcherButton,
-                                       modifiers: launcherMods)
-        var effectiveLauncherEnabled = launcherEnabled
-        if launcherEnabled && launcherTrigger == castTrigger {
-            Log.line("config: [tome].button = \"\(launcherButton.rawValue)\""
-                + " + modifiers=\(modifierList(launcherMods)) collides"
+        let tomeTrigger = Trigger(button: tomeButton,
+                                       modifiers: tomeMods)
+        var effectiveTomeEnabled = tomeEnabled
+        if tomeEnabled && tomeTrigger == castTrigger {
+            Log.line("config: [tome].button = \"\(tomeButton.rawValue)\""
+                + " + modifiers=\(modifierList(tomeMods)) collides"
                 + " with [cast] — [tome] disabled for this"
                 + " session. Pick a distinct button, or add a"
                 + " modifier (e.g. `modifiers = [\"ctrl\"]`) to one"
                 + " side. (Declaration-order policy: gesture wins,"
                 + " later families lose.)")
-            effectiveLauncherEnabled = false
+            effectiveTomeEnabled = false
         }
 
-        let launcher = LauncherSpec(
-            enabled: effectiveLauncherEnabled,
-            trigger: launcherTrigger,
-            layout: launcherLayout,
+        let tome = TomeSpec(
+            enabled: effectiveTomeEnabled,
+            trigger: tomeTrigger,
+            layout: tomeLayout,
             items: items,
-            row: launcherRow,
-            animation: launcherAnimation,
-            decoration: launcherDecoration,
-            theme: launcherTheme)
+            row: tomeRow,
+            animation: tomeAnimation,
+            decoration: tomeDecoration,
+            theme: tomeTheme)
 
         // [[cast.cursor.rule]] / [[cast.focused.rule]] — cast pattern
         // → action mappings, split by activation context (target-
@@ -468,7 +468,7 @@ public struct WandConfig: Sendable {
             rules: rules,
             overlay: overlay,
             fire: fire,
-            launcher: launcher,
+            tome: tome,
             failsafe: failsafe,
             failsafeBlockPresent: failsafeBlockPresent
         )
@@ -620,8 +620,8 @@ public struct WandConfig: Sendable {
     /// surfaced here: it's a global default with a true/false value
     /// that doesn't change toolbar's behaviour either way, so warning
     /// about it would just add noise.
-    private static func warnToolbarOnlyFields(items: [LauncherItem],
-                                               layout: LauncherLayout) {
+    private static func warnToolbarOnlyFields(items: [TomeItem],
+                                               layout: TomeLayout) {
         guard layout != .list else { return }
         for (idx, item) in items.enumerated() {
             var ignored: [String] = []
@@ -683,7 +683,7 @@ public struct WandConfig: Sendable {
     /// `[tome]` items inside the main config and by
     /// `parseItems(_:)` for the `tome --open --items <PATH>` path.
     private static func parseItem(_ row: [String: TOMLValue], idx: Int)
-        -> LauncherItem? {
+        -> TomeItem? {
         let label = "[[item]][\(idx)]"
             + (row.string("name").isEmpty ? "" : " \(row.string("name"))")
         let name = row.string("name")
@@ -694,7 +694,7 @@ public struct WandConfig: Sendable {
         }
         let dynamic = row.string("dynamic")
         let action: Action
-        let template: LauncherTemplate?
+        let template: TomeTemplate?
         if dynamic.isEmpty {
             // Static item — need a regular action.
             template = nil
@@ -721,7 +721,7 @@ public struct WandConfig: Sendable {
             // never produces a checkmark or runs the shell).
             //
             // `[[cast.cursor.rule]]` drops + logs on bad action; the
-            // dynamic-launcher parent keeps working but tells the
+            // dynamic-tome parent keeps working but tells the
             // user exactly which lines are dead.
             var strayDynamicFields: [String] = [
                 "action-type", "action-keys", "action-verb",
@@ -792,7 +792,7 @@ public struct WandConfig: Sendable {
                     + " these fields are ignored.")
             }
         }
-        return LauncherItem(
+        return TomeItem(
             name: name, group: group, separatorBefore: sep,
             apps: apps.isEmpty ? ["*"] : apps,
             header: header,
@@ -812,9 +812,9 @@ public struct WandConfig: Sendable {
     /// a raw string (it may contain `{line}` placeholders that the
     /// adapter substitutes at expansion time).
     private static func parseTemplate(_ row: [String: TOMLValue])
-        -> LauncherTemplate? {
+        -> TomeTemplate? {
         let kindRaw = row.string("template-action-type").lowercased()
-        guard let kind = LauncherTemplate.Kind(rawValue: kindRaw)
+        guard let kind = TomeTemplate.Kind(rawValue: kindRaw)
         else { return nil }
         let payload: String
         switch kind {
@@ -829,7 +829,7 @@ public struct WandConfig: Sendable {
         }
         guard !payload.isEmpty else { return nil }
         let name = row.string("template-name")
-        return LauncherTemplate(
+        return TomeTemplate(
             kind: kind,
             payload: payload,
             name: name.isEmpty ? "{line}" : name,

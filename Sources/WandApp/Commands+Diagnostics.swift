@@ -46,15 +46,15 @@ extension WandApp {
                    tap ? "can install" : "cannot install (needs Accessibility)"))
 
         // Tome diagnostics — only meaningful when opted in.
-        if cfg.launcher.enabled {
-            let lTap = MacOSLauncherSource.canInstallTap(
-                trigger: cfg.launcher.trigger)
+        if cfg.tome.enabled {
+            let lTap = MacOSTomeSource.canInstallTap(
+                trigger: cfg.tome.trigger)
             ok = ok && lTap
             print(line(lTap, "Tome tap:",
                        lTap
                          ? "can install (button="
-                           + "\(cfg.launcher.trigger.button.rawValue), "
-                           + "\(cfg.launcher.items.count) item(s))"
+                           + "\(cfg.tome.trigger.button.rawValue), "
+                           + "\(cfg.tome.items.count) item(s))"
                          : "cannot install"))
         } else {
             print(line(true, "Tome:",
@@ -145,9 +145,9 @@ extension WandApp {
         let cfg = WandConfig.load()
         let cfgWarnings = Log.lineCount
         requireFailsafeBlock(cfg)
-        let tomeLine = cfg.launcher.enabled
-            ? ", tome=\(cfg.launcher.trigger.button.rawValue) "
-              + "(\(cfg.launcher.items.count) item(s))"
+        let tomeLine = cfg.tome.enabled
+            ? ", tome=\(cfg.tome.trigger.button.rawValue) "
+              + "(\(cfg.tome.items.count) item(s))"
             : ""
         FileHandle.standardError.write(Data((
             "wand: loaded \(cfg.rules.count) rule(s), "

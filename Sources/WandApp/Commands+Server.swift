@@ -60,12 +60,12 @@ extension WandApp {
             cancelWindowMs: cfg.recognition.cancelWindowMs
         )
 
-        // Launcher trigger — only allocated when opted in at startup.
+        // Tome trigger — only allocated when opted in at startup.
         // Like the gesture tap, its button is baked into the event
         // mask, so toggling enabled / changing button needs a restart
         // (surfaced as pending-restart in `daemon --show`).
-        let launcher: LauncherSource? = cfg.launcher.enabled
-            ? MacOSLauncherSource(trigger: cfg.launcher.trigger)
+        let tome: TomeSource? = cfg.tome.enabled
+            ? MacOSTomeSource(trigger: cfg.tome.trigger)
             : nil
 
         // Construct Controller up front so the overlay's onSample
@@ -76,7 +76,7 @@ extension WandApp {
         // apart after a hot-reload — the user would see candidate
         // cards for the OLD rule set while a NEW rule fired.
         let controller = Controller(source: source,
-                                    launcher: launcher,
+                                    tome: tome,
                                     config: cfg)
 
         // Fire-moment effect managers — owned by Main for the

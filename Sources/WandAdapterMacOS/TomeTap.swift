@@ -1,7 +1,7 @@
-// Launcher trigger — a separate CGEventTap masking only the
+// Tome trigger — a separate CGEventTap masking only the
 // configured button's down/up. Sibling to MacOSMouseSource (which
 // owns the gesture tap); two taps coexist on the same daemon so the
-// gesture's right-button-drag and the launcher's middle-click never
+// gesture's right-button-drag and the tome's middle-click never
 // fight over a single mask.
 //
 // We consume BOTH down and up of the trigger button: if we ate the
@@ -15,12 +15,12 @@ import CoreGraphics
 import Foundation
 import WandCore
 
-public final class MacOSLauncherSource: LauncherSource, @unchecked Sendable {
+public final class MacOSTomeSource: TomeSource, @unchecked Sendable {
 
     private let trigger: Trigger
     private var tap: CFMachPort?
     private var source: CFRunLoopSource?
-    private var handler: (@Sendable (LauncherEvent) -> Void)?
+    private var handler: (@Sendable (TomeEvent) -> Void)?
     // Precomputed at init so the hot-path callback doesn't rebuild
     // them per event. Trigger is immutable post-init (a config
     // change needs a daemon restart, surfaced as pending-restart),
@@ -40,7 +40,7 @@ public final class MacOSLauncherSource: LauncherSource, @unchecked Sendable {
     }
 
     /// Cheap probe — install a listen-only tap and tear it down. Used
-    /// by `wand config --doctor` to confirm the launcher tap path works
+    /// by `wand config --doctor` to confirm the tome tap path works
     /// without touching the real handler.
     public static func canInstallTap(trigger: Trigger) -> Bool {
         let mask = trigger.button.downUpMask
@@ -56,7 +56,7 @@ public final class MacOSLauncherSource: LauncherSource, @unchecked Sendable {
         return true
     }
 
-    public func start(_ handler: @escaping @Sendable (LauncherEvent) -> Void) {
+    public func start(_ handler: @escaping @Sendable (TomeEvent) -> Void) {
         self.handler = handler
 
         let mask = trigger.button.downUpMask
@@ -69,13 +69,13 @@ public final class MacOSLauncherSource: LauncherSource, @unchecked Sendable {
             eventsOfInterest: mask,
             callback: { _, type, event, refcon in
                 guard let refcon else { return Unmanaged.passRetained(event) }
-                let me = Unmanaged<MacOSLauncherSource>
+                let me = Unmanaged<MacOSTomeSource>
                     .fromOpaque(refcon).takeUnretainedValue()
                 return me.handle(type: type, event: event)
             },
             userInfo: info
         ) else {
-            Log.line("launcher-tap: tapCreate failed — is Accessibility "
+            Log.line("tome-tap: tapCreate failed — is Accessibility "
                      + "granted? (System Settings → Privacy & Security)")
             return
         }
@@ -84,7 +84,7 @@ public final class MacOSLauncherSource: LauncherSource, @unchecked Sendable {
         CGEvent.tapEnable(tap: tap, enable: true)
         self.tap = tap
         self.source = src
-        Log.line("launcher-tap: installed (button=\(trigger.button.rawValue), "
+        Log.line("tome-tap: installed (button=\(trigger.button.rawValue), "
                  + "mods=\(trigger.modifiers.map(\.rawValue).sorted()))")
     }
 
@@ -147,12 +147,12 @@ public final class MacOSLauncherSource: LauncherSource, @unchecked Sendable {
             let target = AXTarget.resolveAt(point: point)
                 ?? Target(pid: 0, bundleID: "",
                           title: "", frame: .zero, windowID: 0)
-            Log.line("launcher-tap: down at \(point) → "
+            Log.line("tome-tap: down at \(point) → "
                      + (target.bundleID.isEmpty
                         ? "no AX target (Dock / menu bar / desktop) "
                           + "— global items only"
                         : target.bundleID))
-            handler?(LauncherEvent(point: point, target: target))
+            handler?(TomeEvent(point: point, target: target))
             return nil  // consume — don't let the foreground app see it
         }
 

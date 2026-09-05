@@ -19,9 +19,9 @@
 // (`wandCanonicalThemeName` over sill's `canonicalThemeNames` + wand's
 // engine themes) + `EffectIntensity.allCases`, and wand's own
 // `CaseIterable` enums (`Effect` / `ArmedEffect` / `TrailStyle` /
-// `DecalKind` / `LauncherBorder` / `LauncherOpenAnim` /
-// `LauncherCloseAnim` / `NoMatchBanner` / `TrailEndKind` / `ChompSize`
-// / `LauncherLayout` / `Trigger.Button` / `Modifier`). Numeric
+// `DecalKind` / `TomeBorder` / `TomeOpenAnim` /
+// `TomeCloseAnim` / `NoMatchBanner` / `TrailEndKind` / `ChompSize`
+// / `TomeLayout` / `Trigger.Button` / `Modifier`). Numeric
 // `min`/`max` mirror the `clampInt` / `clampMs` bounds in `parse`
 // (advisory in the editor; the app still clamps at runtime so a typo
 // can't break recognition).
@@ -34,7 +34,7 @@
 //     conditional masking of the trail's style/width/straighten)
 //   • `[cast.overlay.trail].color*` / `[cast.fire.burst].color`
 //     (theme-palette inheritance on the empty-string sentinel)
-//   • the gesture↔launcher trigger-collision demotion
+//   • the gesture↔tome trigger-collision demotion
 // Those are marked `.arrayOfTables` (schema-only rows) or carry a
 // schema-only field whose `apply` writes the raw value the bespoke
 // step then re-reads / overrides.
@@ -110,20 +110,20 @@ public extension WandConfig {
         var decalDurationMs = 3000
         var decalSize = 60
         // [tome]
-        var launcherEnabled = false
-        var launcherButton: Trigger.Button = .middle
-        var launcherModifiers: Set<Modifier> = []
-        var launcherLayout: LauncherLayout = .list
-        var launcherTheme: String = wandDefaultThemeName
+        var tomeEnabled = false
+        var tomeButton: Trigger.Button = .middle
+        var tomeModifiers: Set<Modifier> = []
+        var tomeLayout: TomeLayout = .list
+        var tomeTheme: String = wandDefaultThemeName
         // [tome.row]
         var rowShortcutBadge = true
         var rowIconChip = true
         var rowFontSize = 13
         // [tome.animation]
-        var animOpen: LauncherOpenAnim = .off
-        var animClose: LauncherCloseAnim = .off
+        var animOpen: TomeOpenAnim = .off
+        var animClose: TomeCloseAnim = .off
         // [tome.decoration] + [tome.decoration.border]
-        var decorBorder: LauncherBorder = .off
+        var decorBorder: TomeBorder = .off
         var decorCycleMs = 4000
         var decorBorderWidth = 2
         var decorShadow = false
@@ -350,20 +350,20 @@ public extension WandConfig {
                   doc: "Tome trigger (a button-press pops a contextual "
                      + "menu) + layout + theme.",
                   fields: [
-                .bool("enabled", \.launcherEnabled, default: false,
+                .bool("enabled", \.tomeEnabled, default: false,
                       doc: "Install the tome tap. `false` = no menu "
                          + "(restart to flip)."),
-                .button("button", \.launcherButton, default: .middle,
+                .button("button", \.tomeButton, default: .middle,
                         doc: "Mouse button that pops the menu."),
-                .modifiers("modifiers", \.launcherModifiers,
+                .modifiers("modifiers", \.tomeModifiers,
                            doc: "Modifiers held with the button; `[]` = none. "
                               + "Must differ from `[cast]` or the tome is "
                               + "demoted (collision)."),
-                .enumField("layout", \.launcherLayout, section: "tome",
-                           domain: LauncherLayout.allCases.map(\.rawValue),
+                .enumField("layout", \.tomeLayout, section: "tome",
+                           domain: TomeLayout.allCases.map(\.rawValue),
                            default: .list,
                            doc: "Panel orientation for the native trigger."),
-                .theme("theme", \.launcherTheme,
+                .theme("theme", \.tomeTheme,
                        doc: "Tome panel theme (independent of `[cast].theme`); "
                           + "`\"\"` = native `system`."),
             ]),
@@ -385,10 +385,10 @@ public extension WandConfig {
                   doc: "Panel open / close transitions.",
                   fields: [
                 .enumField("open", \.animOpen, section: "tome.animation",
-                           domain: LauncherOpenAnim.allCases.map(\.rawValue),
+                           domain: TomeOpenAnim.allCases.map(\.rawValue),
                            default: .off, doc: "Open animation; `off` = instant."),
                 .enumField("close", \.animClose, section: "tome.animation",
-                           domain: LauncherCloseAnim.allCases.map(\.rawValue),
+                           domain: TomeCloseAnim.allCases.map(\.rawValue),
                            default: .off, doc: "Close animation; `off` = instant."),
             ]),
 
@@ -408,7 +408,7 @@ public extension WandConfig {
                   fields: [
                 .enumField("effect", \.decorBorder,
                            section: "tome.decoration.border",
-                           domain: LauncherBorder.allCases.map(\.rawValue),
+                           domain: TomeBorder.allCases.map(\.rawValue),
                            default: .off,
                            doc: "Border decoration; `off` = no rim."),
                 .clampInt("color-cycle-ms", \.decorCycleMs, min: 500, max: 10000,
