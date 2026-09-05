@@ -269,7 +269,7 @@
         },
         "overlay" : {
           "additionalProperties" : false,
-          "description" : "Gesture-trail HUD toggle + blur + colour-cycle period (trail / badge / cards live in sub-blocks).",
+          "description" : "Cast-trail HUD toggle + blur + colour-cycle period (trail / badge / cards live in sub-blocks).",
           "properties" : {
             "badge" : {
               "additionalProperties" : false,

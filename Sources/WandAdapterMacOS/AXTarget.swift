@@ -65,7 +65,7 @@ public enum AXTarget {
         Log.line("AX: no window resolvable at \(point) — "
                  + "ax-walk failed and CGWindowList found no on-screen "
                  + "window there. Cursor was likely on Dock / menu bar / "
-                 + "desktop. Gesture dropped.")
+                 + "desktop. Cast dropped.")
         return nil
     }
 

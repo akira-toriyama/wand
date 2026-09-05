@@ -1,7 +1,7 @@
 // Chomp trail renderer. Stateless — `TrailView` packages every
 // piece of state the renderer needs into `State` and calls into
 // the static `draw(state:color:outline:)` entry point. The
-// chomp/ghost code sits in its own file so GestureOverlay.swift
+// chomp/ghost code sits in its own file so CastOverlay.swift
 // carries only the shared trail / HUD plumbing, not one theme's
 // implementation. Everything that is math rather than paint —
 // the snapped polyline, corridor centerline, fillet points, the

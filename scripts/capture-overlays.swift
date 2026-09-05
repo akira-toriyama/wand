@@ -54,7 +54,7 @@ try? FileManager.default.createDirectory(
 
 print("wand overlay capture")
 print("Place cursor over a window (VS Code / Chrome / ...).")
-print("Gesture starts at the CURRENT cursor position in 5s — keep hands off.")
+print("Cast starts at the CURRENT cursor position in 5s — keep hands off.")
 sleepMs(5000)
 
 // Clear any open context menu / popover.

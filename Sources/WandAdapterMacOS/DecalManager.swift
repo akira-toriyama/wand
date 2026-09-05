@@ -3,7 +3,7 @@
 // click-through NSWindow so it can sit on top of every app without
 // interfering with input. Fades out and self-releases.
 //
-// The class is intentionally separate from `GestureOverlay`: that
+// The class is intentionally separate from `CastOverlay`: that
 // window is sized to the whole virtual desktop and lives for the
 // daemon's lifetime; decals are per-fire, short-lived, and one
 // window-per-decal lets multiple stack visually (a Splatoon-y
