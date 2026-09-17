@@ -95,7 +95,7 @@ let package = Package(
         // resolution — move both in one commit. Dependabot ignores
         // akira-toriyama/*, so nothing else will flag the pairing.
         .package(url: "https://github.com/akira-toriyama/sill.git",
-                 .upToNextMinor(from: "8.8.4")),
+                 .upToNextMinor(from: "8.9.0")),
         // swift-toml-edit — the family's ONE TOML implementation (Sill-1).
         // Provides the `Toml` module WandCore reads config with
         // (`Toml.parseFlat`, whose `Document{tables,arrays}` matches wand's
