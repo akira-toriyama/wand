@@ -36,6 +36,23 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$PLIST" "$APP/Contents/Info.plist"
 cp .build/release/wand "$APP/Contents/MacOS/wand"   # = CFBundleExecutable
+
+# Stamp the bundle's marketing version: the committed Info.plist value is
+# only a fallback for a tag-less tarball build, and it said 4.0.0 while
+# the tags stood at v10.0.0 — measured 2026-09-25, the v10.1.0 draft's
+# Wand.zip carried 4.0.0. The tag this build is FOR arrives as
+# RELEASE_TAG (glyph's release.yml states it on the build step): the
+# draft's tag exists as a git ref only once a human publishes, so `git
+# describe` in CI could only name the PREVIOUS release. Without
+# RELEASE_TAG (a local build) `git describe` stamps v10.0.0-3-g1e77545 →
+# 10.0.0-3-g1e77545; a clean tagged build is just 10.0.0.
+VERSION="${RELEASE_TAG:-$(git describe --tags --dirty 2>/dev/null || true)}"
+VERSION="${VERSION#v}"
+if [[ -n "$VERSION" ]]; then
+  /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" \
+    "$APP/Contents/Info.plist" >/dev/null 2>&1 || true
+fi
+
 # CFBundleIconFile = Wand (set in Info.plist) tells Launch Services
 # to look for Wand.icns in Resources/. Committed binary lives in
 # assets/; regenerate with scripts/make-icon.sh.
