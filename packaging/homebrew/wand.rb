@@ -37,43 +37,14 @@ class Wand < Formula
     pkgshare.install "setup-signing-cert.sh"
     chmod 0755, pkgshare/"setup-signing-cert.sh"
 
-    # Hybrid signing (best-effort cert, loud fallback):
-    # 1. Try to set up / reuse a stable per-user self-signed identity in
-    #    the login keychain. When this works, the code-signing leaf hash
-    #    stays constant across reinstalls, so TCC grants (Accessibility)
-    #    persist across `brew upgrade`.
-    # 2. If the script fails — locked login keychain, brew sandbox
-    #    quirks, missing openssl, etc. — fall back to ad-hoc signing
-    #    (always works) and emit a LOUD warning with a copy-pasteable
-    #    recovery path. Without the warning the fallback is silent and
-    #    users only notice when macOS re-prompts on every upgrade.
-    #    Same pattern facet / ws-tabs use.
-    sign_id = "-"
-    if quiet_system "./setup-signing-cert.sh"
-      id_file = ".signing-id"
-      sign_id = File.read(id_file).strip if File.exist?(id_file)
-    end
-    system "codesign", "--force", "--sign", sign_id, app
-
-    if sign_id == "-"
-      opoo <<~EOS
-        Could not set up a stable self-signed identity in the login keychain —
-        signed Wand.app ad-hoc. The app works fine, but every
-        `brew upgrade wand` produces a new code hash, so macOS will
-        re-prompt for Accessibility on every upgrade.
-
-        To make grants persist across upgrades, run once after install:
-          #{opt_pkgshare}/setup-signing-cert.sh
-          brew reinstall wand
-
-        Verify:
-          codesign -dvv #{opt_prefix}/Wand.app
-          # expect: Authority="wand Local Signing"
-      EOS
-    else
-      ohai "Signed Wand.app with stable self-signed identity " \
-           "(\"#{sign_id}\") — TCC grants persist across upgrades."
-    end
+    # Ad-hoc sign the bundle. The persistent "wand Local Signing"
+    # identity is not set up here: Homebrew's build sandbox blocks
+    # `security` from touching the user's login keychain, and the
+    # script needs a terminal for the login password it asks for once
+    # (without one it exits 1). The user runs the shipped script once
+    # in a terminal, then `wand daemon --resign` after every install /
+    # upgrade — same pattern as chord.
+    system "codesign", "--force", "--sign", "-", app
 
     # Same binary doubles as the thin CLI client (daemon --reload / --quit / etc).
     bin.install_symlink app/"Contents/MacOS/wand" => "wand"
@@ -132,12 +103,15 @@ class Wand < Formula
         background daemon can't tap mouse events.
 
       Persistent Accessibility grants across `brew upgrade` need a stable
-      code-signing identity. The install creates one automatically when it
-      can; if the install printed a "fell back to ad-hoc" warning (or
-      `codesign -dvv #{opt_prefix}/Wand.app` shows no Authority line),
-      run once:
+      code-signing identity; the install signs ad-hoc (the build sandbox
+      cannot reach your login keychain). Run once, in a terminal — it
+      asks for your login password once:
         #{opt_pkgshare}/setup-signing-cert.sh
-        brew reinstall wand
+        wand daemon --resign
+      After every `brew upgrade wand`:
+        wand daemon --resign
+      Verify: codesign -dvv #{opt_prefix}/Wand.app
+        # expect: Authority="wand Local Signing"
 
       Migrating from `stroke` (pre-v3.0):
         mkdir -p ~/.config/wand && \\
