@@ -13,11 +13,12 @@ extension WandApp {
     /// `wand daemon --resign` re-signs the installed Wand.app with the
     /// persistent `wand Local Signing` self-signed identity and
     /// restarts the daemon. Necessary after every `brew install` /
-    /// `brew upgrade wand`, because Homebrew's build sandbox
-    /// blocks the in-formula `setup-signing-cert.sh` from touching
-    /// the user's login keychain — install falls back to ad-hoc
-    /// signing and TCC re-prompts for Accessibility on every
-    /// upgrade. Same pattern as chord 0.3.3's `--resign`.
+    /// `brew upgrade wand`: the formula signs ad-hoc, because
+    /// Homebrew's build sandbox cannot reach the user's login keychain
+    /// and `setup-signing-cert.sh` needs a terminal for the login
+    /// password it asks for once — so TCC would re-prompt for
+    /// Accessibility on every upgrade. Same pattern as chord's
+    /// `--resign`.
     ///
     /// Exit codes:
     ///   0 — re-signed (restart attempted, best-effort)

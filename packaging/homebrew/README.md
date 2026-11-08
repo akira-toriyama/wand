@@ -36,16 +36,14 @@ before a sensitive bump.
 
 ## TCC grant persistence across `brew upgrade`
 
-The formula's install step tries `./setup-signing-cert.sh` first. When
-that succeeds, every `brew reinstall` / `brew upgrade` signs the bundle
-with the same stable identity, so the Accessibility grant stays put.
-
-The script can fail inside the Homebrew install sandbox (locked login
-keychain, openssl wrappers, etc.). In that case the install falls back
-to ad-hoc signing and emits a LOUD warning (per
-[`wand.rb`](wand.rb)'s `opoo` branch) with a copy-pasteable recovery
-path: run the script outside the sandbox, then `brew reinstall wand`.
-Same hybrid pattern facet and ws-tabs use.
+The formula does not run `./setup-signing-cert.sh`: Homebrew's build
+sandbox cannot reach the login keychain, and the script needs a
+terminal for the login password it asks for once (the key's partition
+list, see the script's `allow_codesign`). The install signs `Wand.app`
+ad-hoc and ships the script under `$(brew --prefix)/share/wand/`. The
+user runs it once in a terminal, then `wand daemon --resign` after
+every `brew install` / `brew upgrade` — the caveats block spells this
+out. Same pattern as chord.
 
 ## Bumping by hand (escape hatch)
 
